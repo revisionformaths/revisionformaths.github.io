@@ -567,6 +567,48 @@ check(
       !/localStorage/.test(src);
   })()
 );
+// The product is called G@M£$ in its own words. Paths, CSS hooks, JS
+// identifiers and other people's project names still say "game" — those are
+// facts, not branding, and changing them would break the site or misname a
+// source. This strips exactly those, then insists nothing is left.
+const BRAND = "G@M£$";
+const brandStrip = (text) => text
+  .replace(/<script[\s\S]*?<\/script>/gi, "")
+  .replace(/<style[\s\S]*?<\/style>/gi, "")
+  .replace(/data-[a-z-]*game[a-z-]*/gi, "")
+  .replace(/Offline HTML Games Pack/g, "")
+  .replace(/[\w./-]*game-request[\w-]*/gi, "")
+  .replace(/[\w./-]*games?[\w./-]*/gi, (token) => (/[/.:]/.test(token) ? "" : token))
+  .replace(/`[^`\n]*`|https?:\/\/\S+/g, "");
+check(
+  "the pages never say \"game\" in their own copy",
+  ["index.html", "files.html", "404.html", "manifest.webmanifest"].every((rel) => {
+    const copy = brandStrip(fs.readFileSync(path.join(ROOT, rel), "utf8"));
+    return !/\bgames?\b/i.test(copy);
+  })
+);
+check(
+  "the README never says \"game\" in its own prose",
+  (() => {
+    const keep = ["KBH Games", "Offline HTML Games Pack", "Offline-HTML-Games-Pack", "game-request", "ClassroomGames", "World's Hardest Game"];
+    const escaped = keep.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const protectedSpan = new RegExp("`[^`\\n]*`|https?:\\/\\/\\S+|[\\w./-]*\\/[\\w./-]+|\\b(?:" + escaped.join("|") + ")\\b", "g");
+    let prose = "";
+    let last = 0;
+    for (const match of readme.matchAll(protectedSpan)) {
+      prose += readme.slice(last, match.index);
+      last = match.index + match[0].length;
+    }
+    prose += readme.slice(last);
+    return !/\bgames?\b/i.test(prose);
+  })()
+);
+check(
+  "the brand is what the copy actually uses",
+  /129 G@M£\$ that still work when the network is blocked/.test(index) &&
+    /These G@M£\$ play with the wi-fi off/.test(filesPage) &&
+    /129 G@M£\$ that keep playing when the network does not/.test(readme)
+);
 check(
   "the README lists a tagged link per channel",
   /https:\/\/funclassroom\.github\.io\/\?ref=discord/.test(readme) &&

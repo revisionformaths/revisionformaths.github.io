@@ -36,9 +36,9 @@
   };
   Array.prototype.forEach.call(document.querySelectorAll("[data-clear-offline]"), function (button) {
     button.addEventListener("click", function () {
-      if (!window.confirm("Remove all locally downloaded game files from this browser? Saved picks and history will not be changed.")) return;
+      if (!window.confirm("Remove all locally downloaded G@M£$ files from this browser? Saved picks and history will not be changed.")) return;
       button.disabled = true;
-      send("CLEAR_GAMES", "").then(function () { window.alert("Offline game downloads cleared from this browser."); })
+      send("CLEAR_GAMES", "").then(function () { window.alert("Offline G@M£$ downloads cleared from this browser."); })
         .catch(function (error) { window.alert(error.message); })
         .finally(function () { button.disabled = false; });
     });

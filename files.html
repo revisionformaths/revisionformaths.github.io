@@ -4,18 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Classroom</title>
-<meta name="description" content="One hundred and twenty-nine games that open as plain files, with no embed and nothing a filter can block.">
+<meta name="description" content="One hundred and twenty-nine G@M£$ that open as plain files, with no embed and nothing a filter can block.">
 <meta name="theme-color" content="#ffffff">
 <meta name="robots" content="index,follow">
 <!-- Link previews. The page is indexable; these tags shape what a shared link shows. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Classroom">
-<meta property="og:title" content="129 games that still work when the network is blocked">
+<meta property="og:title" content="129 G@M£$ that still work when the network is blocked">
 <meta property="og:description" content="Every title on this page is an HTML file served from the same folder. No embed, no portal to get through, and they keep playing with the wi-fi off.">
 <meta property="og:image" content="https://funclassroom.github.io/assets/img/share/og-cover.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Classroom — 129 games that still work when the network is blocked.">
+<meta property="og:image:alt" content="Classroom — 129 G@M£$ that still work when the network is blocked.">
 <meta property="og:url" content="https://funclassroom.github.io/files.html">
 <link rel="canonical" href="https://funclassroom.github.io/files.html">
 <meta name="twitter:card" content="summary_large_image">
@@ -62,7 +62,7 @@
 <main class="wrap">
   <section class="files-hero">
     <p class="files-kicker"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg> Works offline</p>
-    <h1>These games play with the wi-fi off.</h1>
+    <h1>These G@M£$ play with the wi-fi off.</h1>
     <p class="files-lede">
       One hundred and twenty-nine titles that live in this folder as plain
       HTML, not embeds on somebody else's server. Each one is a file that
@@ -101,7 +101,7 @@
   <div class="files-tools">
     <div class="search files-search">
       <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
-      <input id="fq" type="search" placeholder="Search HTML games" autocomplete="off" spellcheck="false" aria-label="Filter these titles">
+      <input id="fq" type="search" placeholder="Search HTML G@M£$" autocomplete="off" spellcheck="false" aria-label="Filter these titles">
     </div>
     <button type="button" class="btn btn-dark" data-surprise>
       <svg class="ico" aria-hidden="true"><use href="#i-shuffle"/></svg>
@@ -119,7 +119,7 @@
 
   <p class="files-note">
     Saves and high scores stay in this browser, like everything else here.
-    <a href="./">Back to all games</a>
+    <a href="./">Back to all G@M£$</a>
   </p>
 </main>
 
@@ -170,8 +170,8 @@
 </div>
 
 <script src="assets/js/local-games.js?v=4"></script>
-<script src="assets/js/feedback.js?v=1"></script>
-<script src="assets/js/pwa.js?v=1"></script>
+<script src="assets/js/feedback.js?v=2"></script>
+<script src="assets/js/pwa.js?v=2"></script>
 <script>
 (function () {
   "use strict";
@@ -185,7 +185,7 @@
     .concat(GAMES.filter(function (game) { return !game.featured; }));
 
   document.querySelector("[data-local-count]").textContent = GAMES.length;
-  document.getElementById("fq").placeholder = "Search these " + GAMES.length + " HTML games";
+  document.getElementById("fq").placeholder = "Search these " + GAMES.length + " HTML G@M£$";
 
   var RECENT_KEY = "classroom.files.v1";
   var MAX_RECENT = 8;
@@ -369,7 +369,7 @@
     var absolute = new URL(file, window.location.href).href;
     activeGamePath = file;
     var game = GAMES.filter(function (entry) { return entry.file === file; })[0];
-    if (fileDescription) fileDescription.textContent = game ? game.line : "Self-contained HTML game file.";
+    if (fileDescription) fileDescription.textContent = game ? game.line : "Self-contained HTML G@M£$ file.";
     if (offlineStatus) offlineStatus.textContent = "";
     if (offlineBtn) {
       offlineBtn.disabled = false; offlineBtn.textContent = "Save offline";
@@ -436,7 +436,7 @@
     var removing = offlineBtn.textContent.indexOf("Remove") === 0;
     offlineBtn.disabled = true;
     offlineBtn.textContent = removing ? "Removing…" : "Saving…";
-    if (offlineStatus) offlineStatus.textContent = removing ? "Removing this local copy from this browser…" : "Downloading this game into this browser. Large files may take a while…";
+    if (offlineStatus) offlineStatus.textContent = removing ? "Removing this local copy from this browser…" : "Downloading this G@M£$ into this browser. Large files may take a while…";
     var operation = removing ? window.ClassroomOffline.remove(path) : window.ClassroomOffline.save(path);
     operation.then(function () {
       if (activeGamePath !== path) return;

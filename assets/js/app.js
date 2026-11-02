@@ -13,7 +13,7 @@
     ALL.push({
       id: "local-" + slug,
       title: game.title + " (HTML)",
-      description: game.line || "A self-contained HTML game stored with this site.",
+      description: game.line || "A self-contained HTML G@M£$ stored with this site.",
       local: true,
       rating: 0,
       plays: 0,
@@ -244,7 +244,7 @@
         var eb = matchScore(b, query);
         if (ea !== eb) return ea - eb;
       }
-      // Games that can play inside the page always lead; the rest open in a
+      // G@M£$ that can play inside the page always lead; the rest open in a
       // tab and sit at the end.
       if (playable(a) !== playable(b)) return playable(a) ? -1 : 1;
       if (state.sort === "az") return a.title.localeCompare(b.title);
@@ -718,7 +718,7 @@
       (item.plays > 0 ? shortNum(item.plays) + " plays" : "new arrival") +
       " · " + (item.local ? "local file · works offline" : playable(item) ? "publisher embed" : "opens in a new tab");
     if (dom.playerDescription) dom.playerDescription.textContent = item.description ||
-      "Publisher-hosted title. Controls and content vary; check the game's own instructions.";
+      "Publisher-hosted title. Controls and content vary; check its own instructions.";
     if (dom.reportGame) {
       var reportTitle = encodeURIComponent("Broken or incorrect title: " + item.title);
       var reportBody = encodeURIComponent("Title: " + item.title + "\nID: " + item.id + "\nPage: " + window.location.href + "\n\nWhat happened?\n");
@@ -866,7 +866,7 @@
       dom.source.textContent = "not embeddable";
       title.textContent = "This one will not be framed";
       dom.blockedText.textContent = item.sources.length
-        ? item.sources[0].portal + " does not allow its games inside another page, " +
+        ? item.sources[0].portal + " does not allow its G@M£$ inside another page, " +
           "so it cannot play here. It still works in its own tab — sorry for the extra click."
         : "This title has no working route at the moment. Sorry about that.";
     } else {
