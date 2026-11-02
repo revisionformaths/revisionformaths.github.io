@@ -1,6 +1,6 @@
 # Classroom
 
-**129 games that keep playing when the network does not.** They are plain
+**129 G@M£$ that keep playing when the network does not.** They are plain
 HTML files served from this repository, so there is no embed, no player to
 load and no third party that can refuse a frame — with the wi-fi off, they
 still open. Behind that is a wall of 17,572 streamed publisher titles for when
@@ -11,18 +11,18 @@ grid of playable titles.
 
 **Live:** https://socks275.github.io/ClassroomGames/
 
-## Local HTML games and search
+## Local HTML G@M£$ and search
 
-The main search includes publisher titles and the **129 local HTML games**.
+The main search includes publisher titles and the **129 local HTML G@M£$**.
 Local versions have an **(HTML)** suffix and open the bundled file rather than
 an external publisher. **100% Unblocked** links to `files.html`, whose search
-only filters local games. Both pages use `assets/js/local-games.js` as their
-shared list; add a game there, its file under `assets/games/`, and its card
+only filters local G@M£$. Both pages use `assets/js/local-games.js` as their
+shared list; add a G@M£$ there, its file under `assets/games/`, and its card
 screenshot under `assets/img/pack/`.
 
 **Minecraft is no longer bundled.** It was a 76 MB single file — more than
 every other local title put together — so it plays from a browser build of the
-game online again, through two routes in `scripts/extras.py`: a self-contained
+G@M£$ online again, through two routes in `scripts/extras.py`: a self-contained
 EaglercraftX file on
 [johntherriiiippper.github.io](https://johntherriiiippper.github.io/eaglercraftx.html)
 and a maintained build at
@@ -35,7 +35,7 @@ The heaviest titles have been removed to buy back hosting headroom: **Slope**
 (25 MB), **Plants vs Zombies** (21 MB), Minecraft (76 MB), and the latest cuts —
 **Vex 4, 5, 6 and X3M** (47.5 MB), **Angry Birds**, **Happy Wheels**, **Snail
 Bob**, **Basketball Stars** and **Time Shooter 3**. The folder is **129 local
-games** and Minecraft streams instead. The game pages total **541,796,666
+G@M£$** and Minecraft streams instead. The G@M£$ pages total **541,796,666
 bytes**, the three runtimes they share add **14,281,181**, and the 900 MiB test
 budget leaves **387,640,553 bytes** — about **370 MiB** for another title. The
 analytics beacons that shipped with some pack pages have been stripped;
@@ -49,7 +49,7 @@ for 13.6 MB of files**. `scripts/share-runtime.py` finds a payload that appears
 in more than one page, writes it once to `assets/vendor/ruffle/`, and repoints
 those pages at the shared copy. Each page still carries its own `.swf` and its
 own loader; only the bytes that were identical now come from one URL. Saving
-one of those games for offline play brings the shared file with it (see
+one of those G@M£$ for offline play brings the shared file with it (see
 `sw.js`), and the checks in `tests/catalog.test.js` stop the duplication coming
 back. Net effect: the folder went from 674 MB to 530 MB.
 
@@ -113,7 +113,7 @@ away, so a known wall cannot become a black screen. When the attempted routes
 all fail, the player says so and offers the publisher in a new tab.
 
 Every title appears once. A tile only carries more than one source when the
-same game exists on more than one portal, and the extra sources are never shown
+same G@M£$ exists on more than one portal, and the extra sources are never shown
 as separate tiles — the player offers the next one when the route above refuses
 to load.
 
@@ -121,12 +121,12 @@ to load.
 
 All **508 MadKidGames sources** are enabled for in-page play using
 `https://www.madkidgames.com/full/<slug>`, matching the count advertised on
-[their HTML5 catalogue](https://www.madkidgames.com/html5-games). Existing games,
+[their HTML5 catalogue](https://www.madkidgames.com/html5-games). Existing G@M£$,
 local files, metadata and alternate sources are preserved. The scheduled
 catalogue builder continues importing the full MadKidGames sitemap and marks
 these sources embeddable on future refreshes.
 
-**Publisher setup required:** MadKidGames' game-page “Ads.txt Requirement” says
+**Publisher setup required:** MadKidGames' G@M£$-page “Ads.txt Requirement” says
 website owners must copy the supplied ads.txt entries to their site's root
 `ads.txt`, then email their domain to **admin@madkidgames.com** for approval.
 Use their current entries; do not invent publisher IDs or copy unrelated
@@ -135,18 +135,18 @@ those entries or evidence of domain approval. Their player may show
 “Embedding unavailable” until setup is complete. Preview domains may need
 separate approval. The existing new-tab fallback remains available.
 
-The catalogue and player are tested locally; live playback of all 508 games
+The catalogue and player are tested locally; live playback of all 508 G@M£$
 has not been verified from an approved deployment.
 
 ### Titles no feed carries
 
-`scripts/extras.py` is a list of games added by hand. They go through the same
+`scripts/extras.py` is a list of G@M£$ added by hand. They go through the same
 grouping and sorting as a feed, so an extra can never appear twice and a portal
 that later starts carrying the same title just becomes a second route on the
 same tile. Four keys are special: `id` names the tile slug, `pin` keeps it
 above the most-played on every sort, `priority` decides which of several
 routes for one title is tried first, and `exclusive` refuses a feed copy — a
-different game that happens to own the same title is not a fallback.
+different G@M£$ that happens to own the same title is not a fallback.
 
 There is one hand-added title: **Minecraft**, with two routes that both allow
 framing. The obvious host, `eaglercraft.com/play`, answers
@@ -157,7 +157,7 @@ that the school does not block — and the second is a maintained 1.8.8 u53
 distribution in case the personal page disappears. If both frames are ever
 refused, set `"embed": False` in `scripts/extras.py` and the tile opens in a
 new tab instead. (The player's iframe still asks for `pointer-lock`, without which
-mouse-look is dead in games like it.)
+mouse-look is dead in G@M£$ like it.)
 
 ### Why not hundreds of portals
 
@@ -170,7 +170,7 @@ hard:
 - **KBH Games** — sitemap readable, pages behind Cloudflare's bot challenge.
 - **HTMLGames** — public JSON index, free embedding, own CDN. Used.
 - **GamePix** — `/embed/` answers 403 to a foreign referrer. Needs a key.
-- **GameDistribution** — 19,000 games and a clean player, but it serves
+- **GameDistribution** — 19,000 G@M£$ and a clean player, but it serves
   `blocked.html?unregistered=true` to any domain that has not registered with
   them. One free dashboard signup would unlock it.
 - **GamePix, Gameflare, CrazyGames, Poki, Y8** — no keyless feed, or a 404
@@ -191,7 +191,7 @@ re-reads the MadKidGames sitemap, merges duplicates by a normalised title
 The builder refuses to write a catalogue that is smaller than the one already
 in place, so a bad feed day cannot wipe the wall. It also drops generative-AI
 titles and a short blocklist of gambling titles (casino, slots, poker). AI-titled
-games are no longer excluded — an earlier rule did that, and it has been removed.
+G@M£$ are no longer excluded — an earlier rule did that, and it has been removed.
 
 ## Getting the link out
 
@@ -234,7 +234,7 @@ Post these, not the bare URL:
 | A friend, one to one | `https://funclassroom.github.io/?ref=wordofmouth` |
 
 `?utm_source=` works the same way if a tag is forced on you, and the value is
-lowercased and stripped to `[a-z0-9_-]` before it is used. The offline games
+lowercased and stripped to `[a-z0-9_-]` before it is used. The offline G@M£$
 page takes the same parameters:
 `https://funclassroom.github.io/files.html?ref=tiktok`.
 
@@ -251,10 +251,10 @@ Two different kinds of progress exist, and it is worth knowing which is which.
 
 Saved picks, history and preferences are not uploaded and there is no account.
 The site pages load Microsoft Clarity for visit and session analytics; the
-bundled HTML game files carry no analytics tag. **Export my data** creates a
+bundled HTML G@M£$ files carry no analytics tag. **Export my data** creates a
 JSON file locally; **Import data** restores it in this browser. The footer has
 a two-step **Clear saved data** button. The separate **Clear offline
-downloads** action removes downloaded game files from Cache Storage.
+downloads** action removes downloaded G@M£$ files from Cache Storage.
 
 **The local files** save wherever their own code decides, which for most of
 them is this browser's `localStorage` under the site's own origin. They are not
@@ -266,7 +266,7 @@ that publisher's storage, tied to this site. They survive a reload, a closed
 tab and a new visit from the same browser. They do not follow you to another
 device or another browser, and a private window throws them away when it closes.
 If a title only keeps state in memory, nothing can save it — that is down to the
-game.
+G@M£$.
 
 ### Installing PostHog
 
@@ -299,7 +299,7 @@ the files back.
 ## The page
 
 - Search titles and descriptions (multi-word: "car park" finds "Car Parking"), plus Popular / Top rated / A–Z / Least played
-- Availability filters for offline files, in-page titles, and new-tab-only titles; game-type filters for action, puzzle, racing, sports, strategy and arcade
+- Availability filters for offline files, in-page titles, and new-tab-only titles; G@M£$-type filters for action, puzzle, racing, sports, strategy and arcade
 - Display options for dark mode, larger text and high contrast; reduced-motion follows the operating system setting
 - "More like what you played" — suggestions derived on the device from titles
   you already opened, with nothing sent anywhere
@@ -311,34 +311,34 @@ the files back.
 - Tab cloaks (Classroom, Google, Docs), a blank-tab launcher and a quick exit
 - **100% Unblocked** in the header: 129 titles that are plain files,
   on their own page, with no embed to load — plus filter and Surprise me
-- The player header sizes to its own text (title, stats, source, description, report link) instead of a fixed bar that clipped the title off the top of the screen; the description wraps to three lines and disappears on a window under 520px tall, so the game keeps the height
+- The player header sizes to its own text (title, stats, source, description, report link) instead of a fixed bar that clipped the title off the top of the screen; the description wraps to three lines and disappears on a window under 520px tall, so the G@M£$ keeps the height
 - Fullscreen, and an "open in a new tab" fallback if a title refuses to frame
 - If a route fails, **Try another source** walks to the next one; if every one
   fails, the player says so, apologises, and offers the portal in a new tab
-- Loading stays on screen until the frame answers, so a slow game is never a
+- Loading stays on screen until the frame answers, so a slow G@M£$ is never a
   silent black page; local files show the same card
 - A short help section explains keyboard shortcuts, publisher availability and
   local storage; report links create GitHub issues with the selected title
 - **Send feedback** in the footer of both pages opens one small dialog: say
-  something is broken or request a game, and it becomes a GitHub issue with
+  something is broken or request a G@M£$, and it becomes a GitHub issue with
   the page, browser and your words already in it. Nothing is sent from the
   site, and no address is published — a free GitHub account is all it needs
 - A static GitHub Pages PWA caches the site shell; on the local-files page,
-  **Save offline** downloads only the selected HTML game — plus the shared
+  **Save offline** downloads only the selected HTML G@M£$ — plus the shared
   runtime, if that page uses one — to this browser. They can be removed
-  separately. Publisher-hosted games still need the internet.
+  separately. Publisher-hosted G@M£$ still need the internet.
 
 No frameworks, no build step, no server-side backend. The site is static on
 GitHub Pages, with a same-origin service worker for optional offline caching.
 `localStorage` and Cache Storage remain in this browser; the only site-level
 analytics integration is the Microsoft Clarity tag in the head of the site
 pages. Nothing in `assets/games/` carries a tag of its own. The optional Hanger 2
-debug editor no longer injects its remote dat.GUI CDN script; normal game play
+debug editor no longer injects its remote dat.GUI CDN script; normal G@M£$ play
 is unaffected.
 
 ### Blocking ads on the site itself
 
-Some of the bundled game files arrived with advertising code still inside them
+Some of the bundled G@M£$ files arrived with advertising code still inside them
 — `dadish-3` carries a live Google Ad Manager tag and a Prebid auction,
 `zombie-rush`, `ovo`, `wheelie-bike` and `8-ball-classic` carry related
 fragments, and `ovo` calls adinplay. `sw.js` keeps a `BLOCKED_HOSTS` list —
@@ -350,24 +350,24 @@ ever runs on this origin.
 
 The `204` is chosen, not incidental: `ovo` watches for a blocked ad request and
 only raises its "adblock detected" flag when the status is `0`. A `204` looks
-like a real answer, so the game plays instead of showing a disable-your-blocker
+like a real answer, so the G@M£$ plays instead of showing a disable-your-blocker
 wall.
 
 What it can and cannot do:
 
-- **It covers** the wall, the files page and all 129 bundled games, because the
+- **It covers** the wall, the files page and all 129 bundled G@M£$, because the
   service worker controls every page in its scope and sees their subresource
   requests, including the cross-origin ones.
-- **It cannot cover a streamed publisher game.** 15,972 of the 17,763 titles
+- **It cannot cover a streamed publisher G@M£$.** 15,972 of the 17,763 titles
   come from `gamemonetize.com`, 1,297 from `htmlgames.com` and 1,018 from
   `madkidgames.com`; the wall loads each of those pages in an iframe. A frame
   from another origin is a separate document that this site cannot script,
   filter or inspect — the same browser rule protects any site from being
   tampered with by whoever frames it. **Ads inside a streamed title cannot be
   removed by any code on this site**, only by the visitor's own browser
-  extension or by the publisher. The 129 bundled games under `assets/games/`
+  extension or by the publisher. The 129 bundled G@M£$ under `assets/games/`
   are the part this list fully covers.
-- **Clarity is deliberately not on the list.** Neither is `jsdelivr.net` (26 game
+- **Clarity is deliberately not on the list.** Neither is `jsdelivr.net` (26 G@M£$
   files load their runtime from it) nor any publisher domain. Tests fail if any
   of those creep in, and fail if a lookalike domain such as `notdoubleclick.net`
   matches the suffix rule.
@@ -380,10 +380,10 @@ What it can and cannot do:
 `files.html`, reached from **100% Unblocked** in the header, lists 129 titles
 that ship with the site as plain HTML under `assets/games/`. No embed, no
 portal, no third party that can refuse a frame: the page opens a file from its
-own folder, and a filter aimed at a game site has nothing to act on.
+own folder, and a filter aimed at a G@M£$ site has nothing to act on.
 
 140 of them come from [CoolDude2349's Offline HTML Games Pack](https://github.com/CoolDude2349/Offline-HTML-Games-Pack),
-which collects 352 single-file games. All 352 would be 5.3 GB, so this site
+which collects 352 single-file G@M£$. All 352 would be 5.3 GB, so this site
 carries a hand-picked set that fits inside the size budget: the small classics,
 the heavy legends (Slope, Retro Bowl, OvO, Bad Piggies, Fireboy & Watergirl and
 more) and the sequels of both.
@@ -400,7 +400,7 @@ tree**, so `tests/catalog.test.js` holds `assets/games/` to **900 MiB**. The
 folder and its shared runtimes now sit about **370 MiB** under that
 project-level ceiling; a new title still has to be worth the megabytes it
 costs. The other limit is honesty: a
-file that fetches its engine from a CDN is not an offline game, so it is not
+file that fetches its engine from a CDN is not an offline G@M£$, so it is not
 shipped no matter how good the title is.
 
 Every candidate is therefore screened before it is copied, and the checks are
@@ -414,7 +414,7 @@ the ones a school network would notice:
   `Cluster Rush`, `Crazy Cars`, `Rooftop Snipers 2`, `Space Waves`,
   `Ages of Conflict`, `Car King Arena`, `Tunnel Rush`, `Ragdoll Archers`,
   `Monkey Mart`) it is left out, because it needs the network;
-- no payload it does not carry. A game must have at least 90% of its own bytes
+- no payload it does not carry. A G@M£$ must have at least 90% of its own bytes
   inlined as base64 or in an embedded zip, measured per file;
 - no boot step waiting on a missing script. Several pack copies start with
   `await load("poki.js")` and stop there when it 404s — that excluded
@@ -448,7 +448,7 @@ pack copy is not really offline (`Geometry Dash` still pulls its sounds,
 removing something first, and the size check in the test suite is what makes
 that argument happen out loud instead of at 1 GB.
 
-A number of the pack's newer exports wrap the game in a `player.load(...)`
+A number of the pack's newer exports wrap the G@M£$ in a `player.load(...)`
 bootstrap that did not initialise in the test browser (`Bloons TD 5`,
 `Duck Life 2` to `5`, `Motherload`, `Wheely`, `Snail Bob 2`, `Run`,
 `Space is Key 2`, `Flood Runner 3` and `4`, `Earn to Die 2`, `Papa's Burgeria`,
@@ -456,7 +456,7 @@ bootstrap that did not initialise in the test browser (`Bloons TD 5`,
 already ships, so those copies were set aside rather than declared broken.
 
 Card art for a new title is a screenshot the probe takes, so a freshly added
-game shows a plain title card until `local-files.yml` has run once and
+G@M£$ shows a plain title card until `local-files.yml` has run once and
 committed its real screenshot.
 
 That is also why the folder is committed in the open rather than hidden behind
@@ -471,7 +471,7 @@ from `assets/games/`.)
 `scripts/probe-files.mjs` serves the repo and opens every one of them in
 Chromium, checking each returns 200 and actually paints. It also takes the
 512×384 card screenshots in `assets/img/pack/`.
-`.github/workflows/local-files.yml` runs it when a game changes and commits any
+`.github/workflows/local-files.yml` runs it when a G@M£$ changes and commits any
 new screenshots.
 
 ## Files
@@ -480,8 +480,8 @@ new screenshots.
 index.html               the page
 files.html               the 129 titles that are plain files
 404.html                 not-found page
-assets/games/*.html      the games themselves, straight from the offline pack
-assets/img/pack/*.jpg    one screenshot per game, taken by the probe
+assets/games/*.html      the G@M£$ themselves, straight from the offline pack
+assets/img/pack/*.jpg    one screenshot per G@M£$, taken by the probe
 assets/img/share/og-cover.png  the 1200x630 card a shared link shows
 assets/css/app.css       all styling
 assets/js/catalog.js     generated catalogue (17,573 rows)
@@ -522,12 +522,12 @@ by `robots.txt` and the pages' own `index,follow` below.
 ### Being found
 
 - `robots.txt` allows everything and names the sitemap.
-- `sitemap.xml` lists the wall, the files page and every game file that does not
+- `sitemap.xml` lists the wall, the files page and every G@M£$ file that does not
   mention `noindex` — 110 addresses today. Regenerate it with
-  `python3 scripts/build-sitemap.py` after adding or removing a game; the
+  `python3 scripts/build-sitemap.py` after adding or removing a G@M£$; the
   catalogue refresh workflow runs the same script, and `tests/catalog.test.js`
   fails if the committed file drifts from the folder.
-- The 16 game files that carry another author's `noindex` are left out on
+- The 16 G@M£$ files that carry another author's `noindex` are left out on
   purpose, as are the five that only mention it inside a bundled payload. A page
   that refuses indexing in a sitemap is a warning in every webmaster tool.
 - The 17,763 catalogue entries are not separate URLs; they live in
@@ -536,7 +536,7 @@ by `robots.txt` and the pages' own `index,follow` below.
 
 Being listed cuts against the "keeps working when a filter blocks it" idea: the
 same index that lets a search find the site lets a school's blocklist find it.
-The pages stay public and the games still play from the folder, but a site that
+The pages stay public and the G@M£$ still play from the folder, but a site that
 ranks is a site a filter can recognise.
 
 ### Cloudflare Workers
@@ -557,11 +557,11 @@ forget them:
 
 ## On images and AI
 
-No image is generated here: every game thumbnail is the publisher's own file.
+No image is generated here: every G@M£$ thumbnail is the publisher's own file.
 The artwork the repo holds is the hand-written SVG tab icon, the 1200x630 share
 card, and one 512x384 grass-block card for Minecraft under
 `assets/img/catalog/` — a streamed tile needs art that still draws when every
-game host is unreachable.
+G@M£$ host is unreachable.
 
 AI-titled titles are no longer filtered — the old blocklist was removed when it
 turned out to be hiding the one Veo title the feeds still carried.

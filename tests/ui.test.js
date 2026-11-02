@@ -608,7 +608,7 @@ function titles(document) {
     check("the panel is shown straight away", !document.querySelector("[data-blocked]").hidden);
     check(
       "it explains the no-frame rule",
-      /does not allow its games inside another page/.test(document.querySelector("[data-blocked-text]").textContent)
+      /does not allow its G@M£\$ inside another page/.test(document.querySelector("[data-blocked-text]").textContent)
     );
     check(
       "it says the title will not be framed",
@@ -1021,7 +1021,7 @@ function titles(document) {
       note.hidden === false &&
         requestUrl.indexOf("/issues/new?") !== -1 &&
         /labels=game-request/.test(requestUrl) &&
-        requestUrl.indexOf("[Game request] Bloons TD 5") !== -1 &&
+        requestUrl.indexOf("[G@M£$ request] Bloons TD 5") !== -1 &&
         requestUrl.indexOf("The one everyone keeps asking for.") !== -1
     );
 

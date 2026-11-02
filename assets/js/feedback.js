@@ -53,10 +53,10 @@
           '<fieldset class="fb-kinds">' +
             '<legend>What is it about?</legend>' +
             '<label class="fb-kind is-on"><input type="radio" name="fb-kind" value="bug" checked><span>Something is broken</span></label>' +
-            '<label class="fb-kind"><input type="radio" name="fb-kind" value="request"><span>Request a game</span></label>' +
+            '<label class="fb-kind"><input type="radio" name="fb-kind" value="request"><span>Request a G@M£$</span></label>' +
           "</fieldset>" +
           '<label class="fb-field" data-fb-game hidden>' +
-            '<span>Which game?</span>' +
+            '<span>Which G@M£$?</span>' +
             '<input name="fb-game" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Bloons TD 5">' +
           "</label>" +
           '<label class="fb-field" data-fb-link hidden>' +
@@ -160,7 +160,7 @@
     var page = window.location.href;
 
     if (request && game.length < 2) {
-      errorLine.textContent = "Which game would you like?";
+      errorLine.textContent = "Which G@M£$ would you like?";
       errorLine.hidden = false;
       gameBox.focus();
       return;
@@ -177,9 +177,9 @@
     var body;
 
     if (request) {
-      title = "[Game request] " + firstLine(game, 70);
+      title = "[G@M£$ request] " + firstLine(game, 70);
       body =
-        "### Game\n" + game + "\n\n" +
+        "### G@M£$\n" + game + "\n\n" +
         "### Why\n" + (message || "—") + "\n\n" +
         "### Where to play it\n" + (link || "—") + "\n\n" +
         "---\nRequested from " + page;
