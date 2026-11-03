@@ -99,18 +99,18 @@ Routes are chosen **one per domain**, so a block on one host never takes the
 backup with it. That is why `html5.gamemonetize.co` and `gamemonetize.com` are
 not both listed for the same title unless a second domain exists.
 
-The player learns from real attempts only: a portal that actually failed in the
-frame moves to the back for that device. It never pre-judges a host from a
-`fetch()` — a reachability ping is filtered differently from an iframe, so it
-gave false "blocked" answers and hid sources that played fine. The one fact it
-does trust is the builder's `embeddable` flag, which comes from the publisher's
-own `X-Frame-Options` / `Content-Security-Policy` headers.
+The player only ever frames a file from **this** repository. A publisher title
+is handed to the publisher: one click on a real anchor, `target="_blank"` with
+`rel="noopener noreferrer"`, so it opens in its own tab, gets no handle on this
+page and no referrer. Nothing of a publisher's — page, script, ad or tracker —
+is ever loaded inside this site, which is also what lets the security policy
+name `'self'` as the only frame source.
 
-Every tile carries at least one route and most carry two, tried in order. A
-source the builder marked non-embeddable is never mounted in the iframe: the
-player shows the explanation panel and a prominent new-tab button straight
-away, so a known wall cannot become a black screen. When the attempted routes
-all fail, the player says so and offers the publisher in a new tab.
+That replaced a per-portal fallback queue: several routes per tile, tried in
+order, a route that failed in the frame moved to the back for that device, and
+a panel explaining the publisher that refused. The queue still exists for
+bundled files, but every one of those has a single, local source, so in
+practice the frame either loads in a blink or it is a broken file on disk.
 
 Every title appears once. A tile only carries more than one source when the
 same G@M£$ exists on more than one portal, and the extra sources are never shown
@@ -148,16 +148,14 @@ above the most-played on every sort, `priority` decides which of several
 routes for one title is tried first, and `exclusive` refuses a feed copy — a
 different G@M£$ that happens to own the same title is not a fallback.
 
-There is one hand-added title: **Minecraft**, with two routes that both allow
-framing. The obvious host, `eaglercraft.com/play`, answers
-`X-Frame-Options: DENY` (checked 20 October 2026), so the tile could never
-play inside the page; it was pulled. The first route is a single-file
-EaglercraftX build on GitHub Pages — a host that cannot send that header and
-that the school does not block — and the second is a maintained 1.8.8 u53
-distribution in case the personal page disappears. If both frames are ever
-refused, set `"embed": False` in `scripts/extras.py` and the tile opens in a
-new tab instead. (The player's iframe still asks for `pointer-lock`, without which
-mouse-look is dead in G@M£$ like it.)
+There is one hand-added title: **Minecraft**, with two routes. The obvious
+host, `eaglercraft.com/play`, answers `X-Frame-Options: DENY` (checked 20
+October 2026). The first route is a single-file EaglercraftX build on GitHub
+Pages, the second a maintained 1.8.8 u53 distribution in case the personal page
+disappears. Both are publisher routes now: the tile opens the build in its own
+tab rather than asking it to be framed. (The player's iframe still asks for
+`pointer-lock` for the bundled files — Flashtorio and the rest — where
+mouse-look would be dead without it.)
 
 ### Why not hundreds of portals
 
@@ -312,11 +310,12 @@ the files back.
 - **100% Unblocked** in the header: 129 titles that are plain files,
   on their own page, with no embed to load — plus filter and Surprise me
 - The player header sizes to its own text (title, stats, source, description, report link) instead of a fixed bar that clipped the title off the top of the screen; the description wraps to three lines and disappears on a window under 520px tall, so the G@M£$ keeps the height
-- Fullscreen, and an "open in a new tab" fallback if a title refuses to frame
-- If a route fails, **Try another source** walks to the next one; if every one
-  fails, the player says so, apologises, and offers the portal in a new tab
-- Loading stays on screen until the frame answers, so a slow G@M£$ is never a
-  silent black page; local files show the same card
+- Fullscreen for bundled files; every publisher title opens in its own tab,
+  never in a frame
+- If a bundled file fails, **Try another source** walks to the next route; if
+  every one fails, the player says so and offers the file in a new tab
+- Loading stays on screen until the frame answers, so a slow file is never a
+  silent black page
 - A short help section explains keyboard shortcuts, publisher availability and
   local storage; report links create GitHub issues with the selected title
 - **Send feedback** in the footer of both pages opens one small dialog: say
@@ -335,6 +334,59 @@ analytics integration is the Microsoft Clarity tag in the head of the site
 pages. Nothing in `assets/games/` carries a tag of its own. The optional Hanger 2
 debug editor no longer injects its remote dat.GUI CDN script; normal G@M£$ play
 is unaffected.
+
+## Security
+
+The site is static, so there is no server to attack and nothing to log in to.
+What is left is the browser: what the page is allowed to load, and what it is
+allowed to frame.
+
+**Nothing from a publisher is loaded in this page.** Every publisher title is
+an `<a target="_blank" rel="noopener noreferrer">` handed to the browser on a
+real click. The player frames bundled files only, and `embeddable()` in
+`assets/js/app.js` filters on `sameOrigin(source.url)` rather than trusting the
+catalogue data. So a title added by a feed tomorrow still cannot put a
+third-party document — with its scripts, ads, redirects and trackers — inside
+this site.
+
+**A content security policy rides in a `<meta http-equiv>` tag** on `index.html`,
+`files.html` and `404.html`, because GitHub Pages cannot send headers. It
+allows:
+
+| directive | allowed | why |
+| --- | --- | --- |
+| `default-src` | `'self'` | everything else is denied unless a rule below widens it |
+| `script-src` | `'self'`, `https://*.clarity.ms`, plus a `sha256` hash per inline script | Clarity is a deliberate exception; the hashes replace `'unsafe-inline'` |
+| `frame-src` | `'self'` | the bundled files, and nothing that is not this site |
+| `object-src`, `base-uri`, `form-action` | `'none'` | no plugins, no `<base>` rewriting, no forms leaving the page |
+| `img-src` | `'self'`, `data:`, `https:`, `https://c.bing.com` | tile thumbnails come from the publisher feeds |
+| `connect-src` | `'self'`, `https://*.clarity.ms` | the only place a request may go |
+| `style-src` | `'self'`, `'unsafe-inline'` | inline style attributes are set by the UI code |
+
+There is **no `'unsafe-inline'` and no `'unsafe-eval'` in `script-src`**: an
+injected `<script>`, or an `onclick=` smuggled into a title, has nothing to
+match. The hashes are checked against the pages' actual inline scripts by
+`npm test`, so editing an inline script without regenerating the policy fails
+the build. Regenerate with:
+
+```sh
+node scripts/csp-hashes.mjs
+```
+
+**Every off-site link** carries `rel="noopener noreferrer"`, and every page
+sends `<meta name="referrer" content="no-referrer">`, so no publisher learns
+which page sent a click or gets a handle on the opener window.
+
+**What this does not do.** It cannot sandbox the bundled G@M£$ files: they are
+served from this origin, so they share its storage and its service worker, and
+they are third-party code. That is the price of them working offline, and it is
+why they are picked by hand from one pack (see above) rather than mirrored
+wholesale. It also cannot stop a visitor clicking through to a publisher — that
+page is the publisher's, with the publisher's trackers and its own policy.
+
+**Reporting a problem.** Anything in the catalogue can be reported from the
+player or the footer, which opens a GitHub issue with the title and the page
+already in it.
 
 ### Blocking ads on the site itself
 
@@ -358,15 +410,12 @@ What it can and cannot do:
 - **It covers** the wall, the files page and all 129 bundled G@M£$, because the
   service worker controls every page in its scope and sees their subresource
   requests, including the cross-origin ones.
-- **It cannot cover a streamed publisher G@M£$.** 15,972 of the 17,763 titles
+- **There is nothing left to cover on this site.** 15,972 of the 17,763 titles
   come from `gamemonetize.com`, 1,297 from `htmlgames.com` and 1,018 from
-  `madkidgames.com`; the wall loads each of those pages in an iframe. A frame
-  from another origin is a separate document that this site cannot script,
-  filter or inspect — the same browser rule protects any site from being
-  tampered with by whoever frames it. **Ads inside a streamed title cannot be
-  removed by any code on this site**, only by the visitor's own browser
-  extension or by the publisher. The 129 bundled G@M£$ under `assets/games/`
-  are the part this list fully covers.
+  `madkidgames.com`; none of those pages is framed any more. A publisher title
+  opens in its own tab, where its ads are the publisher's business and the
+  visitor's extension can deal with them. This page now loads no
+  third-party document at all, so there is no ad slot in it to fill.
 - **Clarity is deliberately not on the list.** Neither is `jsdelivr.net` (26 G@M£$
   files load their runtime from it) nor any publisher domain. Tests fail if any
   of those creep in, and fail if a lookalike domain such as `notdoubleclick.net`
@@ -491,9 +540,11 @@ assets/vendor/ruffle/    the Flash runtime, kept once for the pages that share i
 scripts/build-catalog.py catalogue generator
 scripts/extras.py        titles added by hand (Minecraft and its spare route)
 scripts/share-runtime.py writes a duplicated runtime out once, repoints the pages
+scripts/csp-hashes.mjs   writes the content security policy and its script hashes
 .github/ISSUE_TEMPLATE  the bug and game-request forms the dialog mirrors
 tests/ui.test.js         DOM behaviour
 tests/catalog.test.js    data and repository checks
+tests/security.test.js   policy, framing and link hygiene (run from catalog.test)
 ```
 
 ## Running

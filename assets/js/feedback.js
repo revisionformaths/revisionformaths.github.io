@@ -73,7 +73,7 @@
             '<button type="button" class="fb-cancel" data-fb-cancel>Cancel</button>' +
             '<button type="submit" class="fb-send">Open GitHub issue</button>' +
           "</div>" +
-          '<p class="fb-alt">Want to look first? <a href="' + ISSUES + '" target="_blank" rel="noopener">See what has already been reported</a>.</p>' +
+          '<p class="fb-alt">Want to look first? <a href="' + ISSUES + '" target="_blank" rel="noopener noreferrer">See what has already been reported</a>.</p>' +
         "</form>" +
       "</div>";
 

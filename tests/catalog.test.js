@@ -783,6 +783,8 @@ check(
   /funclassroom\/funclassroom\.github\.io/.test(fs.readFileSync(path.join(ROOT, "assets/js/feedback.js"), "utf8"))
 );
 
+require("./security.test.js").securityChecks(check);
+
 console.log("\n  DATA: " + pass + " passed, " + fail + " failed\n");
 if (fail) {
   failures.forEach((f) => console.log("   - " + f));
