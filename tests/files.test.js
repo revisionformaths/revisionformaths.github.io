@@ -1,7 +1,7 @@
-/* The files page and its import pipeline.
+/* The files page and the library behind it.
    Everything here is about one promise: every entry in data/local-files.json is
-   a real file on disk, is regenerated into local-games.js, and is a file that
-   pulls nothing from the network. */
+   a real file on disk, is regenerated into local-games.js, and is a file from
+   this repository rather than a link to somebody else's page. */
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
@@ -10,7 +10,7 @@ const ROOT = path.join(__dirname, "..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const DATA = JSON.parse(read("data/local-files.json"));
 
-const MAX_FILE = 2 * 1024 * 1024;
+const MAX_FILE = 25 * 1024 * 1024; /* Cloudflare's per-file upload limit */
 const BUDGET = 750 * 1024 * 1024;
 
 /* Mirrors scripts/build-local-list.py, so a stale list is caught here. */
@@ -57,7 +57,7 @@ function fetchedFrom(html) {
 }
 
 function fileChecks(check) {
-  console.log("\nFILES — the offline library and its importer\n");
+  console.log("\nFILES — the offline library\n");
 
   const entries = DATA.entries;
   check("the file list is not empty", entries.length > 0, String(entries.length));
@@ -93,11 +93,12 @@ function fileChecks(check) {
   }
 
   /* Sizes. A game is a file, not a bundle of files. */
-  const tooBig = entries.filter((entry) => {
-    if ((entry.source || {}).kind !== "js13k") return false;
-    return fs.statSync(path.join(ROOT, entry.file)).size > MAX_FILE;
-  });
-  check("no imported file is over 2 MB", tooBig.length === 0, tooBig.slice(0, 3).map((e) => e.file).join(", "));
+  const tooBig = entries.filter((entry) => fs.statSync(path.join(ROOT, entry.file)).size > MAX_FILE);
+  check(
+    "no file is over the 25 MB per-file upload limit",
+    tooBig.length === 0,
+    tooBig.slice(0, 3).map((e) => e.file).join(", ")
+  );
 
   const total = entries.reduce((sum, entry) => sum + fs.statSync(path.join(ROOT, entry.file)).size, 0);
   check(
@@ -106,34 +107,31 @@ function fileChecks(check) {
     (total / 1048576).toFixed(0) + " MB of " + BUDGET / 1048576 + " MB"
   );
 
-  /* The promise the whole page makes: a file that needs nothing but itself. */
-  const imported = entries.filter((entry) => (entry.source || {}).kind === "js13k");
-  const leaky = imported.filter((entry) => {
-    const refs = fetchedFrom(read(entry.file));
-    return refs.some((ref) => !/^(data:|#)/i.test(ref));
-  });
+  /* Every entry is one file in this repository: nothing streamed, nothing
+     handed to somebody else's page. */
+  const offSite = entries.filter((entry) => !/^assets\/games\/[^/]+\.html?$/.test(entry.file));
   check(
-    "every imported file is self-contained",
-    leaky.length === 0,
-    leaky.slice(0, 3).map((e) => e.file).join(", ")
+    "every entry is one HTML file in assets/games/",
+    offSite.length === 0,
+    offSite.slice(0, 3).map((e) => e.file).join(", ")
   );
 
-  /* Attribution: these are other people's games. */
-  const unattributed = imported.filter((entry) => {
+  const unattributed = entries.filter((entry) => {
     const source = entry.source || {};
-    return !source.author || !source.repo || !source.year || !/^https:\/\/github\.com\//.test(source.repo);
+    return source.kind !== "pack" || !/^https:\/\/github\.com\//.test(source.repo || "");
   });
   check(
-    "every imported game names its author and source",
+    "every entry names the pack it came from",
     unattributed.length === 0,
     unattributed.slice(0, 3).map((e) => e.file).join(", ")
   );
 
-  const noThumb = imported.filter(
+  /* Every entry renders a card, so every one needs its screenshot. */
+  const noThumb = entries.filter(
     (entry) => !fs.existsSync(path.join(ROOT, "assets", "img", "pack", path.basename(entry.file, path.extname(entry.file)) + ".jpg"))
   );
   check(
-    "every imported game has a card image",
+    "every file has a card image",
     noThumb.length === 0,
     noThumb.slice(0, 3).map((e) => path.basename(e.file)).join(", ")
   );
@@ -156,17 +154,13 @@ function fileChecks(check) {
     list.every((game) => fs.existsSync(path.join(ROOT, game.file)))
   );
 
-  /* The importer is configured to run unattended and to stop before the site
-     outgrows what GitHub Pages will serve. */
-  const workflow = read(".github/workflows/import-files.yml");
-  check("a scheduled job keeps importing", /schedule:/.test(workflow) && /import-js13k\.py/.test(workflow));
-  check("the job commits what it finds", /git push/.test(workflow));
-  const importer = read("scripts/import-js13k.py");
+  /* No import pipeline is shipped: files are added by hand, and nothing on a
+     schedule can quietly grow the site. */
+  check("no importer is left in the repo", !fs.existsSync(path.join(ROOT, "scripts/import-js13k.py")));
   check(
-    "the importer has a hard budget",
-    /--budget-mb/.test(importer) && /budget/.test(importer)
+    "no workflow grows the library on its own",
+    !fs.existsSync(path.join(ROOT, ".github/workflows/import-files.yml"))
   );
-  check("the importer refuses files that still fetch", /def leftovers|def check/.test(importer));
 }
 
 module.exports = { fileChecks };

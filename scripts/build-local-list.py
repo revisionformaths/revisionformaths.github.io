@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Render assets/js/local-games.js from data/local-files.json.
 
-`data/local-files.json` is the source of truth for the files page: the 129
-files that ship in the pack plus everything scripts/import-js13k.py has
-imported. This turns it back into the plain list both pages read, so the
-importer never has to patch JavaScript by hand.
+`data/local-files.json` is the source of truth for both pages: every entry is
+one file in `assets/games/`. This turns it into the plain list the pages read,
+so no page ever patches its own JavaScript by hand.
 
     python3 scripts/build-local-list.py          # rewrite local-games.js
     python3 scripts/build-local-list.py --check  # exit 1 if it is stale

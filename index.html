@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- No referrer to anyone: a publisher this page links to learns nothing about where the click came from. -->
+<!-- No referrer to anyone: nothing this page links to learns where the click came from. -->
 <meta name="referrer" content="no-referrer">
 <title>Classroom</title>
-<meta name="description" content="G@M£$ that open as plain files and keep playing with the network off, plus a wall of publisher titles that open in their own tab.">
+<meta name="description" content="Every G@M£$ here is a plain HTML file served with the site, so it keeps playing with the network off and no filter can block it.">
 <meta name="theme-color" content="#ffffff">
 <meta name="robots" content="index,follow">
 <!-- Link previews. The page is indexable; these tags shape what a shared link shows. -->
@@ -72,14 +72,12 @@
   <p class="files-kicker pitch"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg> Works offline</p>
   <p class="pitch-line">
     <b><span data-local-count>129</span> G@M£$ that keep playing with the network off</b>
-    — each one is an HTML file served from this page, so there is no embed to
-    refuse and nothing for a filter to block.
-    <a href="files.html">Open them</a>.
-    The rest of the wall below opens on the publisher's own site, in a new tab.
+    — every one is an HTML file served with this page, so there is no embed to
+    refuse, no publisher to wait for and nothing a filter can block.
   </p>
 
   <div class="toolbar">
-    <h1>All titles <span class="count" data-count>0</span><span class="shown" data-shown></span></h1>
+    <h1>All files <span class="count" data-count>0</span><span class="shown" data-shown></span></h1>
     <div class="sorts" role="group" aria-label="Sort by">
       <button type="button" data-sort="hot" aria-pressed="true">Popular</button>
       <button type="button" data-sort="top" aria-pressed="false">Top rated</button>
@@ -119,14 +117,6 @@
   <div class="tags" data-tags hidden></div>
 
   <div class="filter-bar" aria-label="Filter titles">
-    <label>Availability
-      <select data-availability aria-label="Filter by availability">
-        <option value="all">All titles</option>
-        <option value="local">Offline files</option>
-        <option value="embedded">Plays here</option>
-        <option value="external">New tab only</option>
-      </select>
-    </label>
     <label>Type
       <select data-genre aria-label="Filter by type">
         <option value="all">All types</option>
@@ -144,8 +134,8 @@
 
   <details class="site-help">
     <summary>How this page works</summary>
-    <p>Search titles or descriptions, then filter by G@M£$ type and whether a title plays here or is a local file. Press <kbd>/</kbd> to search and <kbd>Esc</kbd> to close the player. Saved titles and history stay in this browser; use Export/Import to move them between devices.</p>
-    <p>Publisher G@M£$ open on the publisher's own site in a new tab — nothing of theirs is loaded in this page. Local HTML G@M£$ can be saved to this browser for offline play. This site has no account and no server-side storage; saved picks and history stay in this browser. Microsoft Clarity measures page visits and sessions. The catalogue is served as static files from GitHub Pages.</p>
+    <p>Search titles or descriptions, then filter by G@M£$ type. Press <kbd>/</kbd> to search and <kbd>Esc</kbd> to close the player. Saved titles and history stay in this browser; use Export/Import to move them between devices.</p>
+    <p>Every G@M£$ is an HTML file served with this site, so nothing from another site is loaded here and any of them can be saved to this browser for offline play. This site has no account and no server-side storage; saved picks and history stay in this browser. Microsoft Clarity measures page visits and sessions. The page itself is a static file served from GitHub Pages.</p>
   </details>
   <section id="grid" class="grid" aria-label="Titles"></section>
 
@@ -160,7 +150,7 @@
 </main>
 
 <footer class="foot">
-  <p>G@M£$ <span class="sep">/</span> <span data-foot-count>16,000+</span> titles, each opened on the publisher's own site. Nothing is hosted here.</p>
+  <p>G@M£$ <span class="sep">/</span> <span data-foot-count>129</span> files, all served from this page. Nothing is streamed.</p>
   <p class="foot-data">
     <span data-storage-note>Picks, history and scroll position are saved in this browser.</span>
     <button type="button" class="link" data-export>Export my data</button>
@@ -233,7 +223,7 @@
         <a class="btn btn-accent" data-blocked-open target="_blank" rel="noopener noreferrer" hidden></a>
         <button type="button" class="btn btn-dark" data-retry>Try them all again</button>
       </div>
-      <p class="blocked-apology">Sorry about that — the publisher(s) are refusing to be framed right now. Nothing on this page is broken except that.</p>
+      <p class="blocked-apology">Sorry about that — the file did not load. A reload usually fixes it.</p>
     </div>
   </div>
 </div>
@@ -249,7 +239,6 @@
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
 </svg>
 
-<script src="assets/js/catalog.js?v=23"></script>
 <script src="assets/js/local-games.js?v=5"></script>
 <script src="assets/js/app.js?v=30"></script>
 <script src="assets/js/feedback.js?v=4"></script>

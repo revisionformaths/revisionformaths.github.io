@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-kLITZngTzu03ZQ5MIV0JUluTmTgfG0AxPsF/CblGcxY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-J8J07RTcwjs27H8dfPZlkYUX8rxjKUHeAw8Vf0P8oRA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- No referrer to anyone: a publisher this page links to learns nothing about where the click came from. -->
+<!-- No referrer to anyone: nothing this page links to learns where the click came from. -->
 <meta name="referrer" content="no-referrer">
 <title>Classroom</title>
 <meta name="description" content="One hundred and twenty-nine G@M£$ that open as plain files, with no embed and nothing a filter can block.">
@@ -67,33 +67,21 @@
     <p class="files-kicker"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg> Works offline</p>
     <h1>These G@M£$ play with the wi-fi off.</h1>
     <p class="files-lede">
-      Every title here lives in this folder as plain HTML, not an embed on
+      Every G@M£$ here lives in this folder as plain HTML, not an embed on
       somebody else's server. Each one carries its own art and sound, so there
       is no portal, no player to load and no third party that can refuse a
       frame — a filter that blocks a site has nothing to act on.
     </p>
-    <p class="files-lede">
-      The hand-picked ones below lead. The rest arrived from
-      <a href="https://github.com/js13kGames" target="_blank" rel="noopener noreferrer">js13kGames</a>,
-      a jam where every entry has to fit in a 13&nbsp;kB zip — tiny, complete
-      G@M£$ by named authors, each card credited. They were imported, checked
-      to load nothing but themselves, and added without anyone touching a file.
-    </p>
     <p class="files-lede files-lede-2">
-      One hundred and twenty-nine of them come from
+      All one hundred and twenty-nine come from
       <a href="https://github.com/CoolDude2349/Offline-HTML-Games-Pack" target="_blank" rel="noopener noreferrer">CoolDude2349's Offline HTML Games Pack</a>,
       which holds 352 in all: the small classics, the heavy legends (Retro
       Bowl, OvO, Bad Piggies and friends) and the sequels people keep
       asking for — Bloons TD 2 to 4, Fireboy &amp; Watergirl 2 to 4, Among Us,
-      Duck Life and Papa's Pizzeria. Every one is a file that carries its own
-      art and sound, checked to need nothing from the network — the Flash
-      titles share one copy of the player that runs them, kept once for the
-      whole folder instead of pasted into every page.
-      <b>Minecraft</b> is not in this folder any more. It was a 76&nbsp;MB
-      single file — more than every other title put together — so it plays
-      from a browser build online again, starting with
-      <a href="https://johntherriiiippper.github.io/eaglercraftx.html" target="_blank" rel="noopener noreferrer">this one</a>,
-      and it needs the network. Search for it on the main wall instead.
+      Duck Life and Papa's Pizzeria. The Flash titles share one copy of the
+      player that runs them, kept once for the whole folder instead of pasted
+      into every page. There is nothing else on this site: no second list, no
+      embed, and nothing that needs the network.
     </p>
     <ul class="files-facts">
       <li><b data-local-count>129</b> titles in this folder</li>
@@ -136,7 +124,7 @@
 </main>
 
 <footer class="foot">
-  <p>G@M£$ <span class="sep">/</span> the rest of the wall opens on the publishers' own sites — this page is the exception.</p>
+  <p>G@M£$ <span class="sep">/</span> every one of them a file. Nothing here is streamed.</p>
   <p class="foot-data">
     <span>Teacher walking over? Press <kbd>`</kbd> to exit fast.</span>
     <a class="link" href="https://classroom.google.com/">Quick exit</a>
@@ -228,10 +216,8 @@
   // links resolve against the address bar, so it has to be exact.
   var home = window.location.pathname + window.location.search;
 
-  // The last segment of the path, so assets/games/js13k/foo.html and
-  // assets/games/foo.html both key off "foo" - one flat screenshot folder and
-  // one flat set of saved-recent keys. The importer refuses to add a game whose
-  // basename is already taken, so this cannot collide.
+  // The last segment of the path, so a file can sit in a subfolder later
+  // without changing its screenshot name or its saved-recent key.
   function slugOf(file) {
     return file.replace(/^.*\//, "").replace(/\.html?$/, "");
   }

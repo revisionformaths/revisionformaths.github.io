@@ -21,163 +21,36 @@ function check(name, condition, extra) {
   }
 }
 
-console.log("\nDATA — catalogue and repository\n");
+console.log("\nDATA — the offline library\n");
 
-const sandbox = { window: {} };
-vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(ROOT, "assets/js/catalog.js"), "utf8"), sandbox);
+/* There is no publisher catalogue any more: every title on the site is a file
+   in this repository. These checks are what stop one creeping back in. */
+const index = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+const app = fs.readFileSync(path.join(ROOT, "assets/js/app.js"), "utf8");
+const notFound = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
+const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-const CATALOG = sandbox.window.CATALOG;
-const slugs = CATALOG.map((g) => g.id);
-const titles = CATALOG.map((g) => g.title);
-
-check("catalogue is not empty", CATALOG.length > 100, String(CATALOG.length));
-check("the old 506-title wall survived", CATALOG.length >= 506, String(CATALOG.length));
-check("slugs are unique", new Set(slugs).size === slugs.length);
-check("titles are unique", new Set(titles).size === titles.length);
+check("the publisher catalogue is gone", !fs.existsSync(path.join(ROOT, "assets/js/catalog.js")));
+check("no page loads a catalogue", ![index, fs.readFileSync(path.join(ROOT, "files.html"), "utf8")].some((h) => /catalog\.js/.test(h)));
 check(
-  "slugs are url-safe",
-  slugs.every((s) => /^[a-z0-9-]+$/.test(s)),
-  slugs.filter((s) => !/^[a-z0-9-]+$/.test(s)).join(", ")
-);
-check("every title is named", titles.every((t) => t.trim().length > 0));
-check(
-  "ratings sit between zero and five",
-  CATALOG.every((g) => typeof g.rating === "number" && g.rating >= 0 && g.rating <= 5)
-);
-check(
-  "play counts are whole numbers",
-  CATALOG.every((g) => Number.isInteger(g.plays) && g.plays >= 0)
-);
-check(
-  "routes never repeat a domain",
-  CATALOG.every((g) => {
-    const domains = new Set(g.sources.map((s) => new URL(s.url).hostname.split(".").slice(-2).join(".")));
-    return domains.size === g.sources.length;
-  })
-);
-check(
-  "at most three routes per title",
-  CATALOG.every((g) => g.sources.length <= 3)
-);
-check(
-  "several independent embed hosts are in use",
-  new Set(CATALOG.flatMap((g) => g.sources.map((s) => new URL(s.url).hostname))).size >= 3
-);
-check(
-  "all 508 MadKid games are available as in-page sources",
-  (() => {
-    const mad = CATALOG.flatMap((g) => g.sources).filter((s) => s.portal === "madkidgames.com");
-    return new Set(mad.map((s) => s.url)).size >= 508 && mad.every((s) =>
-      s.embed === true && /^https:\/\/www\.madkidgames\.com\/full\/[a-z0-9-]+$/.test(s.url));
-  })(),
-  CATALOG.flatMap((g) => g.sources).filter((s) => s.portal === "madkidgames.com" && !s.embed).length + " not enabled"
-);
-check(
-  "only MadKid routes are marked unembeddable",
-  CATALOG.flatMap((g) => g.sources).every((s) => s.embed || s.portal === "madkidgames.com")
-);
-check(
-  "every tile has at least one source",
-  CATALOG.every((g) => Array.isArray(g.sources) && g.sources.length > 0)
-);
-check(
-  "every source has a portal and an https url",
-  CATALOG.every((g) =>
-    g.sources.every((s) => typeof s.portal === "string" && /^https:\/\//.test(s.url))
+  "no portal is named anywhere the site ships",
+  [index, fs.readFileSync(path.join(ROOT, "files.html"), "utf8"), app].every(
+    (text) => !/gamemonetize|madkidgames|htmlgames\.com|eaglercraft\.q13x/i.test(text)
   )
 );
-check(
-  "sources say whether they can be framed",
-  CATALOG.every((g) => g.sources.every((s) => typeof s.embed === "boolean"))
-);
-check(
-  "frameable sources come before walled ones",
-  CATALOG.every((g) => {
-    const first = g.sources.findIndex((s) => s.embed === false);
-    return first === -1 || g.sources.slice(first).every((s) => s.embed === false);
-  })
-);
-check(
-  "the wall starts with games that play in the page",
-  (() => {
-    const firstWalled = CATALOG.findIndex((g) => g.sources.every((s) => !s.embed));
-    if (firstWalled === -1) return true;
-    return CATALOG.slice(firstWalled).every((g) => g.sources.every((s) => !s.embed));
-  })()
-);
-check(
-  "no tile repeats a source url",
-  CATALOG.every((g) => new Set(g.sources.map((s) => s.url)).size === g.sources.length)
-);
-check(
-  "titles are not duplicated on the wall",
-  new Set(CATALOG.map((g) => g.title.toLowerCase())).size === CATALOG.length
-);
-check(
-  "every tile has a thumbnail",
-  CATALOG.every((g) => /^https:\/\//.test(g.thumb) || /^assets\/img\/(?:catalog\/)?[a-z0-9-]+\.(png|jpe?g|webp)$/.test(g.thumb))
-);
-check(
-  "Minecraft has two routes whose hosts allow framing, and local art",
-  (() => {
-    const tile = CATALOG.filter((g) => g.id === "minecraft");
-    if (tile.length !== 1) return false;
-    const sources = tile[0].sources;
-    return tile[0].pinned === false &&
-      tile[0].thumb === "assets/img/catalog/minecraft.jpg" &&
-      fs.existsSync(path.join(ROOT, "assets/img/catalog/minecraft.jpg")) &&
-      sources.length === 2 &&
-      sources[0].portal === "johntherriiiippper.github.io" &&
-      sources[0].url === "https://johntherriiiippper.github.io/eaglercraftx.html" &&
-      sources[0].embed === true &&
-      sources[1].portal === "eaglercraft.q13x.com" &&
-      sources[1].url === "https://eaglercraft.q13x.com/1.8.8_2/js/?retina=true" &&
-      sources[1].embed === true;
-  })()
-);
-check(
-  "no tile points at the host that refuses to be framed",
-  CATALOG.every((g) => g.sources.every((s) => !/^eaglercraft\.com$/.test(s.portal)))
-);
-check(
-  "the old Minecraft host is gone for good",
-  CATALOG.every((g) => g.sources.every((s) => !/eymenwsmc|workers\.dev/.test(s.url)))
-);
-check(
-  "nothing is pinned, so every sort is the sort that was asked for",
-  CATALOG.every((g) => !g.pinned)
-);
+
+/* Minecraft stays out: it was the one 76 MB bundle. */
 check(
   "the 76 MB Minecraft bundle is out of the folder and the list",
   !fs.existsSync(path.join(ROOT, "assets/games/minecraft.html")) &&
     !fs.existsSync(path.join(ROOT, "assets/img/pack/minecraft.jpg")) &&
     !/file: "assets\/games\/minecraft\.html"/.test(fs.readFileSync(path.join(ROOT, "assets/js/local-games.js"), "utf8"))
 );
-check(
-  "the builder puts Minecraft back, in the same order, on the next rebuild",
-  (() => {
-    const src = fs.readFileSync(path.join(ROOT, "scripts/extras.py"), "utf8");
-    return /"id":\s*"minecraft"/.test(src) &&
-      /johntherriiiippper\.github\.io\/eaglercraftx\.html/.test(src) &&
-      /eaglercraft\.q13x\.com\/1\.8\.8_2\/js\/\?retina=true/.test(src) &&
-      !/"url":\s*"https:\/\/eaglercraft\.com/.test(src) &&
-      !/"pin":\s*True/.test(src);
-  })()
-);
-check(
-  "nothing local is featured now that Minecraft streams",
-  (fs.readFileSync(path.join(ROOT, "assets/js/local-games.js"), "utf8").match(/featured: true/g) || []).length === 0
-);
 
 /* ---------- files ---------- */
-const index = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const app = fs.readFileSync(path.join(ROOT, "assets/js/app.js"), "utf8");
-const notFound = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
-const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-const readme = fs.readFileSync(path.join(ROOT, "README.md"), "utf8");
 
-check("index loads the catalogue", /assets\/js\/catalog\.js/.test(index));
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+check("index loads the shared file list", /assets\/js\/local-games\.js/.test(index));
 check(
   "the wall links to the local files",
   /<a[^>]+class="btn btn-local"[^>]+href="files\.html"/.test(index) &&
@@ -406,10 +279,6 @@ check(
   Array.from(index.matchAll(/(?:src|href)="((?!https?:|data:|#)[^"]+)"/g))
     .map((m) => m[1].split("?")[0])
     .every((rel) => fs.existsSync(path.join(ROOT, rel)))
-);
-check(
-  "AI titles are no longer filtered out",
-  !/ai-token|AI_TOKENS|is_ai/.test(fs.readFileSync(path.join(ROOT, "scripts/build-catalog.py"), "utf8"))
 );
 check(
   "no loose photographs sit beside the pack screenshots",
@@ -750,7 +619,7 @@ check(
     const list = (src.match(/const BLOCKED_HOSTS = \[([\s\S]*?)\];/) || [])[1] || "";
     const hosts = (list.match(/"[^"]+"/g) || []).map((h) => h.slice(1, -1));
     const mustBlock = ["doubleclick.net", "googlesyndication.com", "adnxs.com", "adinplay.com", "gamepix.com", "googletagservices.com"];
-    const mustNot = ["clarity.ms", "jsdelivr.net", "madkidgames.com", "github.io"];
+    const mustNot = ["clarity.ms", "jsdelivr.net", "github.io"];
     const blockedAt = src.indexOf("if (isBlocked(url.hostname))");
     const sameOrigin = src.indexOf("if (url.origin !== self.location.origin) return;");
     return hosts.length >= 15 &&
@@ -771,7 +640,7 @@ check(
       fn("api.adinplay.com") && fn("cdn.gamepix.com") && fn("securepubads.g.doubleclick.net") &&
       !fn("notdoubleclick.net") && !fn("clarity.ms") && !fn("t.clarity.ms") &&
       !fn("googleadservices.com.evil.example") && !fn("jsdelivr.net") &&
-      !fn("gamemonetize.com") && !fn("htmlgames.com") && !fn("madkidgames.com");
+      !fn("revisionformaths.github.io");
   })()
 );
 check("offline support is implemented as a static service worker", fs.existsSync(path.join(ROOT, "sw.js")) && /addEventListener\("fetch"/.test(fs.readFileSync(path.join(ROOT, "sw.js"), "utf8")));
@@ -779,14 +648,15 @@ check("offline copies are user-selected, not bulk downloaded", /CACHE_GAME/.test
 check("problem reports go to GitHub issues", /github\.com\/funclassroom\/funclassroom\.github\.io\/issues/.test(index) && fs.existsSync(path.join(ROOT, ".github/ISSUE_TEMPLATE/bug_report.md")));
 check("the main page offers local-data export and import", /data-export/.test(index) && /data-import/.test(index));
 check("the old game files are gone", !fs.existsSync(path.join(ROOT, "assets/js/games")));
-check("portal adapters exist", fs.existsSync(path.join(ROOT, "scripts/portals.py")));
+check("no portal adapter is left", !fs.existsSync(path.join(ROOT, "scripts/portals.py")));
 check(
-  "the builder groups by title so duplicates collapse",
-  /groups\[key\]/.test(fs.readFileSync(path.join(ROOT, "scripts/build-catalog.py"), "utf8"))
+  "the library list is generated, not hand-edited",
+  /GENERATED from data\/local-files\.json/.test(fs.readFileSync(path.join(ROOT, "assets/js/local-games.js"), "utf8")) &&
+    fs.existsSync(path.join(ROOT, "scripts/build-local-list.py"))
 );
 check(
-  "the builder refuses to shrink the wall",
-  /refusing to write/.test(fs.readFileSync(path.join(ROOT, "scripts/build-catalog.py"), "utf8"))
+  "the sitemap builder is the only thing walking the folder",
+  fs.existsSync(path.join(ROOT, "scripts/build-sitemap.py"))
 );
 check("the old toolkit is gone", !fs.existsSync(path.join(ROOT, "assets/js/gamekit.js")));
 check("the 404 page links home", /href="\.\/"/.test(notFound));
@@ -796,7 +666,11 @@ check("package version is 4.x", /^4\./.test(pkg.version), pkg.version);
 check("npm test runs both suites", /ui\.test\.js/.test(pkg.scripts.test) && /catalog\.test\.js/.test(pkg.scripts.test));
 check("no build step is required", !pkg.scripts.build);
 check("README explains the disguise", /tab reads \*\*Classroom\*\*/i.test(readme));
-check("README states the MadKid count", readme.includes("508"));
+check("README says the library is 129 files", /129 files/.test(readme));
+check(
+  "README promises no catalogue and no embeds",
+  !/catalogue rows|publisher feed|streamed publisher/i.test(readme)
+);
 
 check(
   "both pages load the feedback dialog",
