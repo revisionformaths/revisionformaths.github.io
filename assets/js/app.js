@@ -7,12 +7,13 @@
   "use strict";
 
   var ALL = (window.CATALOG || []).slice();
-  // Keep local versions searchable alongside the publisher catalogue.
+  // The wall is the file list: there is no second, streamed copy of a title
+  // for a local version to be marked off against any more.
   (window.LOCAL_GAMES || []).forEach(function (game) {
     var slug = game.file.split("/").pop().replace(/\.html?$/, "");
     ALL.push({
       id: "local-" + slug,
-      title: game.title + " (HTML)",
+      title: game.title,
       description: game.line || "A self-contained HTML G@M£$ stored with this site.",
       local: true,
       rating: 0,
@@ -199,10 +200,9 @@
     return embeddable(item).length > 0;
   }
 
-  /* The featured local file leads the wall: it is the one title people come
-     for, and the only one shipped as a real copy of the game. It leads the
-     wall in its own order, and it leads any search that names it — even when
-     the wall is sorted another way. No other local title gets this. */
+  /* A featured file leads the wall: it leads in its own order, and it leads
+     any search that names it — even when the wall is sorted another way. No
+     entry sets the flag now, but the behaviour still works. */
   function featuredLeads() {
     if (!FEATURED.length) return false;
     // The wall opens in Popular order, and that is where it leads.
@@ -244,9 +244,8 @@
         var eb = matchScore(b, query);
         if (ea !== eb) return ea - eb;
       }
-      // Playing in the page is no longer a ranking signal: only the local
-      // files can do that, and letting them lead every sort buried the
-      // publisher titles the wall is for. They rank by the sort on offer.
+      // Playing in the page is not a ranking signal: every title does now, so
+      // there is nothing to rank on. They rank by the sort on offer.
       if (state.sort === "az") return a.title.localeCompare(b.title);
       if (state.sort === "top") {
         if (b.rating !== a.rating) return b.rating - a.rating;
@@ -313,9 +312,6 @@
       if (state.savedOnly && store.saved.indexOf(item.id) === -1) return false;
       if (state.tag && tagOf(item) !== state.tag) return false;
       if (state.genre !== "all" && genreOf(item) !== state.genre) return false;
-      if (state.availability === "local" && !item.local) return false;
-      if (state.availability === "embedded" && !playable(item)) return false;
-      if (state.availability === "external" && playable(item)) return false;
       if (!q) return true;
       var titleHay = (item.title + " " + item.id.replace(/-/g, " ")).toLowerCase();
       var hay = (titleHay + " " + (item.description || "") + " " + item.sources.map(function (source) { return source.portal; }).join(" ")).toLowerCase();
@@ -661,11 +657,10 @@
 
   /* ---------- sources ---------- */
 
-  /* Only this site's own files are ever framed. A publisher's page opens in
-     a new tab instead, so no third-party document - and with it no
-     third-party script, ad, tracker or redirect - ever runs inside this page.
-     That is also what lets the security policy name 'self' as the only
-     allowed frame source. */
+  /* Only this site's own files are ever framed. Anything else opens in a tab
+     of its own, so no third-party document - and with it no third-party
+     script, ad, tracker or redirect - ever runs inside this page. That is
+     also what lets the policy name 'self' as the only frame source. */
   function sameOrigin(url) {
     try {
       return new URL(url, window.location.href).origin === window.location.origin;
@@ -723,8 +718,8 @@
     if (!item || state.active === id) return;
     var opts = options || {};
 
-    // Nothing of a publisher's is loaded here any more: a title without a
-    // local file is handed straight to its own site, in its own tab.
+    // Nothing off-site is loaded here: a title without a local file is handed
+    // straight to its own site, in its own tab. No entry needs this now.
     if (!playable(item)) {
       openOnPublisher(item);
       return;
@@ -745,9 +740,9 @@
     dom.playerTitle.textContent = item.title;
     dom.playerSub.textContent = (item.rating > 0 ? item.rating.toFixed(1) + " stars · " : "") +
       (item.plays > 0 ? shortNum(item.plays) + " plays" : "new arrival") +
-      " · " + (item.local ? "local file · works offline" : "plays here");
+      " · local file · works offline";
     if (dom.playerDescription) dom.playerDescription.textContent = item.description ||
-      "Publisher-hosted title. It opens on the publisher\u2019s own site, where its instructions are.";
+      "A self-contained HTML G@M£$ stored with this site. It keeps working with the wi-fi off.";
     if (dom.reportGame) {
       var reportTitle = encodeURIComponent("Broken or incorrect title: " + item.title);
       var reportBody = encodeURIComponent("Title: " + item.title + "\nID: " + item.id + "\nPage: " + window.location.href + "\n\nWhat happened?\n");
@@ -777,10 +772,10 @@
     }
   }
 
-  /* Hand a title to the publisher, in a tab of its own.
-     One synthetic click on a real anchor: a link click inside a gesture is
-     never popup-blocked, and rel=noopener noreferrer means the publisher
-     gets no handle on this page and no referrer either. window.open is not
+  /* Hand a source that is not a local file to its own site, in a tab of its
+     own. One synthetic click on a real anchor: a link click inside a gesture
+     is never popup-blocked, and rel=noopener noreferrer means that site gets
+     no handle on this page and no referrer either. window.open is not
      used here because passing "noopener" to it returns null by design, and
      a null return would look like a blocked popup and open a second tab. */
   function openOnPublisher(item) {
@@ -859,9 +854,9 @@
 
     frame.addEventListener("load", function () {
       if (token !== state.frameToken) return;
-      // The document answered. Whether it then draws a game is the
-      // publisher's business, and there is no honest way for this page to
-      // see inside a cross-origin frame — so never call it broken here.
+      // The document answered. Whether it then draws anything is that
+      // document's business, and there is no honest way for this page to see
+      // inside a cross-origin frame — so never call it broken here.
       state.loaded = true;
       state.loadedPortal = source.portal;
       state.loadingFrame = false;
@@ -909,6 +904,10 @@
     var title = dom.blocked.querySelector("h2");
     var walled = item.sources.filter(function (source) { return source.embed === false; });
     var attempt = sources.length;
+    // Every shipped title is a file here. A source that is not same-origin can
+    // only arrive through bad data, so the copy below only softens to "site"
+    // language for that case.
+    var allLocal = item.sources.every(function (source) { return sameOrigin(source.url); });
 
     if (attempt === 0) {
       // Nothing was even attempted: every route is known to refuse framing.
@@ -924,8 +923,11 @@
       dom.blockedText.textContent = (attempt === 1
         ? "The only source for this title gave us nothing back. "
         : "All " + attempt + " sources for this title gave us nothing back. ") +
-        "That usually means the site is refusing frames or is down — not that the game is broken. " +
-        "It opens fine in its own tab.";
+        (allLocal
+          ? "The file did not open, which usually means it is missing or damaged " +
+            "in this repository. It still opens on its own page."
+          : "That usually means the site is refusing frames or is down — not that the file is broken. " +
+            "It opens fine in its own tab.");
     }
 
     dom.blockedList.innerHTML = "";
@@ -935,7 +937,7 @@
       link.href = source.url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.textContent = source.portal + (source.embed === false
+      link.textContent = (allLocal ? "This file" : source.portal) + (source.embed === false
         ? " — opens in a new tab"
         : " — " + source.url.replace(/^https:\/\//, ""));
       li.appendChild(link);
@@ -946,7 +948,9 @@
     if (first) {
       dom.blockedOpen.hidden = false;
       dom.blockedOpen.href = first.url;
-      dom.blockedOpen.textContent = (attempt === 0 ? "Play on " : "Open on ") + first.portal;
+      dom.blockedOpen.textContent = allLocal
+        ? "Open the file"
+        : (attempt === 0 ? "Play on " : "Open on ") + first.portal;
     } else {
       dom.blockedOpen.hidden = true;
       dom.blockedOpen.removeAttribute("href");
@@ -1186,11 +1190,11 @@
     }
 
     function onFilter() { renderGrid(); }
-    dom.availability.addEventListener("change", function () { state.availability = dom.availability.value; onFilter(); });
+    if (dom.availability) dom.availability.addEventListener("change", function () { state.availability = dom.availability.value; onFilter(); });
     dom.genre.addEventListener("change", function () { state.genre = dom.genre.value; onFilter(); });
     dom.filterReset.addEventListener("click", function () {
       state.availability = "all"; state.genre = "all"; state.tag = ""; state.savedOnly = false;
-      dom.availability.value = "all"; dom.genre.value = "all";
+      if (dom.availability) dom.availability.value = "all"; dom.genre.value = "all";
       if (dom.tags) Array.prototype.forEach.call(dom.tags.children, function (chip) { chip.setAttribute("aria-pressed", "false"); });
       render();
     });
@@ -1363,8 +1367,7 @@
       store = emptyStore();
       state.sort = store.sort;
       state.savedOnly = false;
-      state.availability = "all"; state.genre = "all"; state.tag = "";
-      dom.availability.value = "all"; dom.genre.value = "all";
+      state.genre = "all"; state.tag = "";
       dom.sorts.forEach(function (button) { button.setAttribute("aria-pressed", button.dataset.sort === state.sort ? "true" : "false"); });
       applyCloak(store.cloak, false); applyDisplaySettings();
       save();

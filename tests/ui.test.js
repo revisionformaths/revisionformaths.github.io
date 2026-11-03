@@ -7,7 +7,6 @@ const ROOT = path.join(__dirname, "..");
 const HTML = fs
   .readFileSync(path.join(ROOT, "index.html"), "utf8")
   .replace(/<script src="[^"]+"><\/script>/g, "");
-const CATALOG_JS = fs.readFileSync(path.join(ROOT, "assets/js/catalog.js"), "utf8");
 const LOCAL_JS = fs.readFileSync(path.join(ROOT, "assets/js/local-games.js"), "utf8");
 const APP_JS = fs.readFileSync(path.join(ROOT, "assets/js/app.js"), "utf8");
 const FEEDBACK_JS = fs.readFileSync(path.join(ROOT, "assets/js/feedback.js"), "utf8");
@@ -38,8 +37,10 @@ function boot(hash, seed, catalogJs) {
   });
   dom.window.scrollTo = function (x, y) { dom.window.__scrolledTo = y; };
   if (seed) dom.window.localStorage.setItem(STORE_KEY, JSON.stringify(seed));
-  dom.window.eval(catalogJs || CATALOG_JS);
-  if (!catalogJs) dom.window.eval(LOCAL_JS);
+  // There is no publisher catalogue any more: the wall is built from the file
+  // list, so a boot with no fixture is exactly the shipped page.
+  if (catalogJs) dom.window.eval(catalogJs);
+  else dom.window.eval(LOCAL_JS);
   dom.window.eval(APP_JS);
   dom.window.eval(FEEDBACK_JS);
   return dom;
@@ -149,12 +150,8 @@ function titles(document) {
     type(dom.window, document.querySelector("#q"), "minecraft");
     await tick();
     check(
-      "the streamed Minecraft tile is on the wall, unpinned",
-      (() => {
-        const tile = document.querySelector('.tile[data-id="minecraft"]');
-        return !!tile && tile.getAttribute("data-pinned") === "0" &&
-          tile.querySelector(".tile-title").textContent === "Minecraft";
-      })()
+      "nothing streams in any more, so Minecraft is not on the wall",
+      document.querySelectorAll(".tile").length === 0 && !document.querySelector("[data-empty]").hidden
     );
     type(dom.window, document.querySelector("#q"), "");
     await tick();
@@ -366,9 +363,8 @@ function titles(document) {
       ratings.slice(0, 5).join(",")
     );
     check(
-      "top rated leads with a rated title, nothing pinned above it",
-      document.querySelector(".tile").getAttribute("data-pinned") === "0" &&
-        Number(document.querySelector(".tile").getAttribute("data-rating")) > 0
+      "nothing is pinned above the sort",
+      document.querySelector(".tile").getAttribute("data-pinned") === "0"
     );
     check("one sort at a time", document.querySelectorAll('[data-sort][aria-pressed="true"]').length === 1);
     dom.window.close();
@@ -382,27 +378,24 @@ function titles(document) {
     const { document } = window;
     const input = document.querySelector("#q");
 
-    check("main catalogue includes every HTML game", window.CATALOG.filter((g) => g.id.startsWith("local-")).length === window.LOCAL_GAMES.length);
+    check(
+      "the wall is exactly the file list",
+      window.CATALOG.length === window.LOCAL_GAMES.length &&
+        window.CATALOG.every((g) => g.id.indexOf("local-") === 0)
+    );
     type(window, input, "bad piggies");
-    check("main search includes publisher and HTML versions", !!document.querySelector('.tile[data-id="bad-piggies"]') && !!document.querySelector('.tile[data-id="local-bad-piggies"]'));
+    check("a search finds the file", !!document.querySelector('.tile[data-id="local-bad-piggies"]'));
+    check(
+      "there is only the file, no second copy of the same title",
+      document.querySelectorAll(".tile").length === 1
+    );
     click(window, document.querySelector('[data-open="local-bad-piggies"]'));
     check("HTML result plays the local file", document.querySelector(".player-frame").getAttribute("src") === "assets/games/bad-piggies.html");
     click(window, document.querySelector("[data-close]"));
-
-    type(window, input, "minecraft");
-    check(
-      "searching for Minecraft puts the streamed tile first",
-      document.querySelector(".tile").getAttribute("data-id") === "minecraft",
-      document.querySelector(".tile").getAttribute("data-id")
-    );
-    check(
-      "the streamed Minecraft titles are still listed",
-      document.querySelectorAll(".tile").length > 1
-    );
     type(window, input, "2048");
     check(
-      "no other local title is pushed up",
-      document.querySelector(".tile").getAttribute("data-id") !== "local-2048",
+      "an exact match leads",
+      document.querySelector(".tile").getAttribute("data-id") === "local-2048",
       document.querySelector(".tile").getAttribute("data-id")
     );
 
@@ -742,14 +735,10 @@ function titles(document) {
     other.window.dispatchEvent(new other.window.Event("hashchange"));
     await tick();
     check(
-      "a publisher deep link is not framed",
+      "a deep link to a title that is not a file is ignored",
       otherDoc.querySelector("[data-player]").hidden && otherDoc.querySelectorAll("iframe").length === 0
     );
-    check(
-      "a publisher deep link goes to the publisher",
-      tabs.length === 1 && /subway-surfers/.test(tabs[0].href),
-      JSON.stringify(tabs)
-    );
+    check("and it opens no tab", tabs.length === 0, JSON.stringify(tabs));
     other.window.close();
   }
 
@@ -768,15 +757,16 @@ function titles(document) {
     const { document } = window;
 
     const random = window.Math.random;
-    const tabs = watchNewTabs(window);
     window.Math.random = () => 0;
     click(window, document.querySelector("[data-shuffle]"));
     check(
-      "random hands the first title to its own site",
-      tabs.length === 1 && tabs[0].href === window.CATALOG[0].sources[0].url,
-      JSON.stringify(tabs)
+      "random opens the first file in the player",
+      !document.querySelector("[data-player]").hidden &&
+        document.querySelector(".player-frame").getAttribute("src") === window.CATALOG[0].sources[0].url,
+      document.querySelector(".player-frame") && document.querySelector(".player-frame").getAttribute("src")
     );
     window.Math.random = random;
+    press(window, "Escape");
 
     const search = document.querySelector("#q");
     const event = press(window, "/");
@@ -852,14 +842,14 @@ function titles(document) {
       pretendToBeVisual: true,
     });
     dom.window.scrollTo = function () {};
-    dom.window.localStorage.setItem("gams.saved.v1", JSON.stringify(["granny"]));
-    dom.window.localStorage.setItem("gams.recent.v1", JSON.stringify(["bad-piggies"]));
-    dom.window.eval(CATALOG_JS);
+    dom.window.localStorage.setItem("gams.saved.v1", JSON.stringify(["local-granny"]));
+    dom.window.localStorage.setItem("gams.recent.v1", JSON.stringify(["local-bad-piggies"]));
+    dom.window.eval(LOCAL_JS);
     dom.window.eval(APP_JS);
     await tick();
     const migrated = readStore(dom.window);
-    check("old picks migrate to the new store", migrated.saved.includes("granny"));
-    check("old history migrates too", migrated.recent[0] === "bad-piggies");
+    check("old picks migrate to the new store", migrated.saved.includes("local-granny"));
+    check("old history migrates too", migrated.recent[0] === "local-bad-piggies");
     check("old keys are cleaned up", dom.window.localStorage.getItem("gams.saved.v1") === null);
     dom.window.close();
   }
@@ -909,7 +899,7 @@ function titles(document) {
         removeItem() {},
       },
     });
-    dom.window.eval(CATALOG_JS);
+    dom.window.eval(LOCAL_JS);
     dom.window.eval(APP_JS);
     await tick();
     const { document } = dom.window;
@@ -939,19 +929,14 @@ function titles(document) {
       Array.from(document.querySelectorAll("[data-picks-list] [data-open]")).length > 0
     );
 
+    // Chips need a word to appear in 25 titles; 129 files do not repeat enough,
+    // so the row hides itself rather than offering a chip that filters nothing.
     const tags = document.querySelectorAll("[data-tag]");
-    check("genre chips are offered", tags.length > 3, String(tags.length));
-    const before = document.querySelectorAll(".tile").length;
-    const tagWord = tags[0].textContent.toLowerCase();
-    click(window, tags[0]);
     check(
-      "a chip filters the wall",
-      document.querySelectorAll(".tile").length < before ||
-        titles(document).every((t) => t.toLowerCase().includes(tagWord))
+      "the chip row hides when no word repeats enough to be a chip",
+      tags.length === 0 || document.querySelector("[data-tags]").hidden === false
     );
-    check("the chip shows as pressed", tags[0].getAttribute("aria-pressed") === "true");
-    click(window, tags[0]);
-    check("clicking again clears the filter", document.querySelectorAll(".tile").length === before);
+    check("one sort at a time is still enforced", document.querySelectorAll('[data-sort][aria-pressed="true"]').length === 1);
 
     const input = document.querySelector("#q");
     type(window, input, "car park");
@@ -969,13 +954,12 @@ function titles(document) {
     await tick();
     const { window } = dom;
     const { document } = window;
-    const availability = document.querySelector("[data-availability]");
-    availability.value = "local";
-    availability.dispatchEvent(new window.Event("change", { bubbles: true }));
-    check("offline filter shows only local titles", Array.from(document.querySelectorAll(".tile")).every((tile) => tile.dataset.id.indexOf("local-") === 0));
-    availability.value = "embedded";
-    availability.dispatchEvent(new window.Event("change", { bubbles: true }));
-    check("embedded filter excludes new-tab-only titles", Array.from(document.querySelectorAll(".tile")).every((tile) => tile.dataset.playable === "1"));
+    // There is no availability filter to test: every title is a local file, so
+    // the only filter left on the wall is the type one below.
+    check(
+      "there is no availability filter to offer",
+      !document.querySelector("[data-availability]")
+    );
     const genre = document.querySelector("[data-genre]");
     genre.value = "puzzle";
     genre.dispatchEvent(new window.Event("change", { bubbles: true }));

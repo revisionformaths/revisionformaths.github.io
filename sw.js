@@ -1,5 +1,5 @@
 /* GitHub Pages-only offline shell and explicitly saved local games. */
-const VERSION = "classroom-shell-v16";
+const VERSION = "classroom-shell-v17";
 const GAME_CACHE = "classroom-offline-games-v1";
 /* Ad and auction networks that came bundled inside some of the game files
    (doubleclick, googlesyndication and adnxs are all present today). Blocking
@@ -7,12 +7,10 @@ const GAME_CACHE = "classroom-offline-games-v1";
    needs nothing installed, and only touches requests made by this site.
 
    Deliberately absent: clarity.ms and everything under it, because Clarity is
-   the site's analytics and must keep working; jsdelivr, which 26 game files
-   load their runtime from; and the publisher domains the wall iframes, which
-   would stop games loading rather than stop ads. Anything in an iframe from
-   another origin is invisible to this file anyway — the browser keeps that
-   document out of our reach — so ads inside a streamed publisher game are not
-   something the site can block.
+   the site's analytics and must keep working, and jsdelivr, which some game
+   files load their runtime from — blocking it would stop games loading rather
+   than stop ads. No other host is on the allow side, so nothing else off-site
+   is requested by the pages this worker controls.
 
    The empty 204 is deliberate: a game that watches for a blocked request (ovo
    does, through adinplay) only raises its "adblock detected" flag when the
@@ -45,7 +43,7 @@ const BLOCKED_HOSTS = [
 ];
 const isBlocked = (host) => BLOCKED_HOSTS.some((blocked) => host === blocked || host.slice(-blocked.length - 1) === "." + blocked);
 
-const SHELL = ["./", "index.html", "files.html", "manifest.webmanifest", "assets/css/app.css", "assets/js/catalog.js", "assets/js/local-games.js", "assets/js/app.js", "assets/js/feedback.js", "assets/js/pwa.js", "assets/js/attribution.js", "assets/img/app-icon.svg"];
+const SHELL = ["./", "index.html", "files.html", "manifest.webmanifest", "assets/css/app.css", "assets/js/local-games.js", "assets/js/app.js", "assets/js/feedback.js", "assets/js/pwa.js", "assets/js/attribution.js", "assets/img/app-icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
