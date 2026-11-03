@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html style="
+background-color: white;
+">
+<head>
+    <title>Make it 13</title>
+</head>
+<body>
+    <!-- Game elements -->
+    <canvas id="background-canvas"></canvas>
+    <div id="game-container">
+        <h1 id="title"></h1>
+        <h2 id="subtitle"></h2>
+        <div class="play">
+            <div id="game-container-wrapper-2d" class="play-panel">
+                <div id="game-container-2d">
+                </div>
+            </div>
+            <canvas class="play-panel" id="game-canvas-3d"></canvas>
+        </div>
+        <div id="controls">
+            <button class="control-button glow-on-hover" id="hint">Hint</button>
+            <button class="control-button glow-on-hover" id="skip">Skip Level</button>
+        </div>
+        <div id="controls-end" style="visibility: hidden">
+            <button class="control-button glow-on-hover" id="skip">Play Again?</button>
+        </div>
+    </div>
+    <!-- Hint Modal -->
+    <div id="hint-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="hint-message">Hint failed. Unable to calculate best move because a solution is more than 7 clicks away!</h2>
+            <div class="modal-buttons">
+                <button id="okay" class="control-button glow-on-hover">Okay, I guess I'll have to think</button>
+                <dutton id="wait" class="control-button glow-on-hover">I'm intellectually lazy, but very patient and have a device with lots of RAM. I'll wait.</button>
+            </div>
+        </div>
+    </div>
+    <!-- Win Modal -->
+    <div id="win-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="win-message">Congratulations! You won!</h2>
+            <div class="modal-buttons">
+                <button id="replay" class="control-button glow-on-hover">Replay</button>
+                <button id="next-level" style="display: none" class="control-button glow-on-hover">Next Level</button>
+            </div>
+        </div>
+    </div>
+    <!-- Intro Modal-->
+    <div id="intro-modal" class="modal" style="display: block">
+        <div class="modal-content">
+            <div class="intro-modal-text">
+                <h1>I'm so glad you are here!</h1>
+                <p>We need help.</p>
+                <p>See, people don't like the #13. They seem to be a little... stitious.</p>
+                <p>We'll need to blow up all the #13s we have. But there's a problem, all the #13 squares are not
+                    visible. If you can get them to appear, we can blast them all to smithereens!</p>
+                <h2>Will you help us?</h2>
+            </div>
+            <div class="modal-buttons">
+                <button id="close-intro" class="control-button glow-on-hover">
+                    <div>Yes, I'm fun</div>
+                    <div>I'd love to help!</div>
+                </button>
+                <button id="curmudgeon" class="control-button glow-on-hover">
+                    <div>
+                        No, I'm a curmudgeon
+                    </div>
+                    <div>
+                        I don't want to help
+                    </div>
+                </button>
+                <!-- TODO ADD GOTO LEVEL HERE -->
+            </div>
+        </div>
+    </div>
+    </div>
+    <!-- Hidden canvas to render images to create texture image -->
+    <canvas id="canvas-img" width="8192" height="2048" class="hidden"></canvas>
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Roboto', -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Ubuntu, sans-serif;
+            user-select: none;
+        }
+        #title {
+            font-weight: 900;
+            font-stretch: extra-expanded;
+            font-variant-caps: petite-caps;
+            font-size: 46px;
+            text-align: center;
+            max-width: 90vw;
+            margin-bottom: 0.25em;
+        }
+        #subtitle {
+            margin-top: 0;
+        }
+        .intro-modal-text {
+            margin-bottom: 50px;
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 100%;
+            height: 100vh;
+            justify-content: center;
+            visibility: hidden;
+        }
+
+        #game-container-2d {
+            display: grid;
+            gap: 1px;
+            box-shadow: 0px 4px 15px rgba(128, 128, 128, 0.5);
+        }
+
+        #game-container-wrapper-2d {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-canvas-3d {
+            /* zoom: .2; this makes the cube cripser, but it messes up the picking :( */
+        }
+
+        .play {
+            position: relative;
+            width: 100vw;
+            max-width: 100vh;
+            /* Ensures it forms a square */
+            height: 100vw;
+            max-height: 100vh;
+        }
+
+        .play-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            display: flex;
+            justify-content: center;
+            margin: 2vh;
+        }
+
+        .control-button {
+            min-width: 30vw;
+            padding: 1em;
+            font-size: 1em;
+            margin: 0.75em;
+            /* background-color: #000000;
+            border: none;
+            color: white;
+            border-radius: 10px; */
+            box-shadow: 0px 4px 15px rgba(128, 128, 128, 0.5);
+        }
+
+        .glow-on-hover {
+            border: none;
+            outline: none;
+            color: #fff;
+            background: #111;
+            cursor: pointer;
+            position: relative;
+            z-index: 0;
+            border-radius: 10px;
+        }
+
+        .glow-on-hover:before {
+            content: '';
+            background: linear-gradient(45deg, #ff0000, #ff7300, #fffb00, #48ff00, #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000);
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            background-size: 400%;
+            z-index: -1;
+            filter: blur(5px);
+            width: calc(100% + 4px);
+            height: calc(100% + 4px);
+            animation: glowing 20s linear infinite;
+            opacity: 0;
+            transition: opacity .3s ease-in-out;
+            border-radius: 10px;
+        }
+
+        .glow-on-hover:active {
+            color: #000
+        }
+
+        .glow-on-hover:active:after {
+            background: transparent;
+        }
+
+        .glow-on-hover:hover:before {
+            opacity: 1;
+        }
+
+        .glow-on-hover:after {
+            z-index: -1;
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: #111;
+            left: 0;
+            top: 0;
+            border-radius: 10px;
+        }
+
+        @keyframes glowing {
+            0% {
+                background-position: 0 0;
+            }
+
+            50% {
+                background-position: 400% 0;
+            }
+
+            100% {
+                background-position: 0 0;
+            }
+        }
+
+        #background-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            /* Ensures it stays in the background */
+        }
+
+        .square {
+            transition: background-color 0.3s;
+            box-sizing: border-box;
+            /* Include border in the width and height */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            /*transition: all 1s ease;*/
+            transform: translate(0, 0);
+            opacity: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Dispersing effect */
+        .disperse .square {
+            position: absolute;
+            animation: disperse 1s forwards;
+        }
+
+        @keyframes disperse {
+            0% {
+                transform: translate(0, 0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate(calc(100vw * (random() - 0.5)), calc(100vh * (random() - 0.5)));
+                opacity: 0.3;
+            }
+        }
+
+        /* Exploding effect */
+        .explode .square {
+            position: absolute;
+            animation: explode 0.8s ease forwards;
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(5);
+                opacity: 0;
+            }
+        }
+
+        .modal {
+            display: none;
+            /* Hidden by default */
+            position: fixed;
+            /* Stay in place */
+            z-index: 1;
+            /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            /* Full width */
+            height: 100%;
+            /* Full height */
+            background-color: rgba(0, 0, 0, 0.4);
+            /* Black w/ opacity */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            padding: 2em;
+            border: 1px solid #888;
+            width: 80%;
+            /* Could be more or less, depending on screen size */
+            text-align: center;
+
+            /* Centering the modal correctly */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 10px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-buttons button {
+            margin: 0 10px;
+        }
+
+        #canvas-img {
+            width: 512px;
+            height: 128px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .hint-highlight {
+            animation: hint-highlight .5s infinite;
+        }
+
+        @keyframes hint-highlight {
+            50% {
+                -webkit-filter: brightness(130%); 
+                filter: brightness(130%);
+            }
+        }
+    </style>
+    <!-- vertex shader -->
+    <script id="vertex-shader-3d" type="x-shader/x-vertex">
+      attribute vec4 a_position;
+      attribute vec2 a_texcoord;
+      attribute float a_flash;
+      uniform mat4 u_matrix;
+      varying vec2 v_texcoord;
+      varying float v_flash;
+      void main() {
+        gl_Position = u_matrix * a_position;
+        v_texcoord = a_texcoord;
+        v_flash = a_flash;
+      }
+    </script>
+    <!-- fragment shader -->
+    <script id="fragment-shader-3d" type="x-shader/x-fragment">
+      precision mediump float;
+      varying vec2 v_texcoord;
+      varying float v_flash;
+      uniform sampler2D u_texture;
+      uniform float u_time;
+      void main() {
+        vec4 color = texture2D(u_texture, v_texcoord);
+        if(v_flash > 0.5) {
+            float brightness = 1.4 + 0.2 * sin(u_time * 10.0);
+            color.rgb = min(color.rgb * brightness, 1.0);
+        }
+        gl_FragColor = color;
+      }
+    </script>
+    <!-- picking vertex shader -->
+    <script id="pick-vertex-shader" type="x-shader/x-vertex">
+      attribute vec4 a_position;
+      attribute float a_picking_color;
+      uniform mat4 u_matrix;
+      varying float v_picking_color;
+      void main() {
+        gl_Position = u_matrix * a_position;
+        v_picking_color = a_picking_color;
+      }
+    </script>
+    <!-- picking fragment shader -->
+    <script id="pick-fragment-shader" type="x-shader/x-fragment">
+      precision mediump float;
+      varying float v_picking_color;
+      void main() {
+         gl_FragColor = vec4(v_picking_color, 0, 0, 1.0);
+      }
+    </script>
+</body>
+
+</html>

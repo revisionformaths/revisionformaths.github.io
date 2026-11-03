@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+button {
+  appearance: none;
+  border: none;
+  border-radius: 3px;
+  font: inherit;
+  max-width: 500px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+:root {
+  --wintergreen-dream: #638475ff;
+  --granny-smith-apple: rgb(101, 192, 112);
+  --key-lime: #ddf093ff;
+  --peach-puff: #f6d0b1ff;
+  --popstar: rgb(190, 57, 86);
+  --color-grey1: #222;
+  --color-grey2: #444;
+  --color-grey3: #666;
+  --color-grey4: #888;
+  --color-grey5: #aaa;
+  --color-grey6: #ccc;
+  --color-grey7: #ddd;
+  --color-grey8: #eee;
+  --color-bg: var(--wintergreen-dream);
+  --color-err: var(--popstar);
+  --color-right: var(--granny-smith-apple);
+  --color-txt: var(--color-grey7);
+  --color-accent: var(--key-lime);
+
+  --slack_stop_size: 50px;
+  --slack_rotation: 45deg;
+  --slack_cream: rgb(241, 228, 212);
+  --slack_yellow: rgba(234, 168, 32, 0.75);
+  --slack_green: rgba(63, 185, 146, 0.75);
+  --slack_pink: rgba(224, 21, 100, 0.75);
+  --slack_blue: rgba(111, 202, 221, 0.75);
+}
+
+body {
+  display: grid;
+  grid-template-rows: 20% 80%;
+  font-family: sans-serif;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  position: relative;
+  background-color: var(--color-bg);
+  color: var(--color-txt);
+  font-size: clamp(16px, 4vw, 22px);
+}
+
+.background {
+  background-blend-mode: darken;
+  background-color: var(--slack_cream);
+  background-image: repeating-linear-gradient(
+      var(--slack_rotation),
+      transparent var(--slack_stop_size),
+      transparent calc(var(--slack_stop_size) * 2),
+      var(--slack_pink) calc(var(--slack_stop_size) * 2),
+      var(--slack_pink) calc(var(--slack_stop_size) * 3),
+      transparent calc(var(--slack_stop_size) * 3),
+      transparent calc(var(--slack_stop_size) * 4),
+      var(--slack_blue) calc(var(--slack_stop_size) * 4),
+      var(--slack_blue) calc(var(--slack_stop_size) * 5),
+      transparent calc(var(--slack_stop_size) * 5)
+    ),
+    repeating-linear-gradient(
+      calc(var(--slack_rotation) + 90deg),
+      transparent var(--slack_stop_size),
+      transparent calc(var(--slack_stop_size) * 2),
+      var(--slack_yellow) calc(var(--slack_stop_size) * 2),
+      var(--slack_yellow) calc(var(--slack_stop_size) * 3),
+      transparent calc(var(--slack_stop_size) * 3),
+      transparent calc(var(--slack_stop_size) * 4),
+      var(--slack_green) calc(var(--slack_stop_size) * 4),
+      var(--slack_green) calc(var(--slack_stop_size) * 5),
+      transparent calc(var(--slack_stop_size) * 5)
+    );
+}
+
+header,
+main {
+  padding: 0 calc(50vw - 250px);
+}
+
+header {
+  display: grid;
+  grid-template-columns: 20% 60% 20%;
+  font-size: 120%;
+  text-align: center;
+  align-content: center;
+  color: var(--color-grey2);
+}
+
+main {
+  display: grid;
+  grid-template-rows: repeat(3, 30%);
+  gap: 0.5rem;
+}
+
+.tot200 > *:first-child,
+.tot404 > *:first-child {
+  border-bottom: solid 2px var(--color-grey7);
+}
+
+.tot200 > *,
+.tot404 > * {
+  padding: 0.75rem 1rem 0.5rem;
+}
+
+.tot200 {
+  border-radius: 3px 0 0 3px;
+  background-color: var(--color-right);
+  color: var(--color-grey7);
+}
+
+.tot404 {
+  border-radius: 0 3px 3px 0;
+  color: var(--color-grey7);
+  background-color: var(--color-err);
+}
+
+.timer-wrapper {
+  background-color: var(--color-grey7);
+  padding: 0.5rem 0;
+}
+
+.timer {
+  font-family: monospace;
+  font-size: 3rem;
+}
+
+.remaining {
+  font-size: 0.8rem;
+}
+
+.btn-1,
+.btn-2,
+.btn-3 {
+  word-break: break-all;
+  width: 100%;
+  position: relative;
+  padding: 1rem;
+  background-color: var(--color-grey7);
+  color: var(--color-grey2);
+  transition: transform 0.2s;
+}
+
+.r200,
+.r404 {
+  transform: rotate3d(0, 1, 0, 180deg);
+}
+
+.r200::after,
+.r404::after {
+  transform: rotate3d(0, 1, 0, 180deg);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 3rem;
+  content: '200';
+  color: var(--color-grey8);
+  background-color: var(--color-right);
+}
+
+.r404::after {
+  content: '404';
+  color: var(--peach-puff);
+  background-color: var(--color-err);
+}
+
+.backdrop:not([hidden]) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: var(--color-grey7);
+}
+
+.backdrop-game-over > * {
+  margin-bottom: 1rem;
+}
+
+.btn-go,
+.play-again {
+  text-transform: uppercase;
+  width: 80%;
+  padding: 2rem;
+  background-color: var(--color-grey6);
+  border-top: solid 6px var(--color-accent);
+}
+
+.instructions {
+  width: 80%;
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 4rem;
+  font-family: monospace;
+  text-align: center;
+}
+
+.code200,
+.code404 {
+  display: inline;
+  padding: 0.1rem 0.25rem;
+  border-radius: 2px;
+  color: white;
+}
+
+.code200 {
+  background-color: var(--color-right);
+}
+
+.code404 {
+  background-color: var(--peach-puff);
+}
+</style>
+  </head>
+  <body class="background">
+    <header>
+      <div class="tot200">
+        <div>200</div>
+        <div class="counter200">0</div>
+      </div>
+      <div class="timer-wrapper">
+        <div class="timer"></div>
+        <div class="remaining">
+          <span>remaining turns: </span>
+          <span class="remaining-counter"></span>
+        </div>
+      </div>
+      <div class="tot404">
+        <div>404</div>
+        <div class="counter404">0</div>
+      </div>
+    </header>
+    <main>
+      <button class="btn-1"></button>
+      <button class="btn-2"></button>
+      <button class="btn-3"></button>
+      <div class="backdrop backdrop-go">
+        <div class="instructions">
+          <div class="title">|404|</div>
+          You will see 3 URLs:
+          <br />
+          one of them is correct and will result in a http
+          <span class="code200">200</span> response code.
+          <br />
+          One has a wrong path (the domain is always correct) and will result in
+          a http
+          <span class="code404">404</span> response code.
+          <br />
+          <br />
+          Try to click the right URL, avoid 404!
+        </div>
+        <button class="btn-go">go</button>
+      </div>
+      <div class="backdrop backdrop-game-over" hidden>
+        <div class="title">
+          <div>GAME OVER</div>
+          <div class="result"></div>
+        </div>
+        <button class="play-again">play again</button>
+      </div>
+    </main>
+    <script>const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const masterGainNode = audioContext.createGain();
+masterGainNode.connect(audioContext.destination);
+masterGainNode.gain.value = 0.25;
+
+export function playTone(freq, duration = 500) {
+  const osc = audioContext.createOscillator();
+  osc.connect(masterGainNode);
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  osc.start();
+
+  return new Promise(res => {
+    setTimeout(() => {
+      osc.stop();
+      res();
+    }, duration);
+  });
+}
+
+export function play200sound() {
+  return playTone(300, 200).then(() => playTone(500, 100));
+}
+
+export function play404sound() {
+  return playTone(300, 150)
+    .then(() => playTone(250, 200))
+    .then(() => playTone(150, 250));
+}
+
+export function playWonTune() {
+  return playTone(440, 100)
+    .then(() => playTone(0, 50))
+    .then(() => playTone(440, 100))
+    .then(() => playTone(0, 50))
+    .then(() => playTone(400, 100))
+    .then(() => playTone(0, 50))
+    .then(() => playTone(700, 300));
+}
+
+export function playLooseTune() {
+  return playTone(300, 400)
+    .then(() => playTone(0, 100))
+    .then(() => playTone(300, 400))
+    .then(() => playTone(250, 200))
+    .then(() => playTone(100, 250));
+}
+
+const synth = window.speechSynthesis;
+const voices = synth.getVoices();
+const voice = voices.find(({ lang }) => lang === 'en-US');
+
+export function speak(text) {
+  const utterThis = new SpeechSynthesisUtterance(text);
+  utterThis.voice = voice;
+  utterThis.pitch = 1;
+  utterThis.rate = 1;
+  utterThis.volume = 1;
+
+  return new Promise(res => {
+    utterThis.onend = res;
+    synth.cancel();
+    synth.speak(utterThis);
+  });
+}
+</script>
+    <script>import {
+  playTone,
+  play200sound,
+  play404sound,
+  playWonTune,
+  playLooseTune,
+  speak,
+} from './sound.js';
+
+const counter404El = document.querySelector('.counter404');
+const timerEl = document.querySelector('.timer');
+const remainingEl = document.querySelector('.remaining-counter');
+const counter200El = document.querySelector('.counter200');
+const btn1El = document.querySelector('.btn-1');
+const btn2El = document.querySelector('.btn-2');
+const btn3El = document.querySelector('.btn-3');
+const backdropGoEl = document.querySelector('.backdrop-go');
+const goEl = document.querySelector('.btn-go');
+const backdropGameOverEl = document.querySelector('.backdrop-game-over');
+const resultEl = document.querySelector('.result');
+const playAgainEl = document.querySelector('.play-again');
+const buttonsEl = [btn1El, btn2El, btn3El];
+
+const INITIAL_TIMER = 3;
+const MAX_QUESTIONS = 10;
+const TIMER_INTERVAL = 1000;
+
+const initialState = {
+  links: [
+    'en.wikipedia.org/wiki/Linux',
+    'en.wikipedia.org/wiki/Wayland_(display_server_protocol)',
+    'developer.mozilla.org/en-US/docs/Web/HTML/Element/button',
+    'developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset',
+    'freeonlinecasinoq.co/css3-slot-machine.php',
+    'www.playcasinoz.co/css3-slot-machine-effect',
+    'certbot.eff.org/instructions',
+    'keepass.info/help/v1/version.html',
+    'letsencrypt.org/docs',
+    'keepassxc.org/download',
+    'docs.traefik.io/providers/file/',
+    'gitlab.touch.abssrv.it/users/sign_in',
+    'www.pcmag.com/picks/the-best-free-password-managers',
+    'vim.fandom.com/wiki/Undo_and_Redo',
+    'babeljs.io/docs/en/babel-cli',
+    'docs.mongodb.com/manual/reference/operator/query/all',
+    'docs.mongodb.com/manual/reference/operator/aggregation/count',
+    'css-tricks.com/snippets/css/complete-guide-grid',
+    'create-react-app.dev/docs/adding-typescript',
+    'www.elastic.co/guide/en/logstash/current/plugins-filters-aggregate.html',
+    'www.motoguzzi.com/en_EN/moto-guzzi-world',
+    'github.com/azure/aci-deploy',
+    'www.benelli.com/country-selector',
+    'www.pcmag.com/reviews/bitwarden',
+    'apps.azureiotcentral.com/build',
+    'www.youtube.com/c/CafeRacerGarage/videos',
+    'material-ui-pickers.dev/api/Calendar',
+    'material-ui.com/components/cards',
+    'socket.io/docs/client-api',
+    'www.w3schools.com/CSS/css_list.asp',
+    'www.tutorialspoint.com/gitlab/gitlab_ci_cd_variables.htm',
+    'www.npmjs.com/package/history',
+    'reactjs.org/docs/hooks-reference.html',
+    'dev.to/miangame/how-to-automate-a-deploy-in-a-vps-with-github-actions-via-ssh-101e',
+    'www.commitstrip.com/en/2016/08/25/a-very-comprehensive-and-precise-spec',
+    'www.11ty.dev/docs/advanced',
+    'learning.postman.com/docs/sending-requests/authorization',
+    'developers.google.com/maps/documentation/javascript/places-autocomplete',
+    'css-tricks.com/bem-101',
+    'www.brembo.com/en/bike/replacement/brake-pads',
+    'www.brixton-motorcycles.com/models/crossfire-500',
+    'www.filamentgroup.com/lab/build-a-blog',
+    'todoist.com/productivity-methods/eat-the-frog',
+    'www.wildguzzi.com/Picspage/Picsmain.htm',
+    'hasura.io/learn/graphql/react-rxdb-offline-first/frontend-setup',
+    'blog.panoply.io/couchdb-vs-mongodb',
+    'www.mongodb.com/collateral/the-offline-first-approach-to-mobile-app-development',
+    'dexie.org/docs/Syncable/Dexie.Syncable.ISyncProtocol',
+    'hasura.io/learn/graphql/hasura/authentication/5-test-with-headers',
+    ' maps.google.it/maps',
+    ' www.skaip.org/headbang-emoticon',
+    ' maeda.pm/?s=Books',
+    ' github.com/Microsoft/vscode/issues/66486',
+    ' www.espruino.com/ide/',
+    ' fbedussi.github.io/BangleApps/',
+    ' www.espruino.com/Image+Converter',
+    ' www.espruino.com/Bangle.js#tutorials',
+    ' www.apple.com/ipad/',
+  ],
+  usedLinks: [],
+  interval: undefined,
+  btn200: undefined,
+  status: 'ready',
+  tot200: 0,
+  tot404: 0,
+  timer: INITIAL_TIMER,
+  link200: '',
+  link404: '',
+  link404bis: '',
+  clickedBtn: undefined,
+};
+let state = {
+  ...initialState,
+  remaining: Math.min(MAX_QUESTIONS, initialState.links.length),
+};
+// STATUS
+//                 -> 200
+// ready -> play /        \ -> play -> over
+//               \        /
+//                 -> 404
+let subscribers = [];
+
+function setState(update) {
+  const nextState = {
+    ...state,
+    ...update,
+  };
+  // console.log(nextState);
+  const oldState = { ...state };
+  state = nextState;
+  subscribers.forEach(
+    ({ key, cb }) =>
+      (!key || nextState[key] !== oldState[key]) && cb(nextState, oldState),
+  );
+}
+
+function subscribe(key, cb) {
+  subscribers.push({ key, cb });
+}
+
+subscribe('tot404', ({ tot404 }) => {
+  counter404El.innerText = tot404;
+});
+subscribe('tot200', ({ tot200 }) => {
+  counter200El.innerText = tot200;
+});
+subscribe('remaining', ({ remaining }) => {
+  remainingEl.innerText = remaining;
+});
+subscribe('timer', ({ timer }) => {
+  if (timer >= 0) {
+    timerEl.innerText = timer;
+  } else {
+    setState({ tot404: state.tot404 + 1 });
+    setNextQuestion();
+  }
+});
+subscribe('status', ({ status, btn200, tot200, tot404, links, usedLinks }) => {
+  backdropGameOverEl.hidden = status !== 'over';
+  backdropGoEl.hidden = status !== 'ready';
+  switch (status) {
+    case 'ready':
+      playTone(600, 100);
+      break;
+    case 'play':
+      setNextQuestion();
+      buttonsEl.forEach(btn => {
+        btn.classList.remove('r200');
+        btn.classList.remove('r404');
+      });
+      break;
+    case '200':
+      play200sound();
+      clearInterval(state.interval);
+      buttonsEl[state.clickedBtn].classList.add('r200');
+      setTimeout(() => setState({ status: 'play' }), 1000);
+      break;
+    case '404':
+      play404sound();
+      clearInterval(state.interval);
+      buttonsEl[state.clickedBtn].classList.add('r404');
+      setTimeout(() => setState({ status: 'play' }), 1000);
+      break;
+    case 'over':
+      const won = tot200 > tot404;
+
+      clearInterval(state.interval);
+      setState({ timer: INITIAL_TIMER });
+      const result = won ? 'You won!' : 'You loose!';
+      resultEl.innerText = result;
+      speak(result).then(() => {
+        if (won) {
+          playWonTune();
+        } else {
+          playLooseTune();
+        }
+      });
+
+      break;
+  }
+});
+
+function splitPath(path) {
+  return path.replace(/\//g, '/\n');
+}
+
+subscribe('link200', ({ link200, link404, link404bis, btn200 }) => {
+  buttonsEl.forEach((buttonEl, index) => {
+    const text =
+      btn200 === index + 1 ? link200 : index < 2 ? link404 : link404bis;
+    buttonEl.innerText = splitPath(text);
+  });
+});
+
+function startTimer() {
+  clearInterval(state.interval);
+  playTone(440, 100);
+  speak(INITIAL_TIMER);
+
+  setState({
+    timer: INITIAL_TIMER,
+    interval: setInterval(() => {
+      const timer = state.timer - 1;
+      timer >= 0 && speak(timer);
+      setState({ timer });
+    }, TIMER_INTERVAL),
+  });
+}
+
+function getIndex() {
+  const index = Math.floor(Math.random() * state.links.length);
+  return index;
+}
+
+function getRandomChar() {
+  return Math.random()
+    .toString(36)
+    .replace(/[^a-z]+/g, '')
+    .substr(0, 1);
+}
+
+function getPathIndex(path) {
+  return Math.round(Math.random() * (path.length - 1));
+}
+
+function insertRandomLetter(path) {
+  let index = getPathIndex(path);
+  let char = path[index];
+  while (char === '/') {
+    index = getPathIndex(path);
+    char = path[index];
+  }
+  let newChar = getRandomChar();
+  while (newChar === char) {
+    newChar = getRandomChar();
+  }
+  return path
+    .split('')
+    .map((c, i) => (i === index ? newChar : c))
+    .join('');
+}
+
+function scrambleLetters(path) {
+  let index = getPathIndex(path);
+  while (path[index] === '/' || !path[index + 1] || path[index + 1] === '/') {
+    index = getPathIndex(path);
+  }
+  return path
+    .split('')
+    .map((c, i) =>
+      i === index ? path[index + 1] : i === index + 1 ? path[index] : c,
+    )
+    .join('');
+}
+
+function deleteLetter(path) {
+  let index = getPathIndex(path);
+  while (path[index] === '/') {
+    index = getPathIndex(path);
+  }
+  return path
+    .split('')
+    .map((c, i) => (i === index ? '' : c))
+    .join('');
+}
+
+function addLetter(path) {
+  let index = getPathIndex(path);
+  while (path[index] === '/') {
+    index = getPathIndex(path);
+  }
+  return path
+    .split('')
+    .map((c, i) => (i === index ? c + getRandomChar() : c))
+    .join('');
+}
+
+function wrongify(link) {
+  const [_, domain, path] = link.match(/([^/]+)(.*)/);
+  const wrongifyFns = [
+    insertRandomLetter,
+    scrambleLetters,
+    deleteLetter,
+    addLetter,
+  ];
+  const wrongifySelected = Math.round(Math.random() * (wrongifyFns.length - 1));
+  const link404 = domain + wrongifyFns[wrongifySelected](path);
+  return link404;
+}
+
+function setNextQuestion() {
+  if (
+    state.usedLinks.length === MAX_QUESTIONS ||
+    state.usedLinks.length === state.links.length
+  ) {
+    setState({ status: 'over' });
+    return;
+  }
+  startTimer();
+
+  let nextQuestionIndex = getIndex();
+  while (state.usedLinks.includes(nextQuestionIndex)) {
+    nextQuestionIndex = getIndex();
+  }
+  const link200 = state.links[nextQuestionIndex];
+  const link404 = wrongify(link200);
+  const link404bis = wrongify(link200);
+  const usedLinks = state.usedLinks.concat(nextQuestionIndex);
+  setState({
+    usedLinks,
+    btn200: Math.round(Math.random() * buttonsEl.length),
+    link200,
+    link404,
+    link404bis,
+    remaining:
+      Math.min(MAX_QUESTIONS, initialState.links.length) - usedLinks.length,
+  });
+}
+
+goEl.addEventListener('click', () => {
+  setState({ status: 'play' });
+});
+
+buttonsEl.forEach((btn, index) => {
+  btn.addEventListener('click', function() {
+    if (state.status !== 'play') {
+      return;
+    }
+    const correct = state.btn200 === index + 1;
+    setState(
+      correct
+        ? {
+            status: '200',
+            tot200: state.tot200 + 1,
+            clickedBtn: index,
+          }
+        : {
+            status: '404',
+            tot404: state.tot404 + 1,
+            clickedBtn: index,
+          },
+    );
+  });
+});
+
+playAgainEl.addEventListener('click', () => {
+  setState(initialState);
+});
+
+timerEl.innerText = INITIAL_TIMER;
+</script>
+  </body>
+</html>

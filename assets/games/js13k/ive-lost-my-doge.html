@@ -1,0 +1,61 @@
+<html>
+<head>
+	<title>I lost my DOGE</title>
+
+	<style>
+	img { position: absolute; display: block; width: 32px; height: 32px; }
+	#s { position: absolute; top: 0; left: 0; background: #fff; opacity: 0.8; padding: 5px; z-index: 999; }
+	#d { cursor: pointer; }
+	</style>
+
+	<script>
+	var imgs = [];
+	var size = 10;
+	var found = 0;
+	var start = + new Date();
+
+	function randomInt(min, max) {
+		return Math.floor(Math.random() * (max - min + 1) + min);
+	}
+
+	function createMap(size) {
+		var html = '';
+		for (var x = 0; x < size; ++x) {
+			for (var y = 0; y < size; ++y) {
+				html += '<img src="' + randomInt(0, 9) + '.jpg" style="left: ' + (x * 32) + 'px; top: ' + (y * 32) + 'px">';
+			}
+		}
+
+		var x = randomInt(1, size-2);
+		var y = randomInt(1, size-2);
+		html += '<img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAgACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAABAUGAwH/xAAoEAACAQMDAwQCAwAAAAAAAAABAwIABBEFEiEGE0EiMVGBFCNhcaH/xAAXAQEAAwAAAAAAAAAAAAAAAAADAQUG/8QAGxEAAgIDAQAAAAAAAAAAAAAAAQIAEQMSISL/2gAMAwEAAhEDEQA/AK2Vzp6TiV13D8QFZtuo/kouELMURGJ7hjNb2OjJRlkpbtkSeY0vEr91kyWoKgnY0kRhyTAe33WfOIp2WCsDHUtZslqLJslGIGeYmklt1Ky+6iTbqJio8SWR4I4P9+aCstRTqt01NtbOEFxG4zh6TkZxn5+RWllp69M1tVyhZ2un+zcc44wPqmLsDTyFRSLEM16d4jpC97DXQfjHcBImAMc8fdTvRmsQXozIahqPfmW5y6eDHj255q+vG9xGDHcDwanp21klm5aVRkP4GRTHINdTBCG7jJbVR9S4cn/aFvHmM4AxA5zx4rqmxMDjJPkkcUG5D7i4xHO3yaDI3mhFQdsz/9k=" id="d" style="left: ' + (x * 32) + 'px; top: ' + (y * 32) + 'px">';
+
+		document.getElementById('x').innerHTML = html;
+
+		document.getElementById('d').onclick = onDogeClick;
+	}
+
+	function onDogeClick() {
+		size += 5;
+		found++;
+		createMap(size);
+	}
+
+	function score() {
+		var time = (+ new Date() - start) / 1000;
+		document.getElementById('s').innerHTML = 'Found ' + found + ' in ' + time.toFixed(1) + ' secs';
+	}
+
+	window.onload = function() {
+		createMap(size);
+		window.setInterval(score, 250);
+	}
+	</script>
+</head>
+<body>
+
+	<div id="s"></div>
+	<div id="x"></div>
+
+</body>
+</html>

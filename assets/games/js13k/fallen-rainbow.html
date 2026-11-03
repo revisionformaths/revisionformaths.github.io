@@ -1,0 +1,2921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fallen rainbow</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #111;
+            color: #aaa;
+            font-family: 'Courier New', 'Consolas', monospace;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #headerBar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 540px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 0 4px;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .6s ease;
+        }
+        #headerBar.visible { opacity: 1; }
+        #gameTitle { font-size: 13px; letter-spacing: 2px; color: #555; }
+        #levelDisplay { font-size: 12px; letter-spacing: 1px; color: #555; }
+
+        #gameContainer { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #gameCanvas { border: 1px solid #333; background: #000; z-index: 10; }
+
+        /* 全屏覆盖层共用定位 */
+        #deathOverlay, #transitionOverlay, #crownChoiceOverlay, #introOverlay, #glitchOverlay { position: fixed; inset: 0; pointer-events: none; }
+        #deathOverlay { display: none; z-index: 100; background: rgba(0,0,0,.75); }
+        #crownChoiceOverlay { display: none; z-index: 300; background: rgba(0,0,0,.85); }
+        #transitionOverlay { background: #000; z-index: 200; opacity: 0; transition: opacity .4s ease; }
+        #introOverlay { background: #000; z-index: 400; opacity: 0; transition: opacity .5s ease; }
+        #glitchOverlay { z-index: 350; display: none; }
+        /* 覆盖层居中布局 */
+        #deathOverlay.active, #crownChoiceOverlay.active, #introOverlay { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #transitionOverlay.active { opacity: 1; }
+        #introOverlay.active { opacity: 1; pointer-events: auto; }
+        #glitchOverlay.active { display: block; animation: glitchFlash .9s steps(2, end); }
+
+        /* 消息/提示统一字号与动画 */
+        #deathMessage, #crownChoiceMessage { text-align: center; padding: 0 20px; white-space: pre-line; animation: fadeUp .5s ease-out; }
+        #deathMessage { font-size: clamp(18px, 4vw, 30px); max-width: 500px; line-height: 1.6; color: #ccc; }
+        #crownChoiceMessage { font-size: clamp(16px, 3.2vw, 24px); max-width: 520px; line-height: 1.7; color: #ccc; }
+        #deathHint, #crownChoiceHint, #introMessage .intro-hint { font-size: 12px; letter-spacing: 3px; }
+        #deathHint, #crownChoiceHint { animation: fadeUp .9s ease-out; }
+        #deathHint { margin-top: 30px; color: #555; }
+        #crownChoiceHint { margin-top: 34px; color: #555; }
+
+        @keyframes fadeUp {
+            0% { opacity: 0; transform: translateY(6px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        #transitionMessage { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 210; pointer-events: none; text-align: center; opacity: 0; transition: opacity .6s ease; padding: 0 20px; }
+        #transitionMessage.active { opacity: 1; }
+        #transitionMessage .level-label { font-size: 14px; letter-spacing: 3px; color: #555; }
+        #transitionMessage .level-sub { font-size: 11px; letter-spacing: 2px; margin-top: 10px; white-space: pre-line; color: #555; }
+        #transitionMessage .cycle-notice { font-size: 13px; letter-spacing: 2px; margin-top: 14px; color: #555; }
+
+        #deathCounter { position: absolute; top: 8px; right: 10px; z-index: 60; font-size: 12px; letter-spacing: 2px; color: #999; opacity: 0; transition: opacity .6s ease; pointer-events: none; }
+        #deathCounter.visible { opacity: 1; }
+
+        #muteMark { position: fixed; top: 20px; left: 20px; z-index: 500; color: #ccc; }
+        #muteMark.visible { color: #f88; }
+
+        #introMessage { max-width: 560px; padding: 0 24px; text-align: center; line-height: 1.9; font-size: 14px; letter-spacing: 1px; }
+        #introMessage .intro-title { font-size: 16px; letter-spacing: 4px; margin-bottom: 22px; color: #ccc; }
+        #introMessage .intro-body { white-space: pre-line; }
+        #introMessage .intro-hint { margin-top: 34px; color: #555; }
+
+        @keyframes glitchFlash {
+            0%   { background: rgba(255,0,80,.18); }
+            20%  { background: rgba(0,255,255,.18); }
+            40%  { background: rgba(255,255,0,.14); }
+            60%  { background: rgba(255,0,255,.16); }
+            80%  { background: rgba(0,255,128,.14); }
+            100% { background: rgba(255,255,255,0); }
+        }
+
+        #touchControls { position: fixed; inset: auto 20px 18px 14px; z-index: 450; display: none; touch-action: none; }
+        #touchControls button { width: 60px; height: 60px; margin: 0 14px 0 0; border-radius: 50%; background: #fff1; color: #fffa; }
+        #touchControls button:nth-child(3) { margin-left: auto; }
+        #touchControls button:active { background: #fff4; }
+        @media (pointer: coarse) { #touchControls { display: flex; } }
+    </style>
+</head>
+<body>
+
+    <div id="headerBar">
+        <span id="gameTitle"></span>
+        <span id="levelDisplay"></span>
+    </div>
+
+    <div id="muteMark">♪</div>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="deathCounter"></div>
+    </div>
+
+    <div id="deathOverlay">
+        <div id="deathMessage"></div>
+        <div id="deathHint"></div>
+    </div>
+
+    <div id="transitionOverlay"></div>
+    <div id="transitionMessage">
+        <div class="level-label"></div>
+        <div class="level-sub"></div>
+        <div class="cycle-notice"></div>
+    </div>
+
+    <div id="crownChoiceOverlay">
+        <div id="crownChoiceMessage"></div>
+        <div id="crownChoiceHint"></div>
+    </div>
+
+    <div id="glitchOverlay"></div>
+
+    <div id="introOverlay">
+        <div id="introMessage">
+            <div class="intro-title"></div>
+            <div class="intro-body"></div>
+            <div class="intro-hint"></div>
+        </div>
+    </div>
+
+    <div id="touchControls"><button>◀</button><button>▶</button><button>▲</button></div>
+
+<script>// ===================== 游戏文案集中管理（copy.js） =====================
+// 所有用户可见文本统一放这里，便于修改与压缩
+
+/** 死亡原因文本映射 */
+const DEATH_REASONS = {
+    'FALLEN': 'Hit the bottom.',
+    'SQUEEZED': 'Squeezed.',
+    'SQUASHED': 'Squashed.',
+    'SUICIDE': 'Gave up.',
+    'SWALLOWED': 'Swallowed.',
+};
+
+/** 过渡/切换文案 */
+const COPY = {
+    // 死亡提示
+    deathHint: '[ SPACE to try again ]',
+    deathCounter: (n) => `deaths: ${n}`,
+    // 王冠抉择（文案统一，不再按轮回区分）
+    choiceHint: '[ LEFT ] let go   [ RIGHT ] keep it',
+    choice: 'Ah, it is this dazzling crown that brings it all to pass.\nPerhaps it feeds upon what it devours, and so grows ever more magnificent.',
+    // 真结局
+    endingSub: 'I remember now.\nWhat I forgot was that I forget.\nThe colors are my memories...',
+    endingCycle: 'When all colors sink like a dying sunset, only black and white shall endure. And they are where my true belonging lies.',
+    // 过渡
+    corridorLabel: '...',
+    corridorSub: '???',
+    hiddenLabel: (part) => `THE ABANDONED PLACE — ${part}/3`,
+    hiddenSub: 'Something stirs in the dark…',
+    // 首次带冠进入 13-1 的揭示（仅该次替换 hiddenCrownedSub）
+    hiddenRevealSub: 'Now I understand why this place is called the Abandoned Place…\nI once knew the truth, yet I cast it aside.',
+    hiddenCrownedSub: 'When colors fade, black and white remain.',
+    displayHidden: (part) => `The Abandoned Place ${part}/3`,
+    cycleCrowned: 'the crowned journey begins…',
+    cycleKept: (n) => `the colors have a keeper. cycle ${n}.`,
+    cyclePlain: 'Another cycle. The end…?',
+    // 开场介绍
+    introBody: 'I wake.\nMy colors are gone — and my memories with them.\nGo forth, and seek my hues. This is my destiny.',
+    introHint: '[ SPACE ]',
+    gameTitle: 'Fallen rainbow',
+};
+</script>
+<script>// Tool functions: collision detection
+// Rect :: { x: number, y: number, width: number, height: number }
+function collideRect(rect1, rect2) {
+    return (
+        rect1.x <= rect2.x + rect2.width &&
+        rect1.x + rect1.width >= rect2.x &&
+        rect1.y <= rect2.y + rect2.height &&
+        rect1.y + rect1.height >= rect2.y
+    );
+}
+
+// ===================== 精灵帧加载（img.bin 位压缩 + 代码提供 rect） =====================
+let GAME_SpriteFrameCache = {};
+
+// 陷阱贴图在 img.bin 中的位置/尺寸（16px 高单行横向排列；独角兽玩家已移除，改为红色碰撞箱）
+// 陷阱使用关卡主题色渲染（位图为黑前景 / 透明背景）
+const GAME_SpriteRects = {
+    'black_hole1.png':      { x: 0,  y: 0, w: 16, h: 16 },
+    'black_hole2.png':      { x: 16, y: 0, w: 16, h: 16 },
+    'bounce_default.png':   { x: 32, y: 0, w: 16, h: 16 },
+    'bounce_triggered.png': { x: 48, y: 0, w: 16, h: 16 },
+    'button_default.png':   { x: 64, y: 0, w: 16, h: 8 },
+    'button_triggered.png': { x: 80, y: 0, w: 16, h: 8 },
+    'destination.png':      { x: 96, y: 0, w: 16, h: 16 },
+};
+
+function cssColorToRGBA(colorStr) {
+    const cvs = document.createElement('canvas');
+    cvs.width = cvs.height = 1;
+    const c = cvs.getContext('2d', { willReadFrequently: true });
+    c.fillStyle = colorStr;
+    c.fillRect(0, 0, 1, 1);
+    return Array.from(c.getImageData(0, 0, 1, 1).data);
+}
+
+/**
+ * 单文件打包资源读取：页尾追加 [img][lvl][u16 imgLen][u16 lvlLen]（大端），一次 fetch 后切片缓存
+ */
+let GAME_assetsP = null, GAME_assetsImg = null, GAME_assetsLvl = null;
+function gameAssetsLoaded() {
+    return GAME_assetsP || (GAME_assetsP = fetch(location.href)
+        .then(r => r.arrayBuffer())
+        .then(b => {
+            const v = new DataView(b);
+            const il = v.getUint16(b.byteLength - 4, false);
+            const ll = v.getUint16(b.byteLength - 2, false);
+            const is = b.byteLength - 4 - il - ll;
+            GAME_assetsImg = b.slice(is, is + il);
+            GAME_assetsLvl = b.slice(is + il, b.byteLength - 4);
+        }));
+}
+
+/**
+ * 从位压缩的 img.bin 按 rect 裁切出所有精灵帧
+ * @param {string} fileName bin 文件路径（单文件模式下忽略，改从页尾切片）
+ * @param {string} foreground 陷阱前景色（默认）
+ * @param {string} background 陷阱背景色（默认）
+ * @param {object} frameRects { 名称: {x,y,w,h,fg?,bg?} }，rect 可覆盖配色
+ * @returns {Promise<object>} 名称 → ImageBitmap
+ */
+async function initializeSpriteFramesFromBinFile(fileName, foreground, background, frameRects) {
+    await gameAssetsLoaded();
+    const view = new DataView(GAME_assetsImg);
+    // 行宽 = 最大 rect 右边界（须为 8 的倍数）
+    const rowWidth = Math.max(...Object.values(frameRects).map(r => r.x + r.w));
+    const rowBytes = rowWidth / 8;
+    const rowCount = view.byteLength / rowBytes;
+    // 解码为逐像素 0/1 位数组
+    const bits = [];
+    for (let row = 0; row < rowCount; row++) {
+        let lineString = '';
+        for (let b = 0; b < rowBytes; b++) {
+            lineString += view.getUint8(row * rowBytes + b).toString(2).padStart(8, '0');
+        }
+        for (let px = 0; px < rowWidth; px++) bits.push(lineString[px]);
+    }
+    const fg = cssColorToRGBA(foreground);
+    const bg = cssColorToRGBA(background);
+    const cache = {};
+    for (const name in frameRects) {
+        const r = frameRects[name];
+        const rfg = r.fg ? cssColorToRGBA(r.fg) : fg;
+        const rbg = r.bg ? cssColorToRGBA(r.bg) : bg;
+        const cvs = document.createElement('canvas');
+        cvs.width = r.w;
+        cvs.height = r.h;
+        const c = cvs.getContext('2d');
+        const img = c.createImageData(r.w, r.h);
+        const d = img.data;
+        for (let y = 0; y < r.h; y++) {
+            for (let x = 0; x < r.w; x++) {
+                const col = bits[(r.y + y) * rowWidth + (r.x + x)] === '1' ? rfg : rbg;
+                const o = (y * r.w + x) * 4;
+                d[o] = col[0];
+                d[o + 1] = col[1];
+                d[o + 2] = col[2];
+                d[o + 3] = col[3];
+            }
+        }
+        c.putImageData(img, 0, 0);
+        cache[name] = await createImageBitmap(cvs);
+    }
+    return cache;
+}
+
+</script>
+<script>// 全局变量前缀约定：
+// GameMap -> GAMEMAP_ 前缀
+// Player -> PLAYER_ 前缀
+
+// ===================== GameMap 模块（原GameMap类） =====================
+// GameMap全局变量
+let GAMEMAP_tileMapArray = [];
+
+/**
+ * 渲染地图（替代原render方法）
+ * @param {CanvasRenderingContext2D} ctx - 画布上下文
+ */
+function gamemap_render(ctx) {
+    ctx.fillStyle = GAME_foregroundColor;
+    for (let y = 0; y < GAME_mapHeight; y++) {
+        for (let x = 0; x < GAME_mapWidth; x++) {
+            if (gamemap_hasTile(x, y)) {
+                ctx.fillRect(x * GAME_tileSize, y * GAME_tileSize, GAME_tileSize, GAME_tileSize);
+            }
+        }
+    }
+}
+
+/**
+ * 检查指定坐标是否有瓦片（替代原hasTile方法）
+ * @param {number} tileX - 瓦片X坐标
+ * @param {number} tileY - 瓦片Y坐标
+ * @returns {boolean|null}
+ */
+function gamemap_hasTile(tileX, tileY) {
+    if (tileX < 0 || tileX >= GAME_mapWidth || tileY < 0 || tileY >= GAME_mapHeight) return null;
+    return GAMEMAP_tileMapArray[tileY][tileX] == "1";
+}
+
+// ===================== Player 模块（原Player类） =====================
+// Player全局变量
+let PLAYER_size_width = 0.625;
+let PLAYER_size_height = 1.125;
+let PLAYER_speed = 4.1;
+let PLAYER_vy = 0;
+let PLAYER_gravity = 34;
+let PLAYER_jumpForce = -9;
+let PLAYER_gravityDir = 1; // 1=正常重力, -1=倒置
+let PLAYER_collision = {
+    x: 0, y: 0, width: PLAYER_size_width, height: PLAYER_size_height
+}
+// 黑洞吸入等仍用红色碰撞箱表现
+const PLAYER_COLOR = '#ff0000';
+let PLAYER_face = 1; // 朝向 1=朝右 -1=朝左（移动时更新，决定角/眼朝前哪侧）
+// DEBUG: B 键切换是否高亮真实碰撞箱（正式构建由 --define 剔除）
+let GAME_showBox = false;
+
+// 幽灵独角兽像素形象（tools/unicorn_soul/unicorn.png 24x32 → 等比 0.5 缩放 12x16）
+// 空心描边剪影：内部镂空透底色，镂空处保留原画的两只点状眼
+const SOUL_W = 12, SOUL_H = 16;
+const SOUL_P = [
+    '........##..',
+    '........##..',
+    '.......###..',
+    '..########..',
+    '.##......##.',
+    '.#........#.',
+    '.#..#..##.#.',
+    '.#........#.',
+    '.#........#.',
+    '.#........#.',
+    '.#........#.',
+    '.#.###....##',
+    '.#...#.....#',
+    '##.###....##',
+    '#........##.',
+    '##########..',
+];
+
+/**
+ * 设置玩家位置（替代原setPosition方法）
+ * @param {number} x - X坐标
+ * @param {number} y - Y坐标
+ */
+function player_setPosition(x, y) {
+    PLAYER_collision.x = x;
+    PLAYER_collision.y = y;
+    PLAYER_vy = 0;
+    PLAYER_collision.width = PLAYER_size_width;
+    PLAYER_collision.height = PLAYER_size_height;
+    gameCamFollow(0); // 瞬移/重生/换关：相机立即对齐新位置，避免缓动横扫
+}
+
+/**
+ * 获取水平位移（替代原getDX方法）
+ * @param {number} deltaTime - 帧间隔时间
+ * @returns {number}
+ */
+function player_getDX(deltaTime) {
+    return (actions.right - actions.left) * PLAYER_speed * deltaTime;
+}
+
+/**
+ * 获取垂直位移（替代原getDY方法）
+ * @param {number} deltaTime - 帧间隔时间
+ * @returns {number}
+ */
+function player_getDY(deltaTime) {
+    PLAYER_vy += PLAYER_gravity * PLAYER_gravityDir * deltaTime;
+    if (actions.jump && player_isOnGround()) {
+        PLAYER_vy = PLAYER_jumpForce * PLAYER_gravityDir;
+        actions.jump = false;
+        sfx(280, 0.18, 0.10, 3, 0.3, 520);
+    }
+    return PLAYER_vy * deltaTime;
+}
+
+/**
+ * 玩家帧更新（替代原tick方法）
+ * @param {number} deltaTime - 帧间隔时间
+ * @returns {boolean} 是否发生碰撞
+ */
+function player_tick(deltaTime) {
+    if (GAME_awaitingRespawn) return;
+
+    // 黑洞吸入动画：推进并最终触发死亡
+    if (GAME_blackHoleSuck) {
+        GAME_blackHoleSuck.t += deltaTime;
+        if (GAME_blackHoleSuck.t >= GAME_blackHoleSuck.duration) {
+            GAME_blackHoleSuck = null;
+            gameKillPlayer('SWALLOWED');
+        }
+        return;
+    }
+
+    let dx = player_getDX(deltaTime);
+    let dy = player_getDY(deltaTime);
+    // 更新朝向（决定幽灵头/角朝前哪侧）
+    const ax = (actions.right ? 1 : 0) - (actions.left ? 1 : 0);
+    if (ax) PLAYER_face = ax;
+    return player_updatePosition(dx, dy);
+}
+
+/**
+ * 检查玩家是否在地面（替代原isOnGround方法）
+ * @returns {boolean}
+ */
+function player_isOnGround() {
+    const dir = PLAYER_gravityDir;
+    const bottom = dir > 0 ? PLAYER_collision.y + PLAYER_collision.height : PLAYER_collision.y;
+    const probe = {
+        x: PLAYER_collision.x,
+        y: dir > 0 ? bottom : bottom - 0.1,
+        width: PLAYER_collision.width,
+        height: 0.1
+    };
+    const probeY = dir > 0 ? bottom + 0.0625 : bottom - 0.0625;
+    return gamemap_hasTile(Math.floor(PLAYER_collision.x), Math.floor(probeY))
+        || gamemap_hasTile(Math.floor(PLAYER_collision.x + PLAYER_collision.width), Math.floor(probeY))
+        || AnyfloatRectCollide(probe)
+        || AnyOnewayCollide(probe);
+}
+
+/**
+ * 玩家脚底（重力方向）正下方是否有瓦片（不含平台/单向板）
+ * @returns {boolean}
+ */
+function player_hasTileBelowFeet() {
+    const dir = PLAYER_gravityDir;
+    const bottom = dir > 0 ? PLAYER_collision.y + PLAYER_collision.height : PLAYER_collision.y;
+    const probeY = dir > 0 ? bottom + 0.0625 : bottom - 0.0625;
+    return gamemap_hasTile(Math.floor(PLAYER_collision.x), Math.floor(probeY))
+        || gamemap_hasTile(Math.floor(PLAYER_collision.x + PLAYER_collision.width), Math.floor(probeY));
+}
+
+/**
+ * 玩家被平台推动（替代原onPushedHorizontally/Vertically方法）
+ * @param {object} perpetratorCollision - 推动者碰撞体
+ * @param {number} direction - 推动方向
+ * @param {string} axis - 坐标轴 'x' 或 'y'
+ * @param {string} deathReason - 挤压死亡原因
+ */
+function player_onPushed(perpetratorCollision, direction, axis, deathReason) {
+    if (direction === 0) return;
+    const singleD = direction / 16;
+    while (collideRect(perpetratorCollision, {
+        x: PLAYER_collision.x,
+        y: PLAYER_collision.y,
+        width: PLAYER_collision.width,
+        height: PLAYER_collision.height
+    })) {
+        PLAYER_collision[axis] += singleD;
+    }
+    if (player_checkCollision()) {
+        gameKillPlayer(deathReason);
+    }
+}
+
+/**
+ * 更新玩家位置（替代原updatePosition方法）
+ * @param {number} dx - 水平位移
+ * @param {number} dy - 垂直位移
+ * @returns {boolean} 是否发生碰撞
+ */
+function player_updatePosition(dx, dy) {
+    let collided = false;
+    const prevY = PLAYER_collision.y;
+    const dir = PLAYER_gravityDir;
+    const falling = dy * dir > 0; // 是否向重力方向移动
+    
+    // === 水平移动 + 碰撞回退（瓦片 + floatrect）===
+    PLAYER_collision.x += dx;
+    if (player_checkCollision()) {
+        // 瓦片碰撞 → 水平回退
+        PLAYER_collision.x -= dx;
+        collided = true;
+    } else if (dx !== 0) {
+        // floatrect 水平碰撞（像墙一样从侧面挡住）
+        for (const trap of TRAP_floatRect_group) {
+            if (trap.n) continue;
+            if (!collideRect(PLAYER_collision, trap.c)) continue;
+            // 玩家在重力方向的表面外侧 → 不阻挡（允许站在上面或跳过头顶）
+            const playerEdge = dir > 0 ? PLAYER_collision.y + PLAYER_collision.height : PLAYER_collision.y;
+            const trapSurface = dir > 0 ? trap.c.y : trap.c.y + trap.c.height;
+            if ((playerEdge - trapSurface) * dir <= 0.01) continue;
+            PLAYER_collision.x -= dx;
+            collided = true;
+            break;
+        }
+    }
+    
+    PLAYER_collision.y += dy;
+    
+    // === 瓦片垂直碰撞回退 ===
+    if (player_checkCollision()) {
+        PLAYER_collision.y -= dy;
+        if (falling) {
+            if (Math.abs(PLAYER_vy) > 3) sfx(100, 0.12, 0.08, 0, 0.2, 60);
+            PLAYER_vy = 0;
+        }
+        else if (dy * dir < 0) PLAYER_vy = 0;
+        collided = true;
+    }
+    
+    // === floatrect 垂直碰撞 ===
+    // 下落：检查是否站在 floatrect 上
+    if (falling) {
+        const TOLERANCE = 1 / GAME_tileSize; // 匹配瓦片 Math.floor 的 1 像素容差
+        for (const trap of TRAP_floatRect_group) {
+            if (trap.n) continue;
+            // 玩家脚底下方已有不动 tile（站在其它地面）→ 不接住，避免被拉进 tile
+            if (player_hasTileBelowFeet()) continue;
+            // 用容差检测：玩家在重力方向的表面附近也算碰撞
+            const pc = PLAYER_collision;
+            const tc = trap.c;
+            const overlaps = pc.x <= tc.x + tc.width &&
+                             pc.x + pc.width >= tc.x &&
+                             pc.y <= tc.y + tc.height + (dir < 0 ? TOLERANCE : 0) &&
+                             pc.y + pc.height >= tc.y - (dir > 0 ? TOLERANCE : 0);
+            if (!overlaps) continue;
+            if (dir > 0 ? prevY + PLAYER_collision.height <= tc.y + 0.01
+                        : prevY >= tc.y + tc.height - 0.01) {
+                PLAYER_collision.y = dir > 0 ? tc.y - PLAYER_collision.height : tc.y + tc.height;
+                PLAYER_vy = 0;
+                collided = true;
+                break;
+            }
+        }
+    }
+    
+    // 上跳：检查是否撞到 floatrect 底部（天花板）
+    if (!falling && !collided) {
+        for (const trap of TRAP_floatRect_group) {
+            if (trap.n) continue;
+            if (!collideRect(PLAYER_collision, trap.c)) continue;
+            if (dir > 0 ? prevY + PLAYER_collision.height >= trap.c.y + trap.c.height - 0.01
+                        : prevY <= trap.c.y + 0.01) {
+                PLAYER_collision.y = dir > 0 ? trap.c.y + trap.c.height : trap.c.y - PLAYER_collision.height;
+                PLAYER_vy = 0;
+                collided = true;
+                break;
+            }
+        }
+    }
+    
+    // 单向平台碰撞检测（仅下落时，没被 tile 或 floatrect 挡住，且移动前在平台表面外侧）
+    if (falling && !collided) {
+        for (const trap of TRAP_oneway_group) {
+            if (trap.n) continue;
+            if (!collideRect(PLAYER_collision, trap.c)) continue;
+            if (dir > 0 ? prevY + PLAYER_collision.height <= trap.c.y + 0.01
+                        : prevY >= trap.c.y + trap.c.height - 0.01) {
+                PLAYER_collision.y = dir > 0 ? trap.c.y - PLAYER_collision.height : trap.c.y + trap.c.height;
+                PLAYER_vy = 0;
+                collided = true;
+                break;
+            }
+        }
+    }
+    
+    const fellOut = dir > 0 ? PLAYER_collision.y > GAME_mapHeight : PLAYER_collision.y + PLAYER_collision.height < 0;
+    if (fellOut && !GAME_awaitingRespawn) {
+        // 12-2跳入虚空 → corridor（带冠/无冠皆可进隐藏关；带冠抉择移师13-3）
+        if (typeof GAME_currentLevelIndex !== 'undefined' && GAME_currentLevelIndex === GAME_NORMAL_LAST_INDEX) {
+            gameEnterHiddenRealm();
+            return collided;
+        }
+        // 13-3掉出顶部 → 通关（带冠与否由 gameOnDestinationReached 决定）
+        if (typeof GAME_currentLevelIndex !== 'undefined' && GAME_currentLevelIndex === GAME_HIDDEN_START_INDEX + 2) {
+            gameOnDestinationReached();
+            return collided;
+        }
+        gameKillPlayer('FALLEN');
+    }
+    return collided;
+}
+
+/**
+ * 检查玩家碰撞（替代原checkCollision方法）
+ * @returns {boolean}
+ */
+function player_checkCollision() {
+    const thisCollision = {
+        x: PLAYER_collision.x,
+        y: PLAYER_collision.y,
+        width: PLAYER_collision.width,
+        height: PLAYER_collision.height
+    };
+    // 底部两角使用微小偏移，避免 Math.floor 精度问题导致站在地面时误判碰撞
+    const eps = 0.001;
+    const points = [
+        {x: thisCollision.x, y: thisCollision.y},
+        {x: thisCollision.x + thisCollision.width, y: thisCollision.y},
+        {x: thisCollision.x, y: thisCollision.y + thisCollision.height - eps},
+        {x: thisCollision.x + thisCollision.width, y: thisCollision.y + thisCollision.height - eps}
+    ];
+    for (const p of points) {
+        if (gamemap_hasTile(Math.floor(p.x), Math.floor(p.y))) return true;
+    }
+    return false;
+}
+
+// ===================== 王冠系统 =====================
+// 主体色相随时间连续循环渐变，顶部白色宝珠固定
+const PLAYER_CROWN_CYCLE_SECONDS = 2.8; // 渐变循环一周所需秒数
+// 像素王冠模板（'.'=透明，其余=主体色，'W'=白色宝珠）
+const PLAYER_CROWN_PIXELS = [
+    '......WW......',
+    '......##......',
+    '.#....##....#.',
+    '.##..####..##.',
+    '.###.####.###.',
+    '.############.',
+    '.############.',
+];
+
+/**
+ * 在角色头顶绘制像素王冠（含脉动光晕）
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} drawX - 占位矩形左边缘（世界像素）
+ * @param {number} drawY - 占位矩形顶边（世界像素）
+ * @param {number} drawW - 占位矩形宽度（世界像素）
+ */
+function player_renderCrown(ctx, drawX, drawY, drawW) {
+    const t = performance.now() / 1e3;
+    const hue = (t / PLAYER_CROWN_CYCLE_SECONDS * 360) % 360;
+    const gw = PLAYER_CROWN_PIXELS[0].length;
+    const gh = PLAYER_CROWN_PIXELS.length;
+    const cs = Math.max(1, Math.round(drawW * 0.5 / gw));
+    const crownW = gw * cs, crownH = gh * cs;
+    const px = Math.round(drawX + (drawW - crownW) / 2);
+    const py = Math.round(drawY - crownH);
+    for (let y = 0; y < gh; y++)
+        for (let x = 0; x < gw; x++) {
+            const ch = PLAYER_CROWN_PIXELS[y][x];
+            if (ch === '.') continue;
+            ctx.fillStyle = ch === 'W' ? '#ffffff' : `hsl(${hue}, 90%, 55%)`;
+            ctx.fillRect(px + x * cs, py + y * cs, cs, cs);
+        }
+    ctx.globalAlpha = 0.4 + 0.35 * Math.sin(t * 9);
+    ctx.strokeStyle = `hsl(${hue}, 100%, 70%)`;
+    ctx.lineWidth = cs;
+    ctx.strokeRect(px - cs, py - cs, crownW + 2 * cs, crownH + 2 * cs);
+    ctx.globalAlpha = 1;
+}
+
+/**
+ * 渲染玩家（幽灵独角兽）：unicorn_soul 像素剪影——空心头部+角，镂空透底色
+ * @param {CanvasRenderingContext2D} ctx - 已含相机 2× 变换的画布上下文
+ */
+function player_render(ctx) {
+    if (GAME_awaitingRespawn) return;
+
+    // 黑洞吸入：红色碰撞箱缩小并被吸向洞心
+    if (GAME_blackHoleSuck) {
+        player_renderSuck(ctx);
+        return;
+    }
+
+    const ts = GAME_tileSize, c = PLAYER_collision, dir = PLAYER_gravityDir;
+    const px = c.x * ts, pw = c.width * ts;
+    // 逆重力端(头顶)的盒缘；头与角都从这端向“上”伸出
+    const yU = dir > 0 ? c.y * ts : (c.y + c.height) * ts;
+    // 幽灵悬浮：贴图沿“离开地面/天花板”方向轻微上浮(0..1 世界px≈设备2px)，物理盒不动
+    const yF = yU - dir * (Math.sin(performance.now() / 1e3 * 3.5) + 1) / 2;
+
+    // ---- 像素形象：把 SOUL 剪影画进碰撞箱（每格 1 设计行/列 → k×k 设备px）----
+    // 头部/角在逆重力端，随 PLAYER_face 水平镜像，随 dir 反向伸入重力侧；
+    // 水平相对碰撞箱居中（等比 12 格 > 盒 10 格 → 左右各超出约 1 格=2px）
+    const k = Math.max(1, Math.round(pw * 2 / SOUL_W));
+    const tf = ctx.getTransform();
+    // 水平居中于碰撞箱：等比 12 格(24px) > 盒 10 格(20px) → 左右各超出 2px
+    const dX0 = Math.round(px * tf.a + tf.e) - (SOUL_W * k - pw * 2) / 2;
+    const dyU = Math.round(yF * tf.a + tf.f);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#000';
+    for (let r = 0; r < SOUL_H; r++) {
+        const yy = dyU + (dir > 0 ? r : -r) * k;
+        const row = SOUL_P[r];
+        for (let cc = 0; cc < SOUL_W; cc++) {
+            if (row.charCodeAt(cc) === 46) continue; // '.'
+            const xx = dX0 + (PLAYER_face > 0 ? cc : SOUL_W - 1 - cc) * k;
+            ctx.fillRect(xx, yy, k, k);
+        }
+    }
+    ctx.restore();
+
+    // 王冠戴在头顶（逆重力端）
+    if (GAME_hasCrown) player_renderCrown(ctx, px, yF, pw);
+
+    // DEBUG：B 键高亮真实碰撞箱（正式构建由 --define 剔除）
+    if (DEBUG && GAME_showBox) {
+        const bx = Math.round(c.x * ts * tf.a + tf.e);
+        const by = Math.round(c.y * ts * tf.a + tf.f);
+        const bw = Math.round(c.width * ts * tf.a);
+        const bh = Math.round(c.height * ts * tf.a);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = PLAYER_COLOR;
+        ctx.fillRect(bx, by, bw, 1);
+        ctx.fillRect(bx, by + bh - 1, bw, 1);
+        ctx.fillRect(bx, by, 1, bh);
+        ctx.fillRect(bx + bw - 1, by, 1, bh);
+    }
+}
+
+/**
+ * 黑洞吸入渲染：幽灵贴图随插值移向洞心并整体缩小至消失
+ * @param {CanvasRenderingContext2D} ctx - 已含相机 2× 变换的画布上下文
+ */
+function player_renderSuck(ctx) {
+    const s = GAME_blackHoleSuck;
+    const p = Math.min(1, s.t / s.duration);
+    const ts = GAME_tileSize;
+    // 目标实时跟随移动中的黑洞位置
+    const trap = TRAP_instances[s.id];
+    if (!trap) return;
+    const toX = trap.c.x + trap.c.width / 2;
+    const toY = trap.c.y + trap.c.height / 2;
+    const cx = (s.fromX + (toX - s.fromX) * p) * ts;   // 中心插值（逻辑px）
+    const cy = (s.fromY + (toY - s.fromY) * p) * ts;
+    const sc = Math.max(0.02, 1 - p);                  // 整体缩小至消失
+    const dir = PLAYER_gravityDir;
+    // 贴图设计格=1 逻辑px（2× 变换下自然放大到 2px/格），绕中心 scale 缩放
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(sc, sc);
+    ctx.fillStyle = '#000';
+    for (let r = 0; r < SOUL_H; r++) {
+        const row = SOUL_P[r];
+        const rr = dir > 0 ? r - SOUL_H / 2 : SOUL_H / 2 - r; // 角始终在逆重力端
+        for (let cc = 0; cc < SOUL_W; cc++) {
+            if (row.charCodeAt(cc) === 46) continue; // '.'
+            ctx.fillRect(cc - SOUL_W / 2, rr, 1, 1);
+        }
+    }
+    ctx.restore();
+}</script>
+
+<script>// ===================== 全局变量定义（统一前缀 TRAP_） =====================
+// 存储所有陷阱实例，key: trapId, value: 陷阱状态对象
+const TRAP_instances = {};
+// BlackHole 相关全局静态变量
+let TRAP_blackHole_spriteFrames = null;
+// Destination 相关全局静态变量
+let TRAP_destination_image = null;
+// FloatRect 相关全局静态变量
+let TRAP_floatRect_group = [];
+// OneWay 相关全局静态变量
+let TRAP_oneway_group = [];
+// Button 相关全局静态变量
+let TRAP_button_image_default = null;
+let TRAP_button_image_triggered = null;
+
+// ===================== 基础可移动陷阱通用函数 =====================
+/**
+ * 创建基础可移动陷阱
+ * @param {string/number} id 陷阱ID
+ * @param {number} posX X坐标
+ * @param {number} posY Y坐标
+ * @returns {object} 陷阱实例
+ */
+function createMoveableTrap(id, posX, posY) {
+  TRAP_instances[id] = {
+    id: id,
+    c: { x: posX, y: posY, width: 1, height: 1 }, // c = collision
+    m: null, // m = movement
+    og: false, // og = occupyingGameThread
+    t: 'moveableTrap', // t = type
+    // 子类扩展属性默认值
+    f: 0, // f = frameIndex
+    ft: 0, // ft = frameTimer
+    fi: 0.12, // fi = frameInterval
+    h: false, // h = hidden
+    n: false, // n = noCollision
+    cl: null, // cl = color
+    mh: 0, // mh = moving_direction_horizontal
+    mv: 0, // mv = moving_direction_vertical
+    p: false, // p = pressed
+    r: false // r = required
+  };
+  return TRAP_instances[id];
+}
+
+/**
+ * 调整陷阱碰撞盒大小
+ * @param {string/number} id 陷阱ID
+ * @param {number} width 宽度
+ * @param {number} height 高度
+ */
+function trapResize(id, width, height) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  trap.c.width = width;
+  trap.c.height = height;
+}
+
+/**
+ * 设置陷阱移动参数
+ * @param {string/number} id 陷阱ID
+ * @param {array} args 移动参数 [objectIndex, x, y, duration, blockFlag]
+ */
+function trapSetMovement(id, args) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  const fromX = trap.c.x;
+  const fromY = trap.c.y;
+  const targetX = args[1];
+  const targetY = args[2];
+  let duration = args[3];
+
+  GAME_blockedByMovement = !!args[4];
+  if (args[4]) trap.og = true;
+
+  if (!duration || duration <= 0) {
+    trap.c.x = targetX;
+    trap.c.y = targetY;
+    trap.m = null;
+  } else {
+    trap.m = {
+      fx: fromX,
+      fy: fromY,
+      tx: targetX,
+      ty: targetY,
+      d: duration,
+      e: 0,
+      b: !!args[4] // b = 本次移动是否 -block（阻塞脚本）
+    };
+    // 机关开始移动时播放音效
+    sfx(200, 0.15, 0.1, 3, 0.4, 300);
+  }
+
+  // 处理FloatRect/OneWay移动方向
+  if ((trap.t === 'floatrect' || trap.t === 'oneway') && trap.m) {
+    trap.mh = trap.m.fx === trap.m.tx ? 0 : (trap.m.tx > trap.m.fx ? 1 : -1);
+    trap.mv = trap.m.fy === trap.m.ty ? 0 : (trap.m.ty > trap.m.fy ? 1 : -1);
+  }
+}
+
+/**
+ * 检查陷阱与玩家碰撞
+ * @param {string/number} id 陷阱ID
+ * @returns {boolean} 是否碰撞
+ */
+function trapCheckCollisionWithPlayer(id) {
+  const trap = TRAP_instances[id];
+  if (!trap) return false;
+  let col = trap.c;
+  // 如果有碰撞偏移（如 BlackHole 缩小碰撞盒居中），应用偏移
+  if (trap.co) {
+    col = {
+      x: col.x + trap.co.x,
+      y: col.y + trap.co.y,
+      width: col.width,
+      height: col.height
+    };
+  }
+  return collideRect(PLAYER_collision, col);
+}
+
+/**
+ * 检查玩家是否站在指定陷阱的顶部（脚底在陷阱顶部表面附近）
+ * 注意：必须判断脚底靠近陷阱的 TOP 边缘，而非仅与陷阱任意部分重叠。
+ * 否则对于细高柱子(fr2)，玩家站在旁边也会被误判为"站在上面"。
+ * @param {object} trapCollision - 陷阱碰撞体
+ * @returns {boolean}
+ */
+function player_isStandingOnTrap(trapCollision) {
+  if (!PLAYER_collision) return false;
+  const dir = PLAYER_gravityDir;
+  // 重力方向的"脚底"与"表面"（倒置时在物理上方）
+  const playerBottom = dir > 0 ? PLAYER_collision.y + PLAYER_collision.height : PLAYER_collision.y;
+  const trapSurface = dir > 0 ? trapCollision.y : trapCollision.y + trapCollision.height;
+  // 脚底必须在表面附近（允许极小偏差和陷进去一点的情况）
+  if (dir > 0 ? (playerBottom < trapSurface - 0.05 || playerBottom > trapSurface + 0.3)
+              : (playerBottom > trapSurface + 0.05 || playerBottom < trapSurface - 0.3)) return false;
+  const feetRect = dir > 0
+    ? { x: PLAYER_collision.x, y: PLAYER_collision.y + PLAYER_collision.height, width: PLAYER_collision.width, height: 0.1 }
+    : { x: PLAYER_collision.x, y: PLAYER_collision.y - 0.1, width: PLAYER_collision.width, height: 0.1 };
+  return collideRect(feetRect, trapCollision);
+}
+
+/**
+ * 陷阱沿指定轴移动（水平/垂直共用）
+ * @param {string/number} id 陷阱ID
+ * @param {object} movement 移动状态对象
+ * @param {number} progress 移动进度(0-1)
+ * @param {string} axis 坐标轴 'x' 或 'y'
+ * @returns {number} 移动距离
+ */
+function trapMoveOnAxis(id, movement, progress, axis) {
+  const trap = TRAP_instances[id];
+  if (!trap) return 0;
+  const toKey = axis === 'x' ? 'tx' : 'ty';
+  const fromKey = axis === 'x' ? 'fx' : 'fy';
+  const totalDA = (movement[toKey] - movement[fromKey]) * progress;
+  trap.c[axis] = movement[fromKey] + totalDA;
+  trap.c[axis] = Math.round(trap.c[axis] * GAME_tileSize) / GAME_tileSize;
+  return totalDA;
+}
+
+/**
+ * 平台类陷阱（floatrect/oneway）沿轴移动：移动 + 携带玩家 + 推动
+ */
+function platformMoveAxis(id, movement, progress, axis) {
+  const trap = TRAP_instances[id];
+  if (!trap) return 0;
+
+  const prev = trap.c[axis];
+  const totalDA = trapMoveOnAxis(id, movement, progress, axis);
+  const frameDA = trap.c[axis] - prev;
+
+  if (frameDA === 0 || trap.n) return totalDA;
+
+  // 撞到玩家：上下/横向推动；站在顶上的不带动（玩家自然下坠），侧面的推开/挤死
+  // oneway 为单向平台：横向可穿行不推动，纵向仍可推动
+  const dirKey = axis === 'x' ? 'mh' : 'mv';
+  if (!GAME_awaitingRespawn && !(trap.t === 'oneway' && axis === 'x') && trap[dirKey] !== 0 && trapCheckCollisionWithPlayer(id)) {
+    const dir = PLAYER_gravityDir;
+    const playerBottom = dir > 0 ? PLAYER_collision.y + PLAYER_collision.height : PLAYER_collision.y;
+    const trapSurface = dir > 0 ? trap.c.y : trap.c.y + trap.c.height;
+    // 上升平台把站在顶上的玩家精确托起（对齐平台顶部），避免反复 push/抖动
+    if (axis === 'y' && trap.mv * dir < 0 && (dir > 0 ? playerBottom <= trapSurface + 0.5 : playerBottom >= trapSurface - 0.5)) {
+      PLAYER_collision.y = dir > 0 ? trapSurface - PLAYER_collision.height : trapSurface + PLAYER_collision.height;
+      PLAYER_vy = 0;
+      return totalDA;
+    }
+    // 玩家下落快于下降平台、正从上方穿过 → 不推（避免瞬移到下方）；被平台压（vy=0）仍 push 压死
+    if (axis === 'y' && trap.mv * dir > 0 && PLAYER_vy * dir > 0) return totalDA;
+    const onTop = dir > 0 ? playerBottom <= trapSurface + 0.05 : playerBottom >= trapSurface - 0.05;
+    if (!onTop) {
+      player_onPushed(trap.c, trap[dirKey], axis, axis === 'x' ? 'SQUEEZED' : 'SQUASHED');
+    }
+  }
+
+  return totalDA;
+}
+
+/**
+ * 推进陷阱移动计时，返回进度(0-1)；无移动返回 -1
+ */
+function trapAdvanceMovement(id, dt) {
+  const trap = TRAP_instances[id];
+  if (!trap || !trap.m) return -1;
+  const m = trap.m;
+  m.e += dt;
+  return Math.min(1, m.e / m.d);
+}
+
+/**
+ * 移动完成后清理移动状态
+ */
+function trapFinishMovement(id, progress) {
+  if (progress < 1) return;
+  const trap = TRAP_instances[id];
+  const wasBlock = !!(trap.m && trap.m.b);
+  trap.m = null;
+  if (wasBlock) GAME_blockedByMovement = false;
+}
+
+/**
+ * 平台类陷阱（floatrect/oneway）帧更新逻辑
+ */
+function platformTick(id, dt) {
+  const progress = trapAdvanceMovement(id, dt);
+  if (progress < 0) return;
+  const trap = TRAP_instances[id];
+  const thisMovement = trap.m;
+  platformMoveAxis(id, thisMovement, progress, 'x');
+  platformMoveAxis(id, thisMovement, progress, 'y');
+  trapFinishMovement(id, progress);
+}
+
+/**
+ * 基础陷阱帧更新逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {number} dt 帧间隔时间
+ */
+function trapBaseTick(id, dt) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+
+  // 碰撞检测 & 执行对应碰撞逻辑（noCollision 或死亡时跳过）
+  if (!trap.n && !GAME_awaitingRespawn && trapCheckCollisionWithPlayer(id)) {
+    switch (trap.t) {
+      case 'blackhole':
+        blackHoleOnCollidedWithPlayer(id);
+        break;
+      case 'destination':
+        destinationOnCollidedWithPlayer(id);
+        break;
+      case 'button':
+        buttonOnCollidedWithPlayer(id);
+        break;
+      case 'bounce':
+        bounceOnCollidedWithPlayer(id);
+        break;
+    }
+  }
+
+  // 处理移动逻辑
+  const progress = trapAdvanceMovement(id, dt);
+  if (progress < 0) return;
+  const thisMovement = trap.m;
+  trapMoveOnAxis(id, thisMovement, progress, 'x');
+  trapMoveOnAxis(id, thisMovement, progress, 'y');
+  trapFinishMovement(id, progress);
+}
+
+// ===================== TrapManager（陷阱管理器）函数 =====================
+/**
+ * 初始化所有陷阱类
+ */
+let TRAP_tickDispatch = null;
+let TRAP_renderDispatch = null;
+
+/** 水平翻转一张精灵位图，返回新 canvas */
+function flipBitmapHorizontally(bmp) {
+  const cvs = document.createElement('canvas');
+  cvs.width = bmp.width;
+  cvs.height = bmp.height;
+  const c = cvs.getContext('2d');
+  c.translate(bmp.width, 0);
+  c.scale(-1, 1);
+  c.drawImage(bmp, 0, 0);
+  return cvs;
+}
+
+function trapManagerInitializeTrapClasses() {
+  TRAP_tickDispatch = {
+    blackhole: blackHoleTick,
+    destination: destinationTick,
+    floatrect: platformTick,
+    button: buttonTick,
+    bounce: bounceTick,
+    oneway: platformTick,
+  };
+  TRAP_renderDispatch = {
+    blackhole: blackHoleRender,
+    destination: destinationRender,
+    floatrect: floatRectRender,
+    button: buttonRender,
+    bounce: bounceRender,
+    oneway: onewayRender,
+  };
+  // 黑洞动画序列：帧1 → 帧2 → 帧1左右翻转 → 帧2左右翻转
+  const bh1 = GAME_SpriteFrameCache['black_hole1.png'];
+  const bh2 = GAME_SpriteFrameCache['black_hole2.png'];
+  TRAP_blackHole_spriteFrames = [
+    bh1,
+    bh2,
+    flipBitmapHorizontally(bh1),
+    flipBitmapHorizontally(bh2),
+  ];
+  TRAP_button_image_default = GAME_SpriteFrameCache['button_default.png'];
+  TRAP_button_image_triggered = GAME_SpriteFrameCache['button_triggered.png'];
+  TRAP_bounce_image_default = GAME_SpriteFrameCache['bounce_default.png'];
+  TRAP_bounce_image_triggered = GAME_SpriteFrameCache['bounce_triggered.png'];
+  TRAP_destination_image = GAME_SpriteFrameCache['destination.png'];
+}
+
+/**
+ * 所有陷阱帧更新
+ * @param {number} dt 帧间隔时间
+ */
+function trapManagerTick(dt) {
+  for (const id of Object.keys(TRAP_instances)) {
+    const trap = TRAP_instances[id];
+    (TRAP_tickDispatch[trap.t] || trapBaseTick)(id, dt);
+  }
+}
+
+/**
+ * 渲染所有陷阱
+ * @param {CanvasRenderingContext2D} ctx 画布上下文
+ */
+function trapManagerRender(ctx) {
+  // 先渲染其他机关（最底层）
+  for (const id of Object.keys(TRAP_instances)) {
+    const trap = TRAP_instances[id];
+    if (trap.t !== 'floatrect') {
+      TRAP_renderDispatch[trap.t](id, ctx);
+    }
+  }
+  // 再渲染 floatrect（覆盖在其他机关上方）
+  for (const id of Object.keys(TRAP_instances)) {
+    const trap = TRAP_instances[id];
+    if (trap.t === 'floatrect') {
+      TRAP_renderDispatch[trap.t](id, ctx);
+    }
+  }
+}
+
+/**
+ * 清空所有陷阱
+ */
+function trapManagerClear() {
+  // 重置所有陷阱实例
+  for (const k in TRAP_instances) delete TRAP_instances[k];
+  // 重置FloatRect组
+  TRAP_floatRect_group = [];
+  // 重置OneWay组
+  TRAP_oneway_group = [];
+  // 黑洞尾迹
+  GAME_blackHoleTrail = [];
+}
+
+/**
+ * 注册陷阱移动
+ * @param {array} args 移动参数 [objectIndex, x, y, duration, blockFlag]
+ */
+function trapManagerRegisterMovement(args) {
+  trapSetMovement(args[0], args);
+}
+
+</script>
+<script>// ===================== Bounce（蹦床）专用函数 =====================
+let TRAP_bounce_image_default = null;
+let TRAP_bounce_image_triggered = null;
+
+/**
+ * 创建Bounce陷阱
+ * @param {string/number} id 陷阱ID
+ * @param {number} x X坐标
+ * @param {number} y Y坐标
+ */
+function createBounce(id, x, y) {
+  const trap = createMoveableTrap(id, x, y);
+  trap.t = 'bounce';
+  trap.a = false; // a = active
+  trap.rt = 0; // rt = recoverTimer
+  trap.rd = 0.5; // rd = recoverDelay
+  // 碰撞箱只占下半格（类似部分陷阱的缩小碰撞盒策略）
+  trap.c.width = 1;
+  trap.c.height = 0.5;
+  trap.co = { x: 0, y: 0.5 };
+}
+
+/**
+ * Bounce碰撞玩家处理
+ * @param {string/number} id 陷阱ID
+ */
+function bounceOnCollidedWithPlayer(id) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  // 仅在未激活时触发一次弹起效果
+  if (!trap.a) {
+    trap.a = true;
+    trap.rt = trap.rd;
+    // 使用玩家已有的垂直速度变量实现弹起
+    // PLAYER_vy 与 player_getDY 配合使用（负值向上）
+    if (typeof PLAYER_vy !== 'undefined') {
+      // 设置为更强的跳跃力，使蹦床弹得更高（倒置重力下反向弹出）
+      PLAYER_vy = PLAYER_jumpForce * 1.6 * PLAYER_gravityDir;
+    }
+    // 播放弹簧音效 — 快速上升的弹性音
+    sfx(350, 0.3, 0.08, 0, 0.4, 900);
+    sfx(600, 0.2, 0.12, 3, 0.3, 1200, 0, 40);
+  }
+}
+
+/**
+ * Bounce帧更新逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {number} dt 帧间隔时间
+ */
+function bounceTick(id, dt) {
+  trapBaseTick(id, dt);
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  if (trap.a) {
+    trap.rt -= dt;
+    if (trap.rt <= 0) {
+      trap.a = false;
+      trap.rt = 0;
+    }
+  }
+}
+
+/**
+ * Bounce渲染逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {CanvasRenderingContext2D} ctx 画布上下文
+ */
+function bounceRender(id, ctx) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  // hidden → 不渲染
+  if (trap.h) return;
+  const px = trap.c.x * GAME_tileSize;
+  const py = trap.c.y * GAME_tileSize;
+  if (trap.a && TRAP_bounce_image_triggered) {
+    ctx.drawImage(TRAP_bounce_image_triggered, px, py, GAME_tileSize, GAME_tileSize);
+  } else if (TRAP_bounce_image_default) {
+    ctx.drawImage(TRAP_bounce_image_default, px, py, GAME_tileSize, GAME_tileSize);
+  }
+}</script>
+<script>// ===================== Button（按钮）专用函数 =====================
+/**
+ * 创建Button陷阱
+ * @param {string/number} id 陷阱ID
+ * @param {number} x X坐标
+ * @param {number} y Y坐标
+ * @returns {object} 陷阱实例
+ */
+function createButton(id, x, y) {
+  const trap = createMoveableTrap(id, x, y);
+  trap.t = 'button';
+  trap.p = false;
+  trap.r = false;
+  // 碰撞盒对齐半格贴图（16×8 位于格子下半部）：0.9 宽居中，避免擦边误触发
+  trap.c.width = 0.9;
+  trap.c.height = 0.5;
+  trap.co = { x: 0.05, y: 0.5 };
+}
+
+/**
+ * Button游戏注册处理
+ * @param {string/number} id 陷阱ID
+ */
+function buttonOnGameRegister(id) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  trap.r = true;
+}
+
+/**
+ * Button碰撞玩家处理
+ * @param {string/number} id 陷阱ID
+ */
+function buttonOnCollidedWithPlayer(id) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  if (!trap.p) sfx(800, 0.25, 0.06, 0, 0.3, 600);
+  trap.p = true;
+  if (!trap.r) return;
+  gameOnButtonPressed();
+  trap.r = false;
+}
+
+/**
+ * Button帧更新逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {number} dt 帧间隔时间
+ */
+function buttonTick(id, dt) {
+  trapBaseTick(id, dt);
+}
+
+/**
+ * Button渲染逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {CanvasRenderingContext2D} ctx 画布上下文
+ */
+function buttonRender(id, ctx) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  // hidden → 不渲染
+  if (trap.h) return;
+  
+  const x = trap.c.x * GAME_tileSize;
+  const y = (trap.c.y + 0.5) * GAME_tileSize;
+  ctx.drawImage(
+    trap.p ? TRAP_button_image_triggered : TRAP_button_image_default,
+    x,
+    y
+  );
+}</script>
+<script>// ===================== Destination（终点陷阱）专用函数 =====================
+/**
+ * 创建Destination陷阱
+ * @param {string/number} id 陷阱ID
+ * @param {number} x X坐标
+ * @param {number} y Y坐标
+ * @returns {object} 陷阱实例
+ */
+function createDestination(id, x, y) {
+  const trap = createMoveableTrap(id, x, y);
+  trap.t = 'destination';
+}
+
+/**
+ * Destination碰撞玩家处理
+ * @param {string/number} id 陷阱ID
+ */
+function destinationOnCollidedWithPlayer(id) {
+  gameOnDestinationReached();
+}
+
+/**
+ * Destination帧更新逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {number} dt 帧间隔时间
+ */
+function destinationTick(id, dt) {
+  trapBaseTick(id, dt);
+}
+
+/**
+ * Destination渲染逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {CanvasRenderingContext2D} ctx 画布上下文
+ */
+function destinationRender(id, ctx) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  // hidden → 不渲染
+  if (trap.h) return;
+  
+  const tx = trap.c.x * GAME_tileSize;
+  const ty = trap.c.y * GAME_tileSize;
+  const w = GAME_tileSize;
+  const h = GAME_tileSize;
+  if (TRAP_destination_image) {
+    ctx.drawImage(TRAP_destination_image, tx, ty, w, h);
+  }
+}</script>
+<script>// ===================== FloatRect（浮动矩形）专用函数 =====================
+/**
+ * 创建FloatRect陷阱
+ * @param {string/number} id 陷阱ID
+ * @param {number} x X坐标
+ * @param {number} y Y坐标
+ * @param {number} w 宽度
+ * @param {number} h 高度
+ * @param {boolean} hidden 是否隐藏
+ * @returns {object} 陷阱实例
+ */
+function createFloatRect(id, x, y, w, h, hidden = false, noCollision = false) {
+  const trap = createMoveableTrap(id, x, y);
+  trap.t = 'floatrect';
+  trap.h = hidden;
+  trap.n = noCollision;
+  trapResize(id, w, h);
+  trap.cl = GAME_foregroundColor;
+  trap.mh = 0;
+  
+  TRAP_floatRect_group.push(trap);
+}
+
+/**
+ * 检查矩形是否与任意FloatRect碰撞
+ */
+function AnyfloatRectCollide(rect) {
+    return TRAP_floatRect_group.some(r => !r.n && collideRect(r.c, rect));
+}
+
+/**
+ * FloatRect渲染逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {CanvasRenderingContext2D} ctx 画布上下文
+ */
+function floatRectRender(id, ctx) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  
+  const tileSize = GAME_tileSize;
+  const collision = trap.c;
+  const x = collision.x * tileSize;
+  const y = collision.y * tileSize;
+  const width = collision.width * tileSize;
+  const height = collision.height * tileSize;
+
+  if (trap.h) return;
+
+  // 显示状态下填充颜色
+  ctx.fillStyle = trap.cl;
+  ctx.fillRect(x, y, width, height);
+}</script>
+<script>// ===================== OneWay（单向平台）专用函数 =====================
+// 玩家可以下方跳穿，但能从上方站立；平台向上移动时推玩家上升
+// 注意：TRAP_oneway_group 已在 traps.js 中声明
+
+/**
+ * 创建OneWay陷阱（高度固定1格）
+ * @param {string/number} id 陷阱ID
+ * @param {number} x X坐标
+ * @param {number} y Y坐标
+ * @param {number} w 宽度
+ */
+function createOneway(id, x, y, w, hidden = false, noCollision = false) {
+  const trap = createMoveableTrap(id, x, y);
+  trap.t = 'oneway';
+  trap.h = hidden;
+  trap.n = noCollision;
+  trapResize(id, w, 1);
+  trap.cl = GAME_foregroundColor;
+  trap.mh = 0;
+  trap.mv = 0;
+  TRAP_oneway_group.push(trap);
+}
+
+/**
+ * 检查矩形是否与任意OneWay碰撞
+ */
+function AnyOnewayCollide(rect) {
+  return TRAP_oneway_group.some(t => !t.n && collideRect(t.c, rect));
+}
+
+/**
+ * OneWay渲染逻辑 — 仅绘制顶部虚线（薄片样式）
+ */
+function onewayRender(id, ctx) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+
+  const tileSize = GAME_tileSize;
+  const c = trap.c;
+  const px = c.x * tileSize;
+  const py = c.y * tileSize;
+  const pw = c.width * tileSize;
+
+  if (trap.h) {
+    // 隐藏状态：红色虚线描边
+    ctx.save();
+    ctx.strokeStyle = '#f00';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(px, py, pw, tileSize);
+    ctx.restore();
+    return;
+  }
+
+  // 顶部虚线 — 视觉上就是一块薄片
+  ctx.save();
+  ctx.strokeStyle = trap.cl;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px + pw, py);
+  ctx.stroke();
+  ctx.restore();
+}
+</script>
+<script>// ===================== BlackHole（黑洞陷阱）专用函数 =====================
+// 玩家接触后被黑洞吞没，播放环状像素坍缩效果，玩家死亡
+// 注意：精灵图由用户自行提供 blackhole_0.png / blackhole_1.png（16×16，双色像素风）
+
+/** 全局坍缩环动画状态 */
+let GAME_ringBlast = null;
+/** 黑洞吸入动画状态（玩家被逐渐吸入洞心） */
+let GAME_blackHoleSuck = null;
+/** 移动尾迹：空心方粒 */
+let GAME_blackHoleTrail = []; // 移动尾迹：空心方粒
+
+/**
+ * 在指定像素位置生成坍缩环
+ * @param {number} cx 黑洞中心像素X
+ * @param {number} cy 黑洞中心像素Y
+ */
+function spawnRingBlast(cx, cy) {
+    GAME_ringBlast = { r: 0, life: 12, cx, cy };
+}
+
+/**
+ * 渲染坍缩环像素动画（在 game_core.js 的 gameRender 中调用）
+ * @param {CanvasRenderingContext2D} ctx
+ */
+function renderRingExplosion(ctx) {
+    if (!GAME_ringBlast) return;
+    const { cx, cy } = GAME_ringBlast;
+    ctx.fillStyle = "#fff";
+    GAME_ringBlast.r += 2;
+    GAME_ringBlast.life--;
+    // 环形离散像素点，模拟像素风吸积环
+    for (let a = 0; a < Math.PI * 2; a += 0.35) {
+        const px = Math.floor(cx + Math.cos(a) * GAME_ringBlast.r);
+        const py = Math.floor(cy + Math.sin(a) * GAME_ringBlast.r);
+        ctx.fillRect(px, py, 1, 1);
+    }
+    if (GAME_ringBlast.life <= 0) GAME_ringBlast = null;
+}
+
+/**
+ * 创建BlackHole陷阱
+ * @param {string/number} id 陷阱ID
+ * @param {number} x X坐标
+ * @param {number} y Y坐标
+ * @returns {object} 陷阱实例
+ */
+function createBlackHole(id, x, y) {
+  const trap = createMoveableTrap(id, x, y);
+  trap.t = 'blackhole';
+  trap.e = false; // e = swallowed
+  trap.f = 0;
+  trap.ft = 0;
+  trap.fi = 0.12;
+  // 缩小碰撞盒（宽高从1缩到0.7），存储偏移量使碰撞盒居中
+  trap.c.width = 0.7;
+  trap.c.height = 0.7;
+  trap.co = { x: 0.15, y: 0.15 };
+}
+
+/**
+ * BlackHole碰撞玩家处理 — 吞没！
+ * @param {string/number} id 陷阱ID
+ */
+function blackHoleOnCollidedWithPlayer(id) {
+  const trap = TRAP_instances[id];
+  if (!trap || trap.e) return;
+  trap.e = true;
+  // 播放吞没音效 — 低沉轰鸣 + 高频碎裂
+  sfx(120, 0.6, 0.3, 2, 0.5, 30);
+  sfx(200, 0.35, 0.2, 1, 0, 60, 0, 50);
+  sfx(80, 0.2, 0.4, 0, 0.3, 0, 0, 100);
+  // 在黑洞中心生成坍缩环
+  const px = (trap.c.x + trap.c.width / 2) * GAME_tileSize;
+  const py = (trap.c.y + trap.c.height / 2) * GAME_tileSize;
+  spawnRingBlast(px, py);
+  // 吸入动画：玩家从当前位置逐渐缩小并被吸向洞心，结束后才真正死亡
+  GAME_blackHoleSuck = {
+    t: 0,
+    duration: 0.7,
+    fromX: PLAYER_collision.x + PLAYER_collision.width / 2,
+    fromY: PLAYER_collision.y + PLAYER_collision.height / 2,
+    id, // 记录黑洞ID，吸入目标实时跟随移动中的黑洞
+  };
+}
+
+/**
+ * 黑洞移动尾迹：空心方粒，随寿命缩小（世界层逻辑px，与黑洞同色）
+ */
+function spawnBlackHoleTrail(cx, cy) { GAME_blackHoleTrail.push({ x: cx, y: cy, h: 7, t: 0, d: .45 }); }
+function blackHoleTrailTick(dt) {
+  for (let i = GAME_blackHoleTrail.length - 1; i >= 0; i--) {
+    const p = GAME_blackHoleTrail[i];
+    if ((p.t += dt) >= p.d) GAME_blackHoleTrail.splice(i, 1);
+  }
+}
+function blackHoleTrailRender(ctx) {
+  ctx.fillStyle = GAME_foregroundColor;
+  for (const p of GAME_blackHoleTrail) {
+    const h = Math.round(p.h * (1 - p.t / p.d));
+    if (h <= 0) continue;
+    ctx.fillRect(p.x - h, p.y - h, h * 2, 1);
+    ctx.fillRect(p.x - h, p.y + h, h * 2, 1);
+    ctx.fillRect(p.x - h, p.y - h, 1, h * 2);
+    ctx.fillRect(p.x + h, p.y - h, 1, h * 2);
+  }
+}
+
+/**
+ * BlackHole帧更新逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {number} dt 帧间隔时间
+ */
+function blackHoleTick(id, dt) {
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  // 移动时生成空心方粒拖尾（隐藏黑洞不生成，避免暴露位置）
+  const px0 = trap.c.x, py0 = trap.c.y;
+  trapBaseTick(id, dt);
+  if (!trap.h && (px0 !== trap.c.x || py0 !== trap.c.y)) {
+    trap.tt = (trap.tt || 0) + dt;
+    while (trap.tt >= .1) {
+      trap.tt -= .1;
+      spawnBlackHoleTrail((trap.c.x + trap.c.width / 2) * GAME_tileSize, (trap.c.y + trap.c.height / 2) * GAME_tileSize);
+    }
+  }
+  // 已吞没不再更新（吸入动画期间继续脉动）
+  if (trap.e && !GAME_blackHoleSuck) return;
+  // 帧动画逻辑（黑洞脉动 / 吸积闪烁：1→2→1镜→2镜）
+  trap.ft += dt;
+  if (trap.ft >= trap.fi) {
+    trap.ft -= trap.fi;
+    trap.f = (trap.f + 1) % 4;
+  }
+}
+
+/**
+ * BlackHole渲染逻辑
+ * @param {string/number} id 陷阱ID
+ * @param {CanvasRenderingContext2D} ctx 画布上下文
+ */
+function blackHoleRender(id, ctx) {
+  if (!TRAP_blackHole_spriteFrames) return;
+  const trap = TRAP_instances[id];
+  if (!trap) return;
+  // 吞没后仅吸入动画期间继续显示黑洞
+  if (trap.e && !GAME_blackHoleSuck) return;
+  if (trap.h) return;
+  
+  const px = trap.c.x * GAME_tileSize;
+  const py = trap.c.y * GAME_tileSize;
+  const idx = (trap.f || 0) % 4;
+  const f = TRAP_blackHole_spriteFrames[idx];
+  ctx.drawImage(f, px, py, GAME_tileSize, GAME_tileSize);
+}
+</script>
+
+<script>// ==================== BinaryReader 相关全局变量（前缀 BR_） ====================
+let BR_data = null;
+let BR_byteOffset = 0;
+let BR_bitOffset = 0;
+
+// ==================== BinaryReader 方法（前缀 BinaryReader_） ====================
+/**
+ * 初始化 BinaryReader 全局变量
+ * @param {ArrayBuffer} arrayBuffer 二进制数据缓冲区
+ */
+function BinaryReader_init(arrayBuffer) {
+    BR_data = new Uint8Array(arrayBuffer);
+    BR_byteOffset = 0;
+    BR_bitOffset = 0;
+}
+
+/**
+ * 读取1个比特位
+ * @returns {string} '0' 或 '1'
+ */
+function BinaryReader_readBit() {
+    const byte = BR_data[BR_byteOffset];
+    const bit = (byte >> (7 - BR_bitOffset)) & 1;
+    
+    BR_bitOffset++;
+    if (BR_bitOffset >= 8) {
+        BR_bitOffset = 0;
+        BR_byteOffset++;
+    }
+    
+    return String(bit);
+}
+
+/**
+ * 读取指定数量的比特位并转换为整数（MSB优先）
+ * @param {number} numBits 要读取的比特位数
+ * @returns {number} 转换后的整数
+ */
+function BinaryReader_readBits(numBits) {
+    let num = 0;
+    for (let i = 0; i < numBits; i++) {
+        num = num * 2 + +BinaryReader_readBit();
+    }
+    return num;
+}
+
+/**
+ * 读取指定数量的比特位并转换为单精度浮点数（最后一位表示0或0.5）
+ * @param {number} numBits 要读取的比特位数
+ * @returns {number} 转换后的浮点数
+ */
+function BinaryReader_readBits2SingleFloatNumber(numBits) {
+    const intPart = BinaryReader_readBits(numBits - 1);
+    return intPart + (BinaryReader_readBit() === '1' ? 0.5 : 0);
+}
+
+/**
+ * 读取指定数量的比特位并转换为四分之一步精度浮点数（最后两位表示 0, 0.25, 0.5, 0.75）
+ * @param {number} numBits 要读取的比特位数
+ * @returns {number} 转换后的浮点数
+ */
+function BinaryReader_readBits2QuarterFloatNumber(numBits) {
+    const intPart = BinaryReader_readBits(numBits - 2);
+    const frac = (BinaryReader_readBit() === '1' ? 2 : 0) + (BinaryReader_readBit() === '1' ? 1 : 0);
+    return intPart + frac * 0.25;
+}
+
+// ==================== 关卡解析状态（前缀 LP_） ====================
+let LP_scriptInstructionCount = 0;
+let LP_currentScriptIndex = 0;
+
+// ==================== 主解析函数 ====================
+/**
+ * 解析关卡二进制流并直接应用：地图写入 GAMEMAP_tileMapArray、物体创建陷阱
+ * @param {ArrayBuffer} arrayBuffer 关卡二进制数据缓冲区
+ * @returns {boolean} 解析是否成功
+ */
+function parseLevelBinaryStream(arrayBuffer) {
+    BinaryReader_init(arrayBuffer);
+        trapManagerClear();
+        trapManagerInitializeTrapClasses();
+
+        // 地图：基础值填充 + 矩形指令覆盖
+        const mapBase = BinaryReader_readBit();
+        const mapInstructionCount = BinaryReader_readBits(7);
+        const mapWidth = 32;
+        const mapHeight = 16;
+        const mapArray = [];
+        for (let y = 0; y < mapHeight; y++) {
+            const row = [];
+            for (let x = 0; x < mapWidth; x++) row.push(mapBase);
+            mapArray.push(row);
+        }
+        for (let i = 0; i < mapInstructionCount; i++) {
+            const type = BinaryReader_readBit();
+            const startX = BinaryReader_readBits(5);
+            const startY = BinaryReader_readBits(4);
+            const endX = BinaryReader_readBits(5);
+            const endY = BinaryReader_readBits(4);
+            for (let y = startY; y <= endY; y++) {
+                for (let x = startX; x <= endX; x++) {
+                    if (y < mapHeight && x < mapWidth) mapArray[y][x] = type;
+                }
+            }
+        }
+        GAMEMAP_tileMapArray = mapArray;
+
+        // 物体：边读边创建陷阱
+        const objectCount = BinaryReader_readBits(7);
+        for (let i = 0; i < objectCount; i++) {
+            const objType = BinaryReader_readBits(4);
+            const objIndex = BinaryReader_readBits(6);
+            switch (objType) {
+                case 0: // blackhole
+                    createBlackHole(objIndex, BinaryReader_readBits(5), BinaryReader_readBits(4));
+                    break;
+                case 1: // floatrect
+                    createFloatRect(objIndex, BinaryReader_readBits(5), BinaryReader_readBits(4), BinaryReader_readBits(6), BinaryReader_readBits(4));
+                    break;
+                case 2: // button
+                    createButton(objIndex, BinaryReader_readBits(5), BinaryReader_readBits(4));
+                    break;
+                case 3: // bounce
+                    createBounce(objIndex, BinaryReader_readBits(5), BinaryReader_readBits(4));
+                    break;
+                case 4: // destination
+                    createDestination(objIndex, BinaryReader_readBits(5), BinaryReader_readBits(4));
+                    break;
+                case 5: // oneway — 只有宽度，高度固定1格
+                    createOneway(objIndex, BinaryReader_readBits(5), BinaryReader_readBits(4), BinaryReader_readBits(6));
+                    break;
+            }
+            // 所有类型末尾统一读取 hidden(1) + noCollision(1)
+            const trap = TRAP_instances[objIndex];
+            if (trap) {
+                trap.h = BinaryReader_readBit() === '1';
+                trap.n = BinaryReader_readBit() === '1';
+            }
+        }
+
+        // 脚本指令数量
+        LP_scriptInstructionCount = BinaryReader_readBits(7);
+        LP_currentScriptIndex = 0;
+        return true;
+}</script>
+<script>// ===================== UI 层：DOM 获取与 class 切换集中于此 =====================
+// 所有 id/class 名称字符串都在这一个文件里（构建时 dom_rename.js 统一改短），
+// game_core.js 只通过下面的全局引用和 ui 助手访问 DOM。
+let GAME_canvas = null, GAME_ctx = null, GAME_worldCanvas = null, GAME_worldContext = null;
+let GAME_headerBar = null, GAME_levelDisplay = null, GAME_gameTitle = null;
+let GAME_deathOverlay = null, GAME_deathMessage = null, GAME_deathHint = null;
+let GAME_transitionOverlay = null, GAME_transitionMessage = null;
+let GAME_transitionLabel = null, GAME_transitionSub = null, GAME_transitionCycle = null;
+let GAME_deathCounter = null, GAME_crownChoiceOverlay = null, GAME_crownChoiceMessage = null, GAME_crownChoiceHint = null;
+let GAME_introOverlay = null, GAME_introMessage = null, GAME_introTitle = null, GAME_introBody = null, GAME_introHint = null;
+let GAME_glitchOverlay = null;
+let GAME_muteMark = null;
+
+/** 一次性获取所有 UI 元素引用（gameInit 调用） */
+function uiInit() {
+    GAME_canvas = document.getElementById('gameCanvas');
+    GAME_ctx = GAME_canvas.getContext('2d');
+    GAME_worldCanvas = document.createElement('canvas');
+    GAME_worldContext = GAME_worldCanvas.getContext('2d');
+    GAME_headerBar = document.getElementById('headerBar');
+    GAME_levelDisplay = document.getElementById('levelDisplay');
+    GAME_gameTitle = document.getElementById('gameTitle');
+    GAME_deathOverlay = document.getElementById('deathOverlay');
+    GAME_deathMessage = document.getElementById('deathMessage');
+    GAME_deathHint = document.getElementById('deathHint');
+    GAME_transitionOverlay = document.getElementById('transitionOverlay');
+    GAME_transitionMessage = document.getElementById('transitionMessage');
+    GAME_transitionLabel = document.querySelector('#transitionMessage .level-label');
+    GAME_transitionSub = document.querySelector('#transitionMessage .level-sub');
+    GAME_transitionCycle = document.querySelector('#transitionMessage .cycle-notice');
+    GAME_deathCounter = document.getElementById('deathCounter');
+    GAME_crownChoiceOverlay = document.getElementById('crownChoiceOverlay');
+    GAME_crownChoiceMessage = document.getElementById('crownChoiceMessage');
+    GAME_crownChoiceHint = document.getElementById('crownChoiceHint');
+    GAME_introOverlay = document.getElementById('introOverlay');
+    GAME_introMessage = document.querySelector('#introMessage');
+    GAME_introTitle = document.querySelector('#introMessage .intro-title');
+    GAME_introBody = document.querySelector('#introMessage .intro-body');
+    GAME_introHint = document.querySelector('#introMessage .intro-hint');
+    GAME_glitchOverlay = document.getElementById('glitchOverlay');
+    GAME_muteMark = document.getElementById('muteMark');
+
+    // 触屏虚拟按键（仅 pointer:coarse 设备显示）；兼处理 UI 状态，与键盘逻辑一致
+    const tc = document.getElementById('touchControls');
+    ['left', 'right', 'jump'].forEach((a, i) => {
+        const el = tc.children[i];
+        const go = (on) => {
+            if (!on) return actions[a] = false;
+            if (GAME_introPending) return gameIntroDismiss();
+            if (GAME_endingShown) return gameRestartAfterEnding();
+            if (GAME_awaitingRespawn) return gameRetry();
+            if (GAME_crownChoicePending) return a[0] == 'l' ? gameCrownReturn() : a[0] == 'r' && gameCrownKeep();
+            actions[a] = true;
+        };
+        el.addEventListener('pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} go(true); });
+        el.addEventListener('pointerup', () => go(false));
+    });
+    // 静音按钮（取代 M 键）
+    GAME_muteMark.addEventListener('click', gameToggleMute);
+}
+
+/** 切换元素 active class：on=true 显示/加，false 隐藏/去 */
+function uiOn(el) { el.classList.add('active'); }
+function uiOff(el) { el.classList.remove('active'); }
+/** 切换元素 visible class（右上角死亡计数/顶栏显隐） */
+function uiVis(el, on) { el.classList[on ? 'add' : 'remove']('visible'); }
+</script>
+<script>// 核心游戏逻辑：输入、关卡、函数式重构（替代原Game类）
+const actions = {
+    left: false,
+    right: false,
+    jump: false
+};
+
+const keyMappings = {
+    'a': 'left',
+    'ArrowLeft': 'left',
+    'd': 'right',
+    'ArrowRight': 'right',
+    'w': 'jump',
+    ' ': 'jump',
+    'ArrowUp': 'jump',
+};
+
+// ============ DEBUG 开关（开发/验证用） ============
+// 构建时 terser_compile.bat 用 --define DEBUG=false 把 DEBUG 分支整块剔除，正式产物不含此功能。
+const DEBUG = true;
+
+document.addEventListener('keydown', (e) => {
+    // 开场介绍：空格开始
+    if (GAME_introPending) {
+        e.preventDefault();
+        if (e.key === ' ' || e.code === 'Space') gameIntroDismiss();
+        return;
+    }
+    // 真结局：SPACE 进入开头叙述（循环即为结局）
+    if (GAME_endingShown) {
+        e.preventDefault();
+        if (e.key === ' ' || e.code === 'Space') gameRestartAfterEnding();
+        return;
+    }
+    // 王冠抉择：左=放手，右=保留
+    if (GAME_crownChoicePending) {
+        e.preventDefault();
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+            gameCrownReturn();
+        } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+            gameCrownKeep();
+        }
+        return;
+    }
+    // R 键自杀
+    if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        gameKillPlayer('SUICIDE');
+        return;
+    }
+    // DEBUG: N 键跳下一关（仅 DEBUG 构建；正式构建由 --define 剔除）
+    if (DEBUG && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        gameLoadLevel((GAME_currentLevelIndex + 1) % levels.length);
+        return;
+    }
+    // DEBUG: B 键切换玩家碰撞箱高亮（仅 DEBUG 构建）
+    if (DEBUG && (e.key === 'b' || e.key === 'B')) {
+        GAME_showBox = !GAME_showBox;
+        return;
+    }
+    if (GAME_awaitingRespawn && (e.key === ' ' || e.code === 'Space')) {
+        gameRetry();
+        return;
+    }
+    const action = keyMappings[e.key];
+    if (action) {
+        actions[action] = true;
+        return;
+    }
+});
+document.addEventListener('keyup', (e) => {
+    const action = keyMappings[e.key];
+    if (action) actions[action] = false;
+});
+
+/** 静音按钮：切换静音并更新角标样式 */
+function gameToggleMute() {
+    GAME_muted = !GAME_muted;
+    uiVis(GAME_muteMark, GAME_muted);
+}
+
+// ==================== 关卡定义（1-3章×3 + 4章×2 + 5-7章×3 + 8章×2 + 9章×3 + 10-12章×2 + 走廊 + 隐藏章×3 = 35关） ====================
+// 第13章 "The Abandoned Place" 为隐藏区：12-2坠落 → corridor → 触碰Dest → 13-1
+const GAME_NORMAL_LAST_INDEX = 30;    // 12-2 在数组中的索引
+const GAME_CORRIDOR_INDEX = 31;       // corridor 过渡关
+const GAME_HIDDEN_START_INDEX = 32;   // 13-1 在数组中的索引
+
+const levels = (function() {
+    const lvls = [];
+    // 每章配色
+    const themes = [
+        { bg: 'rgb(240, 230, 140)', fg: 'rgb(139, 69, 19)' },
+        { bg: 'rgb(168, 121, 186)', fg: 'rgb(125, 45, 236)' },
+        { bg: 'rgb(61, 175, 207)', fg: 'rgb(26, 44, 237)' },
+        { bg: 'rgb(237, 27, 27)', fg: 'rgb(126, 3, 3)' },
+        { bg: 'rgb(120, 180, 100)', fg: 'rgb(30, 100, 30)' },
+        { bg: 'rgb(230, 170, 80)', fg: 'rgb(180, 80, 20)' },
+        { bg: 'rgb(100, 190, 190)', fg: 'rgb(0, 90, 100)' },
+        { bg: 'rgb(210, 140, 180)', fg: 'rgb(150, 30, 80)' },
+        { bg: 'rgb(130, 200, 220)', fg: 'rgb(10, 80, 120)' },
+        { bg: 'rgb(190, 170, 130)', fg: 'rgb(100, 60, 30)' },
+        { bg: 'rgb(150, 160, 170)', fg: 'rgb(50, 55, 70)' },
+        { bg: 'rgb(180, 80, 80)', fg: 'rgb(90, 10, 10)' },
+    ];
+    const spawnPoints = [
+        // 1-7章 ×3
+        [5, 8], [5, 8], [5, 8],
+        [7, 7], [2, 5], [16, 1],
+        [6, 10], [5, 5], [9, 5],
+        [3, 9], [4, 10],             // 4-1, 4-2(原4-3内容)
+        [3, 9], [3, 10], [4, 10], 
+        [3, 7], [3, 8], [2, 10], 
+        [2, 2], [3, 12], [5, 6], 
+        // 8章 ×2
+        [3, 10], [9, 7],
+        // 9章 ×3 
+        [3, 9], [4, 12], [5, 9],
+        // 10章 ×2
+        [4, 9], [3, 1],              // 10-1(原4-2内容), 10-2
+        // 11章 ×2 
+        [3, 3], [4, 3],
+        // 12章 ×2
+        [23, 11], [1, 10],
+    ];
+    const chapterLevelCounts = [3, 3, 3, 2, 3, 3, 3, 2, 3, 2, 2, 2];
+    let level_fullID = 0;
+    for (let ch = 1; ch <= 12; ch++) {
+        const t = themes[ch - 1];
+        for (let p = 1; p <= chapterLevelCounts[ch - 1]; p++) {
+            lvls.push({
+                id:  (ch - 1) * 3 + p,
+                playerSpawn: {
+                    x: spawnPoints[level_fullID][0],
+                    y: spawnPoints[level_fullID][1]
+                },
+                backgroundColor: t.bg,
+                foregroundColor: t.fg,
+                binaryFile: `lvl/${ch}-${p}.bin`
+            });
+            level_fullID++;
+        }
+    }
+    // corridor — 从12-2坠落后的过渡关 (统一 id=37)
+    lvls.push({
+        id: 37,
+        playerSpawn: { x: 5, y: 0 },
+        backgroundColor: 'rgb(20, 18, 25)',
+        foregroundColor: 'rgb(100, 95, 110)',
+        binaryFile: 'lvl/corridor.bin'
+    });
+    // 隐藏章 — The Abandoned Place (统一 id=38~40)
+    const hiddenTheme = { bg: 'rgb(40, 35, 45)', fg: 'rgb(160, 155, 165)' };
+    const hiddenLevelSpawnpoints = [
+        [8, 5], [3, 12], [7, 7]
+    ]
+    for (let p = 0; p < 3; p++) {
+        lvls.push({
+            id: 38 + p, // 38, 39, 40
+            playerSpawn: { x: hiddenLevelSpawnpoints[p][0], y: hiddenLevelSpawnpoints[p][1] },
+            backgroundColor: hiddenTheme.bg,
+            foregroundColor: hiddenTheme.fg,
+            binaryFile: `lvl/13-${p + 1}.bin`,
+            hidden: true
+        });
+    }
+    return lvls;
+})();
+
+/**
+ * 关卡显示名：正常关卡为 "章-关"（如 3-2）
+ * @param {number} levelIndex 关卡数组索引
+ * @returns {string}
+ */
+function gameLevelDisplayName(levelIndex) {
+    if (levelIndex === GAME_CORRIDOR_INDEX) return COPY.corridorLabel;
+    if (levelIndex >= GAME_HIDDEN_START_INDEX) return COPY.displayHidden(levelIndex - GAME_HIDDEN_START_INDEX + 1);
+    const id = levels[levelIndex].id - 1;
+    return `${Math.floor(id / 3) + 1}-${id % 3 + 1}`;
+}
+
+// -------------------------- 全局变量 --------------------------
+// system（画布/世界相关引用已移入 ui.js）
+let GAME_tileSize = 16; // 1 tile = 16px（画布为贴图原生分辨率，CSS 负责放大显示）
+let GAME_scaleK = 1;    // 画布整数放大倍数（内部像素→CSS像素，gameResizeCanvas 更新）
+
+// map
+let GAME_mapWidth = 32;
+let GAME_mapHeight = 16;
+// 视口(格)与相机(格, 玩家居中并钳制在地图内)
+let GAME_viewW = 20;
+let GAME_viewH = 12;
+let GAME_camX = 0;
+let GAME_camY = 0;
+const GAME_CAM_RATE = 10;   // 镜头缓动速率(1/s)：越大贴得越快
+
+// 合并关卡缓存（lvl.bin + 各关偏移表，指针式加载）
+let GAME_lvlBuffer = null;    // lvl.bin 的 ArrayBuffer
+let GAME_lvlOffsets = [];     // 各关在 lvl.bin 中的起始字节偏移
+let GAME_levelPtr = 0;        // 当前关起始偏移（存档点）
+
+// script
+let GAME_waitingForEvent = -1;
+let GAME_blockedByMovement = false;
+let GAME_observingArea = null;
+let GAME_waitTimer = 0;
+
+// game state
+let GAME_awaitingRespawn = false;
+let GAME_paused = false;
+let GAME_currentLevelIndex = 0;
+
+// underground
+let GAME_rafId = null; // RAF ID
+let GAME_levelTransitioning = false; // 关卡切换标记
+let GAME_lastTime = 0; // 上一帧时间
+let GAME_lastVW = 0, GAME_lastVH = 0; // 视口尺寸缓存（画布适配）
+
+// theme
+let GAME_backgroundColor = '#000000';
+let GAME_foregroundColor = '#ffffff';
+
+// game state / UI 元素引用见 ui.js
+let GAME_isNewCycle = false; // 通关最后一关回到第一关时标记
+let GAME_hasCrown = false;   // 打通隐藏关后获得王冠
+let GAME_crownedCycles = 0;  // 已进行的王冠轮回次数（保留=轮回+1）
+let GAME_totalDeaths = 0;    // 拿冠后的永久死亡计数（cookie 持久化）
+let GAME_crownChoicePending = false; // 13-3 丢冠抉择待响应
+let GAME_introPending = false; // 开场介绍待响应
+let GAME_endingShown = false;  // 真结局画面已展示
+let GAME_crownedKept = false;  // 玩家选择了保留王冠（坏循环）
+let GAME_crownedFirstDone = false; // 首次拿冠回归 1-1 已展示（区分 cycleCrowned/cycleKept）
+let GAME_hiddenCrownedRevealed = false; // 首次带冠进入 13-1 已展示揭示句（区分 hiddenRevealSub/hiddenCrownedSub）
+let GAME_crownMoment = false;  // 13-3 得冠瞬间定格中
+let GAME_deathAt = 0;          // 死亡时刻（死亡 glitch 时长基准）
+
+/** 读取 cookie 值（带 mfxww_game 标识的持久化数据） */
+function gameCookieGet(name) {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+}
+
+/** 写入 cookie（默认长期保留，永不清零） */
+function gameCookieSet(name, value, days = 3650) {
+    const d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/`;
+}
+
+/** 读取拿冠后的累计死亡数（cookie），无记录则为 0 */
+function gameReadTotalDeaths() {
+    const v = gameCookieGet('mfxww_game_deaths');
+    return v === null ? 0 : parseInt(v, 10) || 0;
+}
+
+/** 拿冠后死亡 +1，写回 cookie 并刷新右上角显示 */
+function gameIncrementDeaths() {
+    GAME_totalDeaths = gameReadTotalDeaths() + 1;
+    gameCookieSet('mfxww_game_deaths', GAME_totalDeaths);
+    gameRefreshDeathCounter();
+}
+
+/** 刷新右上角死亡计数显示（仅带冠时可见） */
+function gameRefreshDeathCounter() {
+    if (!GAME_deathCounter) return;
+    GAME_deathCounter.textContent = COPY.deathCounter(GAME_totalDeaths);
+    uiVis(GAME_deathCounter, GAME_hasCrown);
+}
+
+/** 将 rgb(r,g,b) 字符串按 t(0..1) 向灰阶 128 插值（王冠循环逐章褪色） */
+function desaturateColor(rgbStr, t) {
+    const m = rgbStr.match(/\d+/g);
+    if (!m || m.length < 3 || t <= 0) return rgbStr;
+    const c = m.slice(0, 3).map((v) => {
+        const n = parseInt(v, 10);
+        return Math.round(n + (128 - n) * t);
+    });
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
+
+/** 拿冠后 1-1 开场播放 RGB 故障动画（"不对劲"强信号） */
+function gamePlayGlitch() {
+    if (!GAME_glitchOverlay) return;
+    uiOff(GAME_glitchOverlay);
+    // 触发重排以重启动画
+    void GAME_glitchOverlay.offsetWidth;
+    uiOn(GAME_glitchOverlay);
+    sfx(70, 0.9, 0.5, 2, 0.7, 30);
+    window.setTimeout(() => {
+        uiOff(GAME_glitchOverlay);
+    }, 950);
+}
+
+// -------------------------- 原Game类方法重构为全局函数 --------------------------
+
+/**
+ * 画布自适应（替代原 _resizeCanvas 方法）
+ */
+function gameResizeCanvas() {
+    // 物理仍 1 tile=16 逻辑px；渲染 2× → 每格 32 内部(画布)像素
+    const pp = GAME_tileSize * 2;
+    const maxW = window.innerWidth * 0.9;
+    const maxH = window.innerHeight * 0.8;
+    // CSS 整数放大优先 2；若放不下最小视口则退回 1
+    let k = 2;
+    let vw = Math.floor(maxW / (pp * k));
+    let vh = Math.floor(maxH / (pp * k));
+    if (vw < 14 || vh < 9) {
+        k = 1;
+        vw = Math.floor(maxW / (pp * k));
+        vh = Math.floor(maxH / (pp * k));
+    }
+    vw = Math.max(10, Math.min(vw, GAME_mapWidth));
+    vh = Math.max(6, Math.min(vh, GAME_mapHeight));
+    GAME_viewW = vw;
+    GAME_viewH = vh;
+    const W = vw * pp, H = vh * pp;
+    GAME_canvas.width = W;
+    GAME_canvas.height = H;
+    if (GAME_worldCanvas) {
+        GAME_worldCanvas.width = W;
+        GAME_worldCanvas.height = H;
+    }
+    GAME_scaleK = k;
+    GAME_canvas.style.width = W * k + 'px';
+    GAME_canvas.style.height = H * k + 'px';
+    // 像素画面（避免放大变糊）
+    GAME_canvas.style.imageRendering = 'pixelated';
+}
+
+/**
+ * 确保合并关卡 lvl.bin 已加载（单文件：从页尾切片），并构建各关偏移表
+ * @returns {Promise<ArrayBuffer>}
+ */
+function gameEnsureLvlLoaded() {
+    if (GAME_lvlBuffer) return Promise.resolve(GAME_lvlBuffer);
+    return gameAssetsLoaded()
+        .then(() => {
+            GAME_lvlBuffer = GAME_assetsLvl;
+            // 扫描 [u8 长度][数据] 构建偏移表（指针定位用）
+            GAME_lvlOffsets = [];
+            const view = new DataView(GAME_lvlBuffer);
+            let ptr = 0;
+            while (ptr + 1 <= GAME_lvlBuffer.byteLength) {
+                GAME_lvlOffsets.push(ptr);
+                ptr += 1 + view.getUint8(ptr);
+            }
+            return GAME_lvlBuffer;
+        });
+}
+
+/**
+ * 加载关卡核心数据（指针式：从合并 lvl.bin 按偏移切片 → 解析）
+ * 被 gameLoadLevel 和 gameRetry 共用
+ * @param {number} levelIndex 关卡索引
+ * @returns {Promise} 完成时 resolve，失败时 reject
+ */
+function gameLoadLevelData(levelIndex) {
+    const levelData = levels[levelIndex];
+    // 双 12-2：无王冠首次到 12-2 用强制坠落版（必进隐藏关），有王冠用正常版
+    const isFirst12_2 = levelIndex === GAME_NORMAL_LAST_INDEX && !GAME_hasCrown;
+    // 王冠循环：普通关按进度褪色（假设 13-3 为最后一关，缩小褪色峰值；隐藏关保持黑白）
+    const isNormal = levelIndex >= 0 && levelIndex <= GAME_NORMAL_LAST_INDEX;
+    const fade = GAME_hasCrown && isNormal ? levelIndex / (GAME_HIDDEN_START_INDEX + 2) : 0;
+    const bg = fade > 0 ? desaturateColor(levelData.backgroundColor, fade) : (levelData.backgroundColor || '#000000');
+    const fg = fade > 0 ? desaturateColor(levelData.foregroundColor, fade) : (levelData.foregroundColor || '#ffffff');
+
+    return Promise.all([
+        gameEnsureLvlLoaded(),
+        // 陷阱贴图背景用透明（设计意图“黑前景+透明背景”），避免不透明卡片遮住背景/雾
+        initializeSpriteFramesFromBinFile('img.bin', fg, 'rgba(0,0,0,0)', GAME_SpriteRects)
+    ])
+    .then(([lvlBuf, spriteCache]) => {
+        GAME_SpriteFrameCache = spriteCache;
+
+        // 指针定位：void 版 12-2 在合并文件最后一块（偏移表末项），其余按索引
+        const voidOffset = GAME_lvlOffsets.length - 1;
+        const ptr = isFirst12_2 ? GAME_lvlOffsets[voidOffset] : GAME_lvlOffsets[levelIndex];
+        GAME_levelPtr = ptr; // 存档点
+        const view = new DataView(lvlBuf);
+        const len = view.getUint8(ptr);
+        const slice = lvlBuf.slice(ptr + 1, ptr + 1 + len);
+
+        GAME_backgroundColor = bg;
+        GAME_foregroundColor = fg;
+
+        parseLevelBinaryStream(slice);
+
+        GAME_observingArea = null;
+        GAME_blockedByMovement = false;
+        GAME_currentLevelIndex = levelIndex;
+        // 13-3（隐藏章第3关）重力倒置
+        PLAYER_gravityDir = levelIndex === GAME_HIDDEN_START_INDEX + 2 ? -1 : 1;
+        GAME_waitingForEvent = -1;
+        GAME_awaitingRespawn = false;
+        GAME_blackHoleSuck = null;
+
+        const spawn = levelData.playerSpawn || { x: 0, y: 0 };
+        player_setPosition(spawn.x, spawn.y);
+
+        GAME_levelTransitioning = false;
+        // 零散音符环境乐：无冠 A 小调五声音阶；带冠诡异变奏（全音阶+saw+低八度+随机失谐）
+        const crowned = GAME_hasCrown;
+        bgmPlay(crowned ? '0.2.4.6.8.10' : '0.3.5.7.10', crowned ? 110 : 220, crowned ? 2200 : 1600, crowned ? 3 : 0, crowned ? 15 : 0);
+        gameStart();
+    });
+}
+
+/**
+ * 加载关卡（替代原 loadLevel 方法）
+ * @param {number} levelIndex 关卡在关卡列表中的索引，并非关卡id
+ */
+function gameLoadLevel(levelIndex) {
+    // 0. 基础准备
+    GAME_awaitingRespawn = false;
+    uiOff(GAME_deathOverlay);
+    GAME_lastTime = performance.now();
+    Object.keys(actions).forEach(key => actions[key] = false);
+
+    // 1. 验证关卡索引
+    const levelData = levels[levelIndex];
+    // 标记关卡切换中
+    GAME_levelTransitioning = true;
+
+    // 启动过渡动画
+    gameBeginTransition(levelIndex);
+
+    // 3. 加载数据（合并 lvl.bin 指针式）
+    gameLoadLevelData(levelIndex)
+        .then(() => {
+            // 更新关卡信息
+            GAME_levelDisplay.textContent = gameLevelDisplayName(levelIndex);
+
+            // 清除过渡动画
+            uiOff(GAME_transitionMessage);
+            window.setTimeout(() => {
+                uiOff(GAME_transitionOverlay);
+                uiVis(GAME_headerBar, true);
+            }, 400);
+        });
+}
+
+/**
+ * 读取并执行一条脚本指令（替代原 evalInstruction + nextScriptInstruction）
+ * @returns {boolean} 是否还有后续指令
+ */
+function gameStepScript() {
+    if (LP_currentScriptIndex >= LP_scriptInstructionCount) return false;
+    LP_currentScriptIndex++;
+
+    if (BinaryReader_readBit() === '1') { // move
+        trapManagerRegisterMovement([
+            BinaryReader_readBits(6),
+            BinaryReader_readBits2SingleFloatNumber(6),
+            BinaryReader_readBits2SingleFloatNumber(5),
+            BinaryReader_readBits2QuarterFloatNumber(6),
+            BinaryReader_readBit() === '1'
+        ]);
+    } else { // wait
+        const eventType = BinaryReader_readBits(2);
+        GAME_waitingForEvent = eventType;
+        switch (eventType) {
+            case 0: // player-in-area
+                GAME_observingArea = {
+                    x: BinaryReader_readBits(5),
+                    y: BinaryReader_readBits(4),
+                    width: BinaryReader_readBits(3),
+                    height: BinaryReader_readBits(3)
+                };
+                break;
+            case 1: // button-press
+                buttonOnGameRegister(BinaryReader_readBits(6));
+                break;
+            case 2: // for-seconds
+                GAME_waitTimer = BinaryReader_readBits2SingleFloatNumber(6) * 1000 + Date.now();
+                break;
+        }
+    }
+    return true;
+}
+
+/**
+ * 检查事件触发状态（替代原 checkEvent 方法）
+ */
+function gameCheckEvent() {
+    switch (GAME_waitingForEvent) {
+        case 0: // player-in-area
+            if (!GAME_observingArea || collideRect(PLAYER_collision, GAME_observingArea)) {
+                GAME_waitingForEvent = -1;
+                GAME_observingArea = null;
+            }
+            break;
+        case 1: // Button-press
+            // 注册的按钮会回调
+            break;
+        case 2: // for-seconds
+            if (GAME_waitTimer <= Date.now()) {
+                GAME_waitingForEvent = -1;
+                GAME_waitTimer = 0;
+            }
+            break;
+        case -1: // 无等待
+            break;
+    }
+}
+
+/**
+ * 启动游戏循环（替代原 start 方法）
+ */
+function gameStart() {
+    // 取消已有RAF避免重复循环
+    if (GAME_rafId) cancelAnimationFrame(GAME_rafId);
+    GAME_lastTime = performance.now();
+    gameLoop();
+}
+
+/**
+ * 游戏主循环（替代原 gameLoop 方法）
+ */
+function gameLoop() {
+    if (GAME_levelTransitioning) return;
+    // 视口变化即重算画布（覆盖嵌入/小窗不触发 resize 的情况）
+    if (innerWidth !== GAME_lastVW || innerHeight !== GAME_lastVH) {
+        GAME_lastVW = innerWidth;
+        GAME_lastVH = innerHeight;
+        gameResizeCanvas();
+    }
+    
+    if (!GAME_paused) {
+        const now = performance.now();
+        // 钳制 deltaTime：避免掉帧时物理/动画一帧大幅跳动
+        const deltaTime = Math.min((now - GAME_lastTime) / 1000, 0.05);
+        GAME_lastTime = now;
+        gameTick(deltaTime);
+        gameRender();
+    }
+    
+    // 保存RAF ID以便后续取消
+    GAME_rafId = requestAnimationFrame(gameLoop);
+}
+
+/**
+ * 帧更新逻辑（替代原 tick 方法）
+ * @param {number} deltaTime 帧间隔（秒）
+ */
+function gameTick(deltaTime) {
+    if (GAME_crownMoment) return; // 得冠瞬间定格（仅渲染，逻辑暂停）
+    gameCamFollow(deltaTime);     // 镜头缓动跟随玩家
+    player_tick(deltaTime);
+    
+    // 陷阱更新
+    trapManagerTick(deltaTime);
+    // 黑洞尾迹推进（死亡期间也继续缩小动画）
+    blackHoleTrailTick(deltaTime);
+    
+    // 指令执行
+    if (GAME_awaitingRespawn) return; // 死亡期间脚本暂停，只保留已注册的陷阱移动
+    if (GAME_blackHoleSuck) return;   // 黑洞吸入动画期间暂停脚本
+    if (GAME_waitingForEvent === -2) return;
+    if (GAME_blockedByMovement) return;
+    
+    if (GAME_waitingForEvent === -1) {
+        // 执行下一条指令
+        if (!gameStepScript()) {
+            GAME_waitingForEvent = -2;
+        }
+    } else {
+        // 检查事件
+        gameCheckEvent();
+    }
+}
+
+/** 视差远景（已移除：本作无相机、前景不移动，错层背景无意义） */
+
+/**
+ * 镜头缓动：焦点=玩家碰撞箱中心，向钳制后目标指数趋近（帧率无关）
+ * dt>0 平滑跟随；dt===0 直接对齐（瞬移/重生/换关，供 player_setPosition 调用）
+ */
+function gameCamFollow(dt) {
+    const pc = PLAYER_collision;
+    let x = pc.x + pc.width / 2 - GAME_viewW / 2;
+    let y = pc.y + pc.height / 2 - GAME_viewH / 2;
+    const mx = GAME_mapWidth - GAME_viewW, my = GAME_mapHeight - GAME_viewH;
+    x = x < 0 ? 0 : x > mx ? mx : x;
+    y = y < 0 ? 0 : y > my ? my : y;
+    if (dt > 0) {
+        const f = 1 - Math.exp(-dt * GAME_CAM_RATE);
+        GAME_camX += (x - GAME_camX) * f;
+        GAME_camY += (y - GAME_camY) * f;
+    } else {
+        GAME_camX = x;
+        GAME_camY = y;
+    }
+}
+
+/**
+ * 背景流体雾：数团径向渐变慢漂（锚定世界坐标，镜头滚动时随地形，不贴镜头）
+ * 亮背景用暗雾、暗背景用淡雾；低透明，不遮瓦片可读性
+ */
+function gameFog() {
+    const g = GAME_worldContext, ts = GAME_tileSize;
+    const t = performance.now() / 1e3;
+    const mw = GAME_mapWidth * ts, mh = GAME_mapHeight * ts;
+    for (let i = 4; i--;) {
+        const x = mw * (i & 1 ? .8 : .2) + Math.sin(t * .07 + i) * mw * .05;
+        const y = mh * (i >> 1 ? .75 : .25) + Math.cos(t * .09 + i * 2) * mh * .07;
+        const r = mh * .5;
+        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        gr.addColorStop(0, 'rgba(255,255,255,.26)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr;
+        g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+}
+
+/**
+ * 渲染帧（替代原 render 方法）
+ * 世界与玩家红色碰撞箱都以原生像素渲染（1 tile = 16px，与贴图一致）
+ */
+function gameRender() {
+    // 相机由 gameCamFollow 每帧更新（缓动），此处仅按当前 GAME_camX/Y 取整偏移
+    const ts = GAME_tileSize, pp = ts * 2, ox = Math.round(GAME_camX * pp), oy = Math.round(GAME_camY * pp);
+    const wctx = GAME_worldContext;
+    wctx.setTransform(1, 0, 0, 1, 0, 0);
+    wctx.imageSmoothingEnabled = false;
+    wctx.fillStyle = GAME_backgroundColor;
+    wctx.fillRect(0, 0, GAME_worldCanvas.width, GAME_worldCanvas.height);
+    // 世界层：放大 2× + 平移使相机位于左上（世界各渲染函数坐标不变）
+    wctx.setTransform(2, 0, 0, 2, -ox, -oy);
+    gameFog();
+    trapManagerRender(wctx);
+    blackHoleTrailRender(wctx);
+    gamemap_render(wctx);
+    renderRingExplosion(wctx);
+    // 迁移像素化世界图到可见画布（1:1）
+    GAME_ctx.setTransform(1, 0, 0, 1, 0, 0);
+    GAME_ctx.imageSmoothingEnabled = false;
+    GAME_ctx.drawImage(GAME_worldCanvas, 0, 0);
+    // 玩家：在可见画布上按相机 2× 变换绘制（叠加于世界之上）
+    GAME_ctx.setTransform(2, 0, 0, 2, -ox, -oy);
+    player_render(GAME_ctx);
+    GAME_ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // 死亡 glitch：死亡瞬间世界画面水平错位闪烁（渐弱）
+    if (GAME_awaitingRespawn) {
+        const t = (performance.now() - GAME_deathAt) / 1000;
+        if (t < 0.35) {
+            const c = GAME_worldCanvas;
+            const band = Math.ceil(c.height / 5);
+            for (let i = 5; i--;) {
+                const y = i * band;
+                const hh = Math.min(band + 1, c.height - y);
+                const dx = (Math.sin(t * 70 + i * 3) * c.width * 0.035) | 0;
+                GAME_ctx.drawImage(c, 0, y, c.width, hh, dx, y, c.width, hh);
+            }
+        }
+    }
+}
+
+/**
+ * 到达目标点回调（替代原 onDestinationReached 方法）
+ */
+function gameOnDestinationReached() {
+    sfx(660, 0.45, 0.18, 0, 0.5);
+    sfx(880, 0.5, 0.25, 0, 0.5, 0, 0, 120);
+    sfx(1100, 0.35, 0.35, 3, 0.3, 0, 0, 260);
+
+    // 避免重复切换关卡
+    if (GAME_levelTransitioning || GAME_crownMoment) {
+        return;
+    }
+
+    // 切换关卡
+    if (GAME_currentLevelIndex === GAME_NORMAL_LAST_INDEX) {
+        // 12-2 通关 → 轮回到 1-1（王冠循环不因通关而断，王冠保留）
+        GAME_currentLevelIndex = 0;
+        GAME_isNewCycle = true;
+        // 轮回音效
+        sfx(440, 0.25, 0.25, 3, 0.4);
+        sfx(349, 0.25, 0.35, 0, 0.3, 0, 0, 180);
+        sfx(262, 0.2, 0.5, 0, 0.2, 0, 0, 380);
+    } else if (GAME_currentLevelIndex === GAME_CORRIDOR_INDEX) {
+        // corridor 触碰Dest → 进入 13-1
+        GAME_currentLevelIndex = GAME_HIDDEN_START_INDEX;
+    } else if (GAME_currentLevelIndex >= GAME_HIDDEN_START_INDEX) {
+        if (GAME_currentLevelIndex < levels.length - 1) {
+            GAME_currentLevelIndex++;
+        } else if (GAME_hasCrown) {
+            // 带冠回到13-3 → 丢冠抉择（不再重复得冠）
+            gameCrownChoice();
+        } else {
+            // 13-3 通关 → 获得王冠，短暂定格展示戴冠瞬间，再轮回
+            const sp = levels[GAME_currentLevelIndex].playerSpawn;
+            GAME_currentLevelIndex = 0;
+            GAME_isNewCycle = true;
+            GAME_hasCrown = true;
+            GAME_crownedKept = false;
+            GAME_crownedCycles = 0;
+            GAME_hiddenCrownedRevealed = false; // 新一轮带冠可再次看到 13-1 揭示句
+            GAME_totalDeaths = gameReadTotalDeaths();
+            gameRefreshDeathCounter(); // 显示右上角计数
+            // 王冠音效 — C-E-G-C 上行琶音
+            sfx(523, 0.35, 0.18, 0, 0.5, 0, -0.2);
+            sfx(659, 0.35, 0.18, 0, 0.5, 0, 0, 130);
+            sfx(784, 0.4, 0.25, 0, 0.5, 0, 0.2, 260);
+            sfx(1047, 0.3, 0.5, 3, 0.3, 0, 0, 400);
+            // 王冠瞬间：回到出生点定格戴冠（王冠色相循环闪动 + 琶音），随后轮回
+            GAME_crownMoment = true;
+            player_setPosition(sp.x, sp.y);
+            setTimeout(() => { GAME_crownMoment = false; gameLoadLevel(0); }, 800);
+            return; // 跳过底部立即转场
+        }
+    } else {
+        GAME_currentLevelIndex++;
+    }
+    gameLoadLevel(GAME_currentLevelIndex);
+}
+
+/**
+ * 按钮按下回调（替代原 onButtonPressed 方法）
+ */
+function gameOnButtonPressed() {
+    if (GAME_waitingForEvent !== -1) GAME_waitingForEvent = -1;
+}
+
+/**
+ * 进入隐藏关卡 — 从12-2虚空坠入 The Abandoned Place
+ */
+function gameEnterHiddenRealm() {
+    GAME_awaitingRespawn = false;
+    uiOff(GAME_deathOverlay);
+    GAME_currentLevelIndex = GAME_CORRIDOR_INDEX;
+    gameLoadLevel(GAME_currentLevelIndex);
+}
+
+/**
+ * 带冠坠入 12-2 虚空 → 弹出丢冠抉择
+ */
+function gameCrownChoice() {
+    if (GAME_crownChoicePending) return;
+    GAME_crownChoicePending = true;
+    GAME_paused = true;
+    bgmStop();
+    // 王冠自白（文案统一，与轮回次数无关）
+    GAME_crownChoiceMessage.textContent = COPY.choice;
+    uiOn(GAME_crownChoiceOverlay);
+    sfx(180, 0.6, 0.3, 0, 0.5, 55);
+}
+
+/** 放手：丢王冠入虚空 → 真结局（揭示因果闭环真相） */
+function gameCrownReturn() {
+    if (!GAME_crownChoicePending) return;
+    GAME_crownChoicePending = false;
+    bgmStop();
+    GAME_hasCrown = false;
+    GAME_crownedKept = false;
+    uiOff(GAME_crownChoiceOverlay);
+    uiOn(GAME_transitionOverlay);
+    uiOn(GAME_transitionMessage);
+    GAME_transitionLabel.textContent = '';
+    GAME_transitionSub.textContent = COPY.endingSub;
+    GAME_transitionCycle.textContent = COPY.endingCycle;
+    gameRefreshDeathCounter();
+    sfx(392, 0.4, 0.2, 0, 0.4);
+    sfx(262, 0.5, 0.3, 0, 0.5, 130, 0, 250);
+    GAME_endingShown = true;
+}
+
+/** 保留：不丢王冠 → 坏循环继续（轮回计数+1） */
+function gameCrownKeep() {
+    if (!GAME_crownChoicePending) return;
+    GAME_crownChoicePending = false;
+    GAME_crownedKept = true;
+    GAME_crownedCycles++;
+    uiOff(GAME_crownChoiceOverlay);
+    GAME_paused = false;
+    GAME_currentLevelIndex = 0;
+    GAME_isNewCycle = true;
+    sfx(440, 0.25, 0.25, 3, 0.4);
+    gameLoadLevel(GAME_currentLevelIndex);
+}
+
+/** 真结局后按 SPACE 回到开头背景叙述（循环即为结局） */
+function gameRestartAfterEnding() {
+    GAME_endingShown = false;
+    GAME_hasCrown = false;
+    GAME_crownedKept = false;
+    GAME_crownedCycles = 0;
+    GAME_crownedFirstDone = false;
+    GAME_isNewCycle = false;
+    uiOff(GAME_transitionOverlay);
+    uiOff(GAME_transitionMessage);
+    GAME_currentLevelIndex = 0;
+    gameLoadLevel(GAME_currentLevelIndex);
+    // 循环即为结局：展示开头背景叙述
+    GAME_introPending = true;
+    GAME_paused = true;
+    uiOn(GAME_introOverlay);
+}
+
+/** 首次开场介绍：按空格关闭并标记已看过 */
+function gameIntroDismiss() {
+    GAME_introPending = false;
+    GAME_paused = false;
+    gameCookieSet('mfxww_game_intro', '1');
+    uiOff(GAME_introOverlay);
+    GAME_lastTime = performance.now();
+}
+
+/**
+ * 玩家死亡处理
+ * @param {string} reason 死亡原因
+ */
+function gameKillPlayer(reason) {
+    if (GAME_awaitingRespawn) return; // 防止死亡后重复触发
+    GAME_awaitingRespawn = true;
+    GAME_deathAt = performance.now(); // 死亡时刻（供死亡 glitch 渐弱）
+    bgmStop(0.6); // BGM 短时淡出而非骤停
+    GAME_blackHoleSuck = null; // 吸入动画已结束，清理状态
+
+    // 按死亡原因播放不同音效
+    switch (reason) {
+        case 'FALLEN':
+            sfx(220, 0.5, 0.45, 0, 0.4, 55);
+            break;
+        case 'SQUEEZED':
+        case 'SQUASHED':
+            sfx(150, 0.45, 0.12, 2, 0.3, 40);
+            sfx(90, 0.3, 0.18, 1, 0, 35, 0, 60);
+            break;
+        case 'SUICIDE':
+            sfx(350, 0.3, 0.2, 0, 0.3, 180);
+            break;
+        case 'SWALLOWED':
+            break;
+        default:
+            sfx(180, 0.4, 0.3, 0, 0.3, 60);
+            break;
+    }
+
+    // 死亡文案：无冠显示原句，带冠（第二轮回）复用并追加 again.
+    const line = (DEATH_REASONS[reason] || 'Dead.') + (GAME_hasCrown ? ' again.' : '');
+    GAME_deathMessage.textContent = line;
+    uiOn(GAME_deathOverlay);
+
+    // 拿冠后的死亡才计入永久计数
+    if (GAME_hasCrown) gameIncrementDeaths();
+}
+
+/**
+ * 淡入关卡过渡 — 显示关卡号 + 简短提示
+ * @param {number} levelIndex 即将加载的关卡索引
+ */
+function gameBeginTransition(levelIndex) {
+    uiOn(GAME_transitionOverlay);
+    sfx(330, 0.15, 0.25, 0, 0.4);
+    sfx(247, 0.12, 0.35, 3, 0.3);
+
+    GAME_transitionCycle.textContent = '';
+
+    if (levelIndex === GAME_CORRIDOR_INDEX) {
+        GAME_transitionLabel.textContent = COPY.corridorLabel;
+        GAME_transitionSub.textContent = COPY.corridorSub;
+        sfx(110, 0.2, 0.5, 0, 0.4, 55);
+        sfx(82, 0.15, 0.7, 3, 0.3);
+    } else if (levelIndex >= GAME_HIDDEN_START_INDEX) {
+        const hiddenPart = levelIndex - GAME_HIDDEN_START_INDEX + 1;
+        GAME_transitionLabel.textContent = COPY.hiddenLabel(hiddenPart);
+        // 带冠进入 13-1：首次展示 Abandoned Place 揭示句，之后回到褪色终局文案
+        if (GAME_hasCrown && levelIndex === GAME_HIDDEN_START_INDEX) {
+            GAME_transitionSub.textContent = GAME_hiddenCrownedRevealed ? COPY.hiddenCrownedSub : COPY.hiddenRevealSub;
+            GAME_hiddenCrownedRevealed = true;
+        } else {
+            GAME_transitionSub.textContent = COPY.hiddenSub;
+        }
+        sfx(130, 0.2, 0.45, 0, 0.35, 65);
+        sfx(98, 0.12, 0.6, 3, 0.25);
+    } else {
+        GAME_transitionLabel.textContent = gameLevelDisplayName(levelIndex);
+        GAME_transitionSub.textContent = '';
+    }
+
+    // 轮回提示
+    if (GAME_isNewCycle) {
+        if (GAME_hasCrown) {
+            // 首次拿冠回归：cycleCrowned + RGB 故障；之后带冠轮回一律 keeper 文案
+            if (!GAME_crownedFirstDone) {
+                GAME_crownedFirstDone = true;
+                window.setTimeout(gamePlayGlitch, 400);
+                GAME_transitionCycle.textContent = COPY.cycleCrowned;
+            } else {
+                GAME_transitionCycle.textContent = COPY.cycleKept(GAME_crownedCycles + 1);
+            }
+        } else {
+            GAME_transitionCycle.textContent = COPY.cyclePlain;
+        }
+        GAME_isNewCycle = false;
+    }
+
+    window.setTimeout(() => {
+        uiOn(GAME_transitionMessage);
+    }, 200);
+
+    uiVis(GAME_headerBar, false);
+}
+
+/**
+ * 重新开始当前关卡（替代原 retry 方法）
+ * 重试时跳过过渡动画（死亡后直接重生）
+ */
+function gameRetry() {
+    GAME_awaitingRespawn = false;
+    uiOff(GAME_deathOverlay);
+    GAME_levelTransitioning = true;
+
+    gameLoadLevelData(GAME_currentLevelIndex);
+}
+
+/**
+ * 暂停游戏（替代原 pause 方法）
+ */
+function gamePause() {
+    GAME_paused = true;
+}
+
+/**
+ * 恢复游戏（替代原 resume 方法）
+ */
+function gameResume() {
+    GAME_paused = false;
+    GAME_lastTime = performance.now();
+}
+
+/**
+ * 页面可见性变化处理（替代原 handleVisibilityChange 方法）
+ */
+function gameHandleVisibilityChange() {
+    if (document.hidden) gamePause();
+    else if (!GAME_introPending && !GAME_endingShown && !GAME_crownChoicePending) gameResume();
+}
+
+/**
+ * 游戏初始化（替代原 Game 类构造函数）
+ */
+function gameInit() {
+    uiInit();
+
+    // 用集中文案填充静态 UI 元素
+    GAME_gameTitle.textContent = COPY.gameTitle;
+    GAME_deathHint.textContent = COPY.deathHint;
+    GAME_crownChoiceHint.textContent = COPY.choiceHint;
+    GAME_deathCounter.textContent = COPY.deathCounter(0);
+    if (GAME_introTitle) GAME_introTitle.textContent = COPY.gameTitle;
+    if (GAME_introBody) GAME_introBody.innerHTML = COPY.introBody.split('\n').join('<br>');
+    if (GAME_introHint) GAME_introHint.textContent = COPY.introHint;
+
+    // 确保死亡覆盖层初始隐藏
+    uiOff(GAME_deathOverlay);
+
+    // 窗口事件监听
+    window.addEventListener('resize', gameResizeCanvas);
+    window.addEventListener('visibilitychange', gameHandleVisibilityChange);
+
+    // 初始化画布尺寸
+    gameResizeCanvas();
+
+    // 首次启动显示开场介绍（cookie 标记，仅一次）
+    if (gameCookieGet('mfxww_game_intro') !== '1') {
+        GAME_introPending = true;
+        GAME_paused = true;
+        uiOn(GAME_introOverlay);
+    }
+
+    // 加载初始关卡（玩家帧随 img.bin 一并载入）
+    gameLoadLevel(0);
+}
+
+// 页面加载完成后初始化游戏
+window.addEventListener('load', () => {
+    gameInit();
+});</script>
+<script>// Public audio context
+let audioContext = null;
+let GAME_muted = false; // 静音开关（左上 ♪ 按钮切换）
+
+/**
+ * Play a sound with custom parameters using Web Audio API
+ * @param {number} frequency - Frequency of the sound in Hz
+ * @param {number} amplitude - Amplitude (volume) of the sound, range 0-1
+ * @param {number} duration - Duration of the sound in seconds
+ * @param {number} pan - Pan value for stereo panning, range -1 (left) to 1 (right)
+ * @param {string} waveType - Waveform type: sine / square / sawtooth / triangle
+ * @param {object} [opts] - Optional advanced options
+ * @param {number} [opts.endFreq] - End frequency for sweep (linear)
+ * @param {number} [opts.attack]  - Attack time in seconds (default 0.005)
+ * @param {number} [opts.decay]   - Decay-to-sustain time in seconds (default 0.01)
+ * @param {number} [opts.sustain] - Sustain level 0-1, relative to amplitude (default 0.6)
+ * @param {number} [opts.release] - Release fade time at the end (default 0.05)
+ * @param {number} [opts.detune]  - Detune in cents for slight chorus (default 0)
+ */
+async function playSound(frequency, amplitude, duration, pan, waveType, opts) {
+    if (GAME_muted) return;
+    if (!audioContext) {
+      const AudioContextConstructor = window.AudioContext;
+      audioContext = new AudioContextConstructor();
+    }
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
+    const o = Object.assign({ attack: 0.005, decay: 0.01, sustain: 0.6, release: 0.05, detune: 0 }, opts);
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const pannerNode = audioContext.createStereoPanner();
+
+    oscillator.type = waveType;
+    oscillator.frequency.value = frequency;
+    if (o.endFreq !== undefined) {
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.frequency.linearRampToValueAtTime(o.endFreq, audioContext.currentTime + duration);
+    }
+    if (o.detune) oscillator.detune.value = o.detune;
+
+    pannerNode.pan.value = pan;
+
+    oscillator.connect(gainNode);
+    gainNode.connect(pannerNode);
+    pannerNode.connect(audioContext.destination);
+
+    const t = audioContext.currentTime;
+    const releaseStart = Math.max(t + duration - o.release, t + o.attack + o.decay + 0.001);
+
+    // ADSR-like envelope
+    gainNode.gain.setValueAtTime(0, t);
+    gainNode.gain.linearRampToValueAtTime(amplitude, t + o.attack);
+    gainNode.gain.linearRampToValueAtTime(amplitude * o.sustain, t + o.attack + o.decay);
+    gainNode.gain.setValueAtTime(amplitude * o.sustain, releaseStart);
+    gainNode.gain.linearRampToValueAtTime(0, t + duration);
+
+    oscillator.start(t);
+    oscillator.stop(t + duration);
+    return gainNode;
+}
+
+/**
+ * 紧凑音效：w=0sine/1square/2sawtooth/3triangle，s=sustain、e=endFreq（0 或省略为无），p=pan、d=延时(ms)
+ */
+function sfx(f, a, u, w, s, e, p, d) {
+    const o = {};
+    if (s) o.sustain = s;
+    if (e) o.endFreq = e;
+    const go = () => playSound(f, a, u, p || 0, ['sine', 'square', 'sawtooth', 'triangle'][w], o);
+    d ? setTimeout(go, d) : go();
+}
+
+// ============ 零散音符环境乐（零外部文件，单一定时器随机间隔） ============
+let bgmT = null, bgmG = null, bgmI = 0, bgmN = [], bgmR = 220, bgmW = 0, bgmS = 1600, bgmD = 0;
+
+/** 启动背景乐。seq: 数字=半音度数(0=根音)，'.'忽略；root=基频Hz；gap=间隔基准ms；wave 0-3；d=随机失谐(cent, 0=无)。音符随机间隔(1.5~5.5×gap)逐个轻声播放，一轮播完停顿(4~10×gap)后乱序重播 */
+function bgmPlay(s, r, t, w, d) {
+    bgmStop();
+    bgmN = s.split('.').map(Number);
+    bgmR = r; bgmW = w; bgmS = t; bgmD = d; bgmI = 0;
+    bgmShuffle();
+    bgmTick();
+}
+function bgmShuffle() {
+    for (let i = bgmN.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [bgmN[i], bgmN[j]] = [bgmN[j], bgmN[i]];
+    }
+}
+function bgmTick() {
+    if (bgmI >= bgmN.length) {
+        bgmI = 0;
+        bgmShuffle();
+        bgmT = setTimeout(bgmTick, bgmS * (4 + Math.random() * 6)); // 一轮后长停顿
+        return;
+    }
+    const f = bgmR * Math.pow(2, bgmN[bgmI++] / 12);
+    playSound(f, 0.05, 2.8, 0, ['sine', 'square', 'sawtooth', 'triangle'][bgmW], { attack: 0.25, release: 1.4, detune: bgmD && (Math.random() * 2 - 1) * bgmD }).then(g => bgmG = g); // 缓入缓出，加长音符；带冠随机失谐；记录增益供死亡淡出
+    bgmT = setTimeout(bgmTick, bgmS * (1.5 + Math.random() * 4));
+}
+function bgmStop(f) {
+    if (bgmT) { clearTimeout(bgmT); bgmT = null; }
+    if (f && bgmG) { const t = audioContext.currentTime; bgmG.gain.cancelScheduledValues(t); bgmG.gain.linearRampToValueAtTime(0, t + f); }
+}</script>
+</body>
+</html>

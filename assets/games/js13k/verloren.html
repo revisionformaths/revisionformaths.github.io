@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Verloren</title>
+    <style>
+      body {
+
+        background: #000;
+        margin: 32px 0 0 0;
+      }
+
+      #wrap {
+
+        width: 768px;
+        margin: auto;
+      }
+
+      canvas {
+
+        background: #000;
+        width: 768px;
+        height: 448px;
+      }
+    </style>
+    <script>// This is a gutted version of my 2D game-making library, Momo.
+// Find it on GitHub: https://github.com/ecj2/momo
+
+let Momo = new class {
+
+  constructor() {
+
+    // Everything is drawn on this canvas.
+    this.canvas = undefined;
+
+    // Resources are queued here.
+    this.resources = [];
+
+    // This dictates how often the canvas should be updated.
+    this.frame_rate = undefined;
+
+    // These store which keys are pressed and released.
+    this.key = [];
+    this.key_pressed = [];
+    this.key_released = [];
+
+    // Define key codes.
+    this.key_codes = {};
+
+    this.keyboard_method = undefined;
+  }
+
+  initialize() {
+
+    let canvas = document.createElement("canvas");
+
+    if (!!!(canvas && canvas.getContext("2d"))) {
+
+      // The browser does not support the canvas element.
+      return false;
+    }
+
+    return true;
+  }
+
+  manageKeyboardEvents(event) {
+
+    switch (event.type) {
+
+      case "keyup":
+
+        this.key[event.which] = false;
+        this.key_released[event.which] = true;
+      break;
+
+      case "keydown":
+
+        if (!this.key[event.which]) {
+
+          this.key_pressed[event.which] = true;
+        }
+
+        this.key[event.which] = true;
+      break;
+    }
+
+    event.preventDefault();
+  }
+
+  installKeyboard() {
+
+    // Define key codes.
+    this.key_codes = {
+
+      "enter": 13,
+
+      "space": 32,
+
+      "left": 37,
+
+      "up": 38,
+
+      "right": 39,
+
+      "down": 40,
+
+      "a": 65,
+
+      "d": 68,
+
+      "s": 83,
+
+      "w": 87
+    };
+
+    this.keyboard_method = this.manageKeyboardEvents.bind(this);
+
+    // Listen for keyboard events.
+    document.addEventListener("keyup", this.keyboard_method);
+    document.addEventListener("keydown", this.keyboard_method);
+  }
+
+  isKeyUp(key_code) {
+
+    return !this.key[this.key_codes["" + key_code]];
+  }
+
+  isKeyDown(key_code) {
+
+    return this.key[this.key_codes["" + key_code]];
+  }
+
+  isKeyPressed(key_code) {
+
+    return this.key_pressed[this.key_codes["" + key_code]];
+  }
+
+  isKeyReleased(key_code) {
+
+    return this.key_released[this.key_codes["" + key_code]];
+  }
+
+  setCanvas(canvas_id, canvas_width, canvas_height) {
+
+    // Get the specified canvas element.
+    let canvas = document.getElementById(canvas_id);
+
+    if (!!!canvas) {
+
+      // The specified canvas element does not exist.
+      return false;
+    }
+
+    // Set the dimensions of the canvas.
+    canvas.width = canvas_width;
+    canvas.height = canvas_height;
+
+    // Set the dimensions, elements, and contexts of the member canvas.
+    this.canvas = {
+
+      width: canvas_width,
+
+      height: canvas_height,
+
+      canvas: canvas,
+
+      context: canvas.getContext("2d"),
+
+      ready: true
+    };
+
+    return true;
+  }
+
+  getCanvas() {
+
+    return this.canvas.canvas;
+  }
+
+  getCanvasContext() {
+
+    return this.canvas.context;
+  }
+
+  clearCanvas(color) {
+
+    this.setStrokeAndFillStyle(color);
+
+    this.canvas.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.canvas.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  getCanvasWidth() {
+
+    return this.canvas.width;
+  }
+
+  getCanvasHeight() {
+
+    return this.canvas.height;
+  }
+
+  setFrameRate(frame_rate) {
+
+    this.frame_rate = frame_rate;
+  }
+
+  resourcesLoaded(procedure) {
+
+    let number_of_resources = 0;
+    let number_of_resources_loaded = 0;
+
+    let i = 0;
+
+    for (i; i < this.resources.length; ++i) {
+
+      ++number_of_resources;
+
+      if (this.resources[i].ready) {
+
+        ++number_of_resources_loaded;
+      }
+    }
+
+    if (number_of_resources_loaded < number_of_resources) {
+
+      // Some resources have not completed downloading yet.
+      window.setTimeout(this.resourcesLoaded.bind(this), 100, procedure);
+    }
+    else {
+
+      // All of the resources have completed downloading.
+      procedure();
+    }
+  }
+
+  createLoop(procedure) {
+
+    window.setInterval(
+
+      function() {
+
+        procedure();
+
+        let i = 0;
+
+        for (i; i < this.key.length; ++i) {
+
+          // Clear key arrays so each keyboard event fires only once.
+          this.key_pressed[i] = false;
+          this.key_released[i] = false;
+        }
+      }.bind(this),
+
+      1000 / this.frame_rate
+    );
+  }
+
+  makeColor(r, g, b, a = 255) {
+
+    return {r: r, g: g, b: b, a: a};
+  }
+
+  setStrokeAndFillStyle(color, line_width = 0) {
+
+    let r = color.r;
+    let g = color.g;
+    let b = color.b;
+    let a = color.a / 255.0;
+
+    this.canvas.context.lineWidth = line_width;
+    this.canvas.context.fillStyle = "rgba(" + r + ", " + g + ", " + b + ", " + a + ")";
+    this.canvas.context.strokeStyle = "rgba(" + r + ", " + g + ", " + b + ", " + a + ")";
+  }
+
+  setEntryPoint(function_name) {
+
+    // Call the specified function when the window loads.
+    window.addEventListener("load", function_name);
+  }
+
+  loadFont(file_name) {
+
+    let element = document.createElement("style");
+
+    let font_name = "font_" + Math.random().toString(16).slice(2);
+
+    element.textContent = `
+
+      @font-face {
+
+        font-family: ` + font_name + `;
+        src: url("` + file_name + `");
+      }
+    `;
+
+    document.head.appendChild(element);
+
+    let font = {
+
+      element: element,
+
+      file: file_name,
+
+      name: font_name,
+
+      type: "font"
+    };
+
+    // Pre-load the font.
+    this.drawText(font, this.makeColor(0, 0, 0, 0), 0, 0, 0, "left", "");
+
+    return font;
+  }
+
+  drawText(font, fill_color, size, x, y, alignment, text, outline_color = undefined, outline_width = 0) {
+
+    this.canvas.context.textAlign = alignment;
+
+    this.canvas.context.font = size + "px " + font.name;
+
+    this.setStrokeAndFillStyle(fill_color);
+
+    this.canvas.context.fillText(text, x, y + size);
+
+    if (outline_color != undefined && outline_width > 0) {
+
+      this.setStrokeAndFillStyle(outline_color, outline_width);
+
+      this.canvas.context.strokeText(text, x, y + size);
+    }
+  }
+
+  drawPolygon(points, color, thickness) {
+
+    this.setStrokeAndFillStyle(color, thickness);
+
+    let x = [];
+    let y = [];
+
+    let i = 0;
+
+    for (i; i < points.length; ++i) {
+
+      if (i % 2) {
+
+        y.push(points[i]);
+      }
+      else {
+
+        x.push(points[i]);
+      }
+    }
+
+    this.canvas.context.beginPath();
+
+    i = 0;
+
+    for (i; i < x.length; ++i) {
+
+      if (i === 0) {
+
+        this.canvas.context.moveTo(x[i], y[i]);
+
+        continue;
+      }
+
+      this.canvas.context.lineTo(x[i], y[i]);
+    }
+
+    this.canvas.context.closePath();
+
+    this.canvas.context.stroke();
+  }
+
+  drawFilledPolygon(points, color) {
+
+    this.setStrokeAndFillStyle(color);
+
+    let x = [];
+    let y = [];
+
+    let i = 0;
+
+    for (i; i < points.length; ++i) {
+
+      if (i % 2) {
+
+        y.push(points[i]);
+      }
+      else {
+
+        x.push(points[i]);
+      }
+    }
+
+    this.canvas.context.beginPath();
+
+    i = 0;
+
+    for (i; i < x.length; ++i) {
+
+      if (i === 0) {
+
+        this.canvas.context.moveTo(x[i], y[i]);
+
+        continue;
+      }
+
+      this.canvas.context.lineTo(x[i], y[i]);
+    }
+
+    this.canvas.context.closePath();
+
+    this.canvas.context.fill();
+  }
+
+  drawArc(center_x, center_y, radius, start_angle, end_angle, color, thickness) {
+
+    this.setStrokeAndFillStyle(color, thickness);
+
+    this.canvas.context.beginPath();
+    this.canvas.context.arc(center_x, center_y, radius, start_angle, end_angle);
+    this.canvas.context.closePath();
+    this.canvas.context.stroke();
+  }
+
+  drawFilledArc(center_x, center_y, radius, start_angle, end_angle, color) {
+
+    this.setStrokeAndFillStyle(color);
+
+    this.canvas.context.beginPath();
+    this.canvas.context.arc(center_x, center_y, radius, start_angle, end_angle);
+    this.canvas.context.closePath();
+    this.canvas.context.fill();
+  }
+
+  drawCircle(center_x, center_y, radius, color, thickness) {
+
+    this.drawArc(center_x, center_y, radius, 0, 2 * Math.PI, color, thickness);
+  }
+
+  drawFilledCircle(center_x, center_y, radius, color) {
+
+    this.drawFilledArc(center_x, center_y, radius, 0, 2 * Math.PI, color);
+  }
+
+  drawRectangle(begin_x, begin_y, end_x, end_y, color, thickness) {
+
+    this.setStrokeAndFillStyle(color, thickness);
+
+    this.canvas.context.beginPath();
+    this.canvas.context.rect(begin_x, begin_y, end_x - begin_x, end_y - begin_y);
+    this.canvas.context.closePath();
+    this.canvas.context.stroke();
+  }
+
+  drawFilledRectangle(begin_x, begin_y, end_x, end_y, color) {
+
+    this.setStrokeAndFillStyle(color);
+
+    this.canvas.context.beginPath();
+    this.canvas.context.rect(begin_x, begin_y, end_x - begin_x, end_y - begin_y);
+    this.canvas.context.closePath();
+    this.canvas.context.fill();
+  }
+};
+</script>
+    <script>// Fonts.
+let pixel = undefined;
+
+// Objects.
+let Ship = undefined;
+let Camera = undefined;
+
+// Object arrays.
+let stars = [];
+let bullets = [];
+let enemies = [];
+
+// Miscellaneous.
+
+let ftl_engine_main = 0.0;
+let ftl_engine_sub = 0.0;
+
+let state = 0;
+
+// States.
+const INTRO = 0;
+const GAME = 1;
+const LOSE = 2;
+const WIN = 3;
+
+let context = undefined;
+
+let shake_angle = 0.0;
+let shake_length = 0.5;
+
+let shake_x = 0.0;
+let shake_y = 0.0;
+
+let bigger_shake = false;
+
+let bigger_shake_angle = 0.0;
+let bigger_shake_length = 2;
+
+let bigger_shake_x = 0.0;
+let bigger_shake_y = 0.0;
+
+let shake_ticks = 0;
+
+let sector = [];
+
+let sector_lower_limit = -299;
+let sector_upper_limit = 299;
+
+let enemy_identifier = 0;
+let bullet_identifier = 0;
+
+let ready_to_use_ftl = false;
+
+let engage_ftl = false;
+
+let fade_ticks = 0;
+
+let enemies_defeated = 0;
+let enemies_suicided = 0;
+
+function getRandomNumber() {
+
+  return Math.random() * 100000 | 0;
+}
+</script>
+    <script>class Bullet {
+
+  constructor(x, y, angle, identifier, type) {
+
+    this.x = x;
+    this.y = y;
+
+    this.radius = 2;
+
+    this.angle = angle;
+
+    this.speed = 3.0;
+
+    // This represents full opacity (0 = completely transparent).
+    this.ticks = 255.0;
+
+    // This is used to keep track of each bullet in the bullets array.
+    this.identifier = identifier;
+
+    this.type = type; // 0 = player; 1 = enemy; 2 = special.
+
+    this.active = true;
+  }
+
+  getX() {
+
+    return this.x;
+  }
+
+  getY() {
+
+    return this.y;
+  }
+
+  getType() {
+
+    return this.type;
+  }
+
+  getRadius() {
+
+    return this.radius;
+  }
+
+  setTicks(ticks) {
+
+    this.ticks = ticks;
+  }
+
+  update() {
+
+    if (!this.active) {
+
+      return;
+    }
+
+    if (this.ticks <= 0) {
+
+      // Move the bullet out of sight and deactivate it once it fades away.
+
+      this.active = false;
+
+      this.x = -99999;
+      this.y = -99999;
+    }
+
+    // Move the bullet. There is no velocity.
+    this.x += Math.sin(this.angle) * this.speed;
+    this.y += -Math.cos(this.angle) * this.speed;
+
+    this.ticks -= 3;
+  }
+
+  render(camera_x, camera_y) {
+
+    if (!this.active) {
+
+      return;
+    }
+
+    let color = 0;
+
+    switch (this.type) {
+
+      case 0:
+
+        // The player's bullets will be yellow.
+        color = Momo.makeColor(255, 255, 0, this.ticks)
+      break;
+
+      case 1:
+
+        // The enemies' bullets will be red.
+        color = Momo.makeColor(255, 0, 0, this.ticks)
+      break;
+
+      case 2:
+
+        // Special bullets change color over time (this is used for when FTL is engaged).
+        color = Momo.makeColor(getRandomNumber() % 255, getRandomNumber() % 255, getRandomNumber() % 255, this.ticks)
+      break;
+    }
+
+    // Draw each bullet as a circle.
+    Momo.drawFilledCircle(
+
+      this.x - camera_x,
+
+      this.y - camera_y,
+
+      this.radius,
+
+      color
+    );
+  }
+}
+</script>
+    <script>Camera = new class {
+
+  constructor() {
+
+    this.x = 0.0;
+    this.y = 0.0;
+  }
+
+  getX() {
+
+    return this.x;
+  }
+
+  getY() {
+
+    return this.y;
+  }
+
+  follow(target_x, target_y) {
+
+    // Keep the target in the center of the view.
+    this.x = target_x - (Momo.getCanvasWidth() / 2);
+    this.y = target_y - (Momo.getCanvasHeight() / 2);
+  }
+};
+</script>
+    <script>class Star {
+
+  constructor(x, y) {
+
+    this.x = x;
+    this.y = y;
+
+    this.radius = 2;
+
+    this.type = getRandomNumber() % 3;
+
+    this.color = Momo.makeColor(getRandomNumber() % 128, getRandomNumber() % 128, getRandomNumber() % 128, getRandomNumber() % 255);
+  }
+
+  render(camera_x, camera_y) {
+
+    let x = 0;
+    let y = 0;
+
+    if (this.type === 0) {
+
+      x = this.x - camera_x;
+      y = this.y - camera_y;
+    }
+    else if (this.type === 1) {
+
+      x = this.x - camera_x / 1.25;
+      y = this.y - camera_y / 1.25;
+    }
+    else {
+
+      x = this.x - camera_x * 1.25;
+      y = this.y - camera_y * 1.25;
+    }
+
+    if (x + this.radius < 0 || y + this.radius < 0) {
+
+      // Do not render stars when they are not within the camera's view.
+      return;
+    }
+
+    if (x > Momo.getCanvasWidth() * 2 || y > Momo.getCanvasHeight() * 2) {
+
+      // Do not render stars when they are not within the camera's view.
+      return;
+    }
+
+    Momo.drawFilledCircle(x, y, this.radius, this.color);
+  }
+}
+</script>
+    <script>class Enemy {
+
+  constructor(x, y, identifier) {
+
+    this.x = x;
+    this.y = y;
+
+    this.w = 16;
+    this.h = 32;
+
+    this.angle = 0.0;
+
+    this.speed = 7.5;
+
+    this.friction = 0.98;
+
+    this.velocity_x = 0.0;
+    this.velocity_y = 0.0;
+
+    // These are used to animate the ship's flame.
+    this.flame_offset_y = 0.0;
+    this.flame_offset_angle_y = 0.0;
+
+    this.identifier = identifier;
+
+    this.active = true;
+  }
+
+  isActive() {
+
+    return this.active;
+  }
+
+  getX() {
+
+    return this.x;
+  }
+
+  getY() {
+
+    return this.y;
+  }
+
+  destroy() {
+
+    this.active = false;
+
+    let a = 0.0;
+
+    while (a < Math.PI * 2) {
+
+      // Generate a bunch of bullets to simulate an explosion.
+
+      a += Math.PI / 8;
+
+      bullets[bullet_identifier] = new Bullet(this.x, this.y, a, bullet_identifier, 1);
+
+      ++bullet_identifier;
+    }
+
+    // Move the enemy's corpse out of sight.
+    this.x = -9999;
+    this.y = -9999;
+  }
+
+  update(target_x, target_y, target_radius) {
+
+    if (!this.active) {
+
+      return;
+    }
+
+    this.flame_offset_angle_y += 0.75;
+
+    this.flame_offset_y += -Math.cos(this.flame_offset_angle_y);
+
+    let delta_x = this.x - target_x;
+    let delta_y = this.y - target_y;
+
+    this.angle = Math.atan2(delta_x, -delta_y) - Math.PI;
+
+    this.velocity_x += Math.sin(this.angle) * this.speed * 0.1;
+    this.velocity_y += -Math.cos(this.angle) * this.speed * 0.1;
+
+    this.x += this.velocity_x;
+    this.y += this.velocity_y;
+
+    this.velocity_x *= this.friction;
+    this.velocity_y *= this.friction;
+  }
+
+  render(camera_x, camera_y) {
+
+    if (!this.active) {
+
+      return;
+    }
+
+    let translate_x = this.x - camera_x;
+    let translate_y = this.y - camera_y;
+
+    context.save();
+
+    context.translate(translate_x, translate_y);
+
+    context.rotate(this.angle);
+
+    context.translate(-translate_x, -translate_y);
+
+    context.translate(-this.w / 2, -this.h / 2);
+
+    context.save();
+
+    // Shake the flame to simulate animation.
+    context.translate(0, -this.flame_offset_y);
+
+    // Draw flame core.
+    Momo.drawFilledPolygon(
+
+      [
+        this.x - camera_x,
+
+        this.y + this.h - camera_y,
+
+        this.x + this.w / 2 - camera_x,
+
+        this.y + this.h * 1.5 - camera_y,
+
+        this.x + this.w - camera_x,
+
+        this.y + this.h - camera_y
+      ],
+
+      Momo.makeColor(255, 255, 0)
+    );
+
+    // Draw flame outline.
+    Momo.drawPolygon(
+
+      [
+
+        this.x + 2 - camera_x,
+
+        this.y + this.h - camera_y,
+
+        this.x + this.w / 2 - camera_x,
+
+        this.y + this.h * 1.5 - camera_y,
+
+        this.x + this.w - 2 - camera_x,
+
+        this.y + this.h - camera_y
+      ],
+
+      Momo.makeColor(255, 0, 0),
+
+      3
+    );
+
+    context.restore();
+
+    let points = [
+
+      this.x - camera_x,
+
+      this.y + this.h - camera_y,
+
+      this.x + this.w / 2 - camera_x,
+
+      this.y - camera_y,
+
+      this.x + this.w - camera_x,
+
+      this.y + this.h - camera_y
+    ];
+
+    // Draw the enemy ship outline and fill.
+    Momo.drawFilledPolygon(points, Momo.makeColor(0, 0, 0));
+    Momo.drawPolygon(points, Momo.makeColor(255, 0, 0), 3);
+
+    context.restore();
+  }
+}
+</script>
+    <script>Ship = new class {
+
+  constructor() {
+
+    this.setup();
+  }
+
+  setup() {
+
+    this.x = 0.0;
+    this.y = 0.0;
+
+    this.w = 16;
+    this.h = 32;
+
+    // Spawn facing a random direction.
+    this.angle = getRandomNumber() % (Math.PI * 2);
+
+    this.speed = 3.0;
+
+    this.friction = 0.99;
+
+    this.velocity_x = 0.0;
+    this.velocity_y = 0.0;
+
+    this.draw_flame = false;
+
+    this.flame_offset_y = 0.0;
+    this.flame_offset_angle_y = 0.0;
+
+    this.fuel = 100.0;
+
+    this.radius = 32;
+
+    this.energy = 100;
+  }
+
+  getX() {
+
+    return this.x;
+  }
+
+  getY() {
+
+    return this.y;
+  }
+
+  getFuel() {
+
+    return this.fuel | 0;
+  }
+
+  getEnergy() {
+
+    return this.energy;
+  }
+
+  getRadius() {
+
+    return this.radius;
+  }
+
+  getAngle() {
+
+    return this.angle;
+  }
+
+  update() {
+
+    if (this.fuel < 0) {
+
+      this.fuel = 0;
+    }
+
+    if (this.fuel > 0.0 && this.draw_flame) {
+
+      this.fuel -= 0.0125;
+
+      if (Momo.isKeyReleased("w")) {
+
+        this.draw_flame = false;
+      }
+
+      this.flame_offset_angle_y += 0.75;
+
+      this.flame_offset_y += -Math.cos(this.flame_offset_angle_y);
+    }
+
+    if (this.fuel <= 0.0) {
+
+      this.draw_flame = false;
+    }
+
+    this.x += this.velocity_x;
+    this.y += this.velocity_y;
+
+    this.velocity_x *= this.friction;
+    this.velocity_y *= this.friction;
+
+    bullets.forEach(
+
+      (value, index) => {
+
+        if (bullets[index].getType() === 1) {
+
+          let distance = Math.sqrt(
+
+            Math.pow(bullets[index].getX() - this.x, 2) + Math.pow(bullets[index].getY() - this.y, 2)
+          );
+
+          if (distance < bullets[index].getRadius() * 4) {
+
+            this.inflictDamage(1);
+
+            bullets[index].setTicks(0);
+          }
+        }
+      }
+    );
+  }
+
+  render(camera_x, camera_y) {
+
+    let translate_x = this.x - camera_x;
+    let translate_y = this.y - camera_y;
+
+    context.save();
+
+    context.translate(translate_x, translate_y);
+
+    context.rotate(this.angle);
+
+    context.translate(-translate_x, -translate_y);
+
+    context.translate(-this.w / 2, -this.h / 2);
+
+    if (this.draw_flame) {
+
+      context.save();
+
+      // Shake the flame to simulate animation.
+      context.translate(0, -this.flame_offset_y);
+
+      // Draw flame core.
+      Momo.drawFilledPolygon(
+
+        [
+          this.x - camera_x,
+
+          this.y + this.h - camera_y,
+
+          this.x + this.w / 2 - camera_x,
+
+          this.y + this.h * 1.5 - camera_y,
+
+          this.x + this.w - camera_x,
+
+          this.y + this.h - camera_y
+        ],
+
+        Momo.makeColor(255, 255, 0)
+      );
+
+      // Draw flame outline.
+      Momo.drawPolygon(
+
+        [
+
+          this.x + 2 - camera_x,
+
+          this.y + this.h - camera_y,
+
+          this.x + this.w / 2 - camera_x,
+
+          this.y + this.h * 1.5 - camera_y,
+
+          this.x + this.w - 2 - camera_x,
+
+          this.y + this.h - camera_y
+        ],
+
+        Momo.makeColor(255, 0, 0),
+
+        3
+      );
+
+      context.restore();
+    }
+
+    let points = [
+
+      this.x - camera_x,
+
+      this.y + this.h - camera_y,
+
+      this.x + this.w / 2 - camera_x,
+
+      this.y - camera_y,
+
+      this.x + this.w - camera_x,
+
+      this.y + this.h - camera_y
+    ];
+
+    // Draw the ship.
+    Momo.drawFilledPolygon(points, Momo.makeColor(0, 0, 0));
+    Momo.drawPolygon(points, Momo.makeColor(255, 255, 255), 3);
+
+    context.restore();
+  }
+
+  rotateLeft() {
+
+    this.angle -= 0.05;
+  }
+
+  rotateRight() {
+
+    this.angle += 0.05;
+  }
+
+  applyThrust() {
+
+    if (this.fuel > 0.0 || engage_ftl) {
+
+      this.draw_flame = true;
+
+      this.velocity_x += Math.sin(this.angle) * this.speed * 0.1;
+      this.velocity_y += -Math.cos(this.angle) * this.speed * 0.1;
+    }
+  }
+
+  ejectFuel() {
+
+    if (this.fuel <= 0) {
+
+      return;
+    }
+
+    let a = 0.0;
+
+    while (a < Math.PI * 2) {
+
+      a += Math.PI / 4;
+
+      bullets[bullet_identifier] = new Bullet(Ship.getX(), Ship.getY(), a, bullet_identifier, 0);
+
+      ++bullet_identifier;
+    }
+
+    this.fuel -= 1;
+  }
+
+  inflictDamage(amount) {
+
+    bigger_shake = true;
+
+    this.energy -= amount;
+
+    if (this.energy <= 0) {
+
+      state = LOSE;
+    }
+  }
+
+  isAccelerating() {
+
+    return this.draw_flame;
+  }
+};
+</script>
+    <script>function main() {
+
+  if (!Momo.initialize() || !Momo.setCanvas("game", 768, 448)) {
+
+    displayError("A critical error has occurred!");
+  }
+
+  context = Momo.getCanvasContext();
+
+  let i = sector_lower_limit;
+
+  for (i; i < sector_upper_limit; ++i) {
+
+    sector[i] = [];
+
+    let j = sector_lower_limit;
+
+    for (j; j < sector_upper_limit; ++j) {
+
+      sector[i][j] = false;
+    }
+  }
+
+  Momo.setFrameRate(60);
+
+  Momo.installKeyboard();
+
+  loadResources();
+
+  Momo.resourcesLoaded(
+
+    () => {
+
+      Momo.createLoop(
+
+        () => {
+
+          update();
+
+          render();
+        }
+      );
+    }
+  );
+}
+
+function update() {
+
+  switch (state) {
+
+    case INTRO:
+
+      if (Momo.isKeyPressed("enter")) {
+
+        state = GAME;
+      }
+    break;
+
+    case GAME:
+
+      if (ftl_engine_main === 100) {
+
+        ready_to_use_ftl = true;
+      }
+
+      if (ready_to_use_ftl && Momo.isKeyPressed("enter")) {
+
+        engage_ftl = true;
+
+        bigger_shake = true;
+
+        let a = 0.0;
+
+        while (a < Math.PI * 2) {
+
+          a += Math.PI / 4;
+
+          bullets[bullet_identifier] = new Bullet(Ship.getX(), Ship.getY(), a, bullet_identifier, 2);
+
+          ++bullet_identifier;
+        }
+      }
+
+      if (engage_ftl) {
+
+        fade_ticks += 1;
+
+        if (fade_ticks >= 254) {
+
+          state = WIN;
+
+          fade_ticks = 0;
+        }
+
+        Ship.applyThrust();
+      }
+
+      if (ftl_engine_main < 100) {
+
+        ++ftl_engine_sub;
+
+        if (ftl_engine_sub > 49) {
+
+          ftl_engine_sub = 0;
+
+          ++ftl_engine_main;
+        }
+      }
+
+      if (!engage_ftl) {
+
+        if (Momo.isKeyDown("a")) {
+
+          Ship.rotateLeft();
+        }
+        else if (Momo.isKeyDown("d")) {
+
+          Ship.rotateRight();
+        }
+
+        if (Momo.isKeyDown("w")) {
+
+          Ship.applyThrust();
+        }
+
+        if (Momo.isKeyPressed("space")) {
+
+          Ship.ejectFuel();
+        }
+      }
+
+      Ship.update();
+
+      updateEnemies();
+
+      updateBullets();
+
+      Camera.follow(Ship.getX(), Ship.getY());
+
+      if (Ship.isAccelerating()) {
+
+        shake_angle += 0.5;
+
+        shake_x += Math.sin(shake_angle) * shake_length;
+        shake_y += -Math.cos(shake_angle) * shake_length;
+      }
+
+      if (bigger_shake) {
+
+        shake_angle += 0.5;
+
+        bigger_shake_x += Math.sin(shake_angle) * bigger_shake_length;
+        bigger_shake_y += -Math.cos(shake_angle) * bigger_shake_length;
+
+        if (shake_ticks > 30) {
+
+          shake_ticks = 0;
+
+          bigger_shake = false;
+
+          bigger_shake_x = 0.0;
+          bigger_shake_y = 0.0;
+        }
+
+        ++shake_ticks;
+      }
+
+      let sector_x = 0;
+      let sector_y = 0;
+
+      if (Ship.getX() < 0) {
+
+        sector_x = (Camera.getX() - Momo.getCanvasWidth()) / Momo.getCanvasWidth() | 0;
+      }
+      else {
+
+        sector_x = (Camera.getX() + Momo.getCanvasWidth()) / Momo.getCanvasWidth() | 0;
+      }
+
+      if (Ship.getY() < 0) {
+
+        sector_y = (Camera.getY() - Momo.getCanvasHeight()) / Momo.getCanvasHeight() | 0;
+      }
+      else {
+
+        sector_y = (Camera.getY() + Momo.getCanvasHeight()) / Momo.getCanvasHeight() | 0;
+      }
+
+      // Add stars to nearby sectors (if applicable).
+      checkSector(sector_x, sector_y);
+      checkSector(sector_x + 1, sector_y);
+      checkSector(sector_x - 1, sector_y);
+      checkSector(sector_x, sector_y + 1);
+      checkSector(sector_x, sector_y - 1);
+      checkSector(sector_x + 1, sector_y + 1);
+      checkSector(sector_x + 1, sector_y - 1);
+      checkSector(sector_x - 1, sector_y + 1);
+      checkSector(sector_x - 1, sector_y - 1);
+    break;
+
+    case WIN:
+
+      if (fade_ticks < 255) {
+
+        fade_ticks += 3;
+      }
+
+      if (Momo.isKeyPressed("enter")) {
+
+        reset();
+      }
+    break;
+
+    case LOSE:
+
+      if (Momo.isKeyPressed("enter")) {
+
+        reset();
+      }
+    break;
+  }
+}
+
+function reset() {
+
+  state = 0;
+
+  bullets = [];
+  enemies = [];
+
+  Ship.setup();
+
+  ftl_engine_sub = 0;
+  ftl_engine_main = 0;
+
+  ready_to_use_ftl = false;
+
+  bigger_shake = false;
+
+  engage_ftl = false;
+
+  fade_ticks = 0;
+
+  enemies_defeated = 0;
+
+  enemies_suicided = 0;
+}
+
+function addStars(offset_x, offset_y) {
+
+  let i = 0;
+
+  for (i; i < 100; ++i) {
+
+    // Create 100 stars per sector.
+
+    let x = (10 * getRandomNumber()) % Momo.getCanvasWidth();
+    let y = (10 * getRandomNumber()) % Momo.getCanvasHeight();
+
+    x += offset_x;
+    y += offset_y;
+
+    stars[stars.length] = new Star(x, y);
+  }
+}
+
+function checkSector(x, y) {
+
+  if (x < sector_lower_limit || y < sector_lower_limit) {
+
+    return;
+  }
+
+  if (x > sector_upper_limit - 1 || y > sector_upper_limit - 1) {
+
+    return;
+  }
+
+  if (sector[x][y] === false) {
+
+    sector[x][y] = true;
+
+    addStars(Momo.getCanvasWidth() * x, Momo.getCanvasHeight() * y);
+  }
+}
+
+function updateBullets() {
+
+  bullets.forEach(
+
+    (value, index) => {
+
+      bullets[index].update();
+    }
+  );
+}
+
+function updateEnemies() {
+
+  if (engage_ftl) {
+
+    return;
+  }
+
+  let ship_x = Ship.getX();
+  let ship_y = Ship.getY();
+
+  let ship_radius = Ship.getRadius();
+
+  let number_of_enemies = 0;
+
+  enemies.forEach(
+
+    (value, index) => {
+
+      if (enemies[index].isActive()) {
+
+        ++number_of_enemies;
+      }
+    }
+  );
+
+  if (number_of_enemies === 0) {
+
+    let enemy_x = 0.0;
+    let enemy_y = 0.0;
+
+    if (getRandomNumber() % 2) {
+
+      enemy_x = ship_x - Momo.getCanvasWidth();
+    }
+    else {
+
+      enemy_x = ship_x + Momo.getCanvasWidth();
+    }
+
+    if (getRandomNumber() % 2) {
+
+      enemy_y = ship_y - Momo.getCanvasHeight();
+    }
+    else {
+
+      enemy_y = ship_y + Momo.getCanvasHeight();
+    }
+
+    // Spawn a new enemy near the player.
+    enemies[enemy_identifier] = new Enemy(enemy_x, enemy_y, enemy_identifier);
+
+    ++enemy_identifier;
+  }
+
+  enemies.forEach(
+
+    (value, index) => {
+
+      enemies[index].update(ship_x, ship_y, ship_radius);
+
+      let distance = 999;
+
+      bullets.forEach(
+
+        (value, index_2) => {
+
+          if (bullets[index_2].getType() === 0) {
+
+            let distance = Math.sqrt(
+
+              Math.pow(bullets[index_2].getX() - enemies[index].getX(), 2) + Math.pow(bullets[index_2].getY() - enemies[index].getY(), 2)
+            );
+
+            if (distance < bullets[index_2].getRadius() * 4) {
+
+              bullets[index_2].setTicks(0);
+
+              enemies[index].destroy();
+
+              ++enemies_defeated;
+            }
+          }
+        }
+      );
+
+      distance = Math.sqrt(Math.pow(enemies[index].getX() - ship_x, 2) + Math.pow(enemies[index].getY() - ship_y, 2));
+
+      if (distance < Ship.getRadius() / 1.5) {
+
+        Ship.inflictDamage(5);
+
+        enemies[index].destroy();
+
+        ++enemies_suicided;
+      }
+    }
+  );
+}
+
+function render() {
+
+  switch (state) {
+
+    case INTRO:
+
+      Momo.clearCanvas(Momo.makeColor(0, 0, 0));
+
+      let text = [
+
+        "REPORT:",
+        "- You are lost in space",
+        "- Kamikaze vessels are hot on your tail",
+        "- Your ship's weaponry is non-operational",
+        "",
+        "OBJECTIVE:",
+        "- Survive until your FTL drive is repaired",
+        "",
+        "INSTRUCTIONS:",
+        "- Steer with \"A\" and \"D\"",
+        "- Engage thruster with \"W\"",
+        "- Eject fuel as projectiles with \"SPACE\""
+      ];
+
+      let i = 0;
+
+      for (i; i < text.length; ++i) {
+
+        Momo.drawText(
+
+          pixel,
+
+          Momo.makeColor(255, 255, 255),
+
+          16,
+
+          8,
+
+          8 + (24 * i),
+
+          "left",
+
+          text[i]
+        );
+      }
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        182,
+
+        32,
+
+        "left",
+
+        "lost"
+      );
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        8,
+
+        8 + 24 * 13,
+
+        "left",
+
+        "Press \"ENTER\" to continue."
+      );
+    break;
+
+    case GAME:
+
+      if (!engage_ftl) {
+
+        Momo.clearCanvas(Momo.makeColor(0, 0, 0));
+      }
+
+      if (Ship.isAccelerating()) {
+
+        // Start shaking the screen.
+
+        context.save();
+
+        context.translate(shake_x, shake_y);
+      }
+
+      if (bigger_shake) {
+
+        context.save();
+
+        context.translate(bigger_shake_x, bigger_shake_y);
+      }
+
+      renderStars();
+
+      renderEnemies();
+
+      renderBullets();
+
+      Ship.render(Camera.getX(), Camera.getY());
+
+      if (Ship.isAccelerating()) {
+
+        // Stop shaking the screen.
+        context.restore();
+      }
+
+      if (bigger_shake) {
+
+        context.restore();
+      }
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 255, 255),
+
+        16,
+
+        8,
+
+        8,
+
+        "left",
+
+        "Energy: " + (Ship.getEnergy() | 0) + "%"
+      );
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 255, 255),
+
+        16,
+
+        Momo.getCanvasWidth() - 8,
+
+        8,
+
+        "right",
+
+        "Fuel: " + Ship.getFuel() + "%"
+      );
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 255, 255),
+
+        16,
+
+        Momo.getCanvasWidth() / 2,
+
+        8,
+
+        "center",
+
+        "FTL: " + ftl_engine_main + "%"
+      );
+
+      if (ready_to_use_ftl && !engage_ftl) {
+
+        Momo.drawText(
+
+          pixel,
+
+          Momo.makeColor(255, 255, 0),
+
+          16,
+
+          Momo.getCanvasWidth() / 2,
+
+          Momo.getCanvasHeight() - 24,
+
+          "center",
+
+          "FTL is ready! press \"ENTER\" to engage!"
+        );
+      }
+
+      if (engage_ftl) {
+
+        Momo.drawFilledRectangle(
+
+          0,
+
+          0,
+
+          Momo.getCanvasWidth(),
+
+          Momo.getCanvasHeight(),
+
+          Momo.makeColor(255, 255, 255, fade_ticks)
+        );
+      }
+    break;
+
+    case WIN:
+
+      Momo.clearCanvas(Momo.makeColor(0, 0, 0));
+
+      let final_score = 0;
+
+      final_score += Ship.getFuel() * 60;
+      final_score += -(enemies_suicided * 20);
+      final_score += enemies_defeated * 100;
+      final_score += Ship.getEnergy() * 50;
+
+      let win_text = [
+
+        "Your FTL drive repaired itself, and you made",
+        "a speedy getaway. God willing, you should",
+        "return home safely...",
+        "",
+        "",
+        "",
+        "SCORE:",
+        "- Fuel remaining: " + Ship.getFuel() + " * 60 = " + Ship.getFuel() * 60,
+        "- Enemies suicided: " + enemies_suicided + " * -20 = " + -(enemies_suicided * 20),
+        "- Enemies defeated: " + enemies_defeated + " * 100 = " + (enemies_defeated * 100),
+        "- Energy remaining: " + Ship.getEnergy() + " * 50 = " + Ship.getEnergy() * 50,
+        "",
+        "Final score: " + final_score
+      ];
+
+      let win_index = 0;
+
+      for (win_index; win_index < win_text.length; ++win_index) {
+
+        Momo.drawText(
+
+          pixel,
+
+          Momo.makeColor(255, 255, 255),
+
+          16,
+
+          8,
+
+          8 + (24 * win_index),
+
+          "left",
+
+          win_text[win_index]
+        );
+      }
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        592,
+
+        32,
+
+        "left",
+
+        "should"
+      );
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        8,
+
+        8 + (24 * 4),
+
+        "left",
+
+        "You are no longer lost."
+      );
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        8,
+
+        8 + (24 * 14),
+
+        "left",
+
+        "Press \"ENTER\" to play again."
+      );
+
+      Momo.drawFilledRectangle(
+
+        0,
+
+        0,
+
+        Momo.getCanvasWidth(),
+
+        Momo.getCanvasHeight(),
+
+        Momo.makeColor(255, 255, 255, 255 - fade_ticks)
+      );
+    break;
+
+    case LOSE:
+
+      Momo.clearCanvas(Momo.makeColor(0, 0, 0));
+
+      let lose_text = [
+
+        "",
+        "",
+        "Your rigid, lifeless corpse shall be carried",
+        "atop the currents of the cosmos until time",
+        "itself comes to an end..."
+      ];
+
+      let index = 0;
+
+      for (index; index < lose_text.length; ++index) {
+
+        Momo.drawText(
+
+          pixel,
+
+          Momo.makeColor(255, 255, 255),
+
+          16,
+
+          8,
+
+          8 + (24 * index),
+
+          "left",
+
+          lose_text[index]
+        );
+      }
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        8,
+
+        8,
+
+        "left",
+
+        "You have died."
+      );
+
+      Momo.drawText(
+
+        pixel,
+
+        Momo.makeColor(255, 0, 0),
+
+        16,
+
+        8,
+
+        8 + (24 * 6),
+
+        "left",
+
+        "Press \"ENTER\" to play again."
+      );
+    break;
+  }
+}
+
+function renderStars() {
+
+  let i = 0;
+
+  for (i; i < stars.length; ++i) {
+
+    stars[i].render(Camera.getX(), Camera.getY());
+  }
+}
+
+function renderBullets() {
+
+  bullets.forEach(
+
+    (value, index) => {
+
+      bullets[index].render(Camera.getX(), Camera.getY());
+    }
+  );
+}
+
+function renderEnemies() {
+
+  enemies.forEach(
+
+    (value, index) => {
+
+      enemies[index].render(Camera.getX(), Camera.getY());
+    }
+  );
+}
+
+function loadResources() {
+
+  pixel = Momo.loadFont("data/woff/pixel.woff");
+}
+
+function displayError(message) {
+
+  alert("Error: " + message + "!");
+
+  throw new Error("Error: " + message + "!");
+}
+
+Momo.setEntryPoint(main);
+</script>
+  </head>
+  <body>
+    <div id="wrap">
+      <canvas id="game">
+        Your browser does not support the canvas element.
+      </canvas>
+    </div>
+  </body>
+</html>

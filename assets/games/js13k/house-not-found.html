@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>body {margin: 0;display: flex;justify-content: center;align-items: center;height: 100vh;}</style>
+    <title>404 House Not Found</title>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <script>(function ( root, factory ) {
+  if ( typeof define === 'function' && define.amd ) {
+    define( [ 'exports' ], factory );
+  } else if ( typeof exports === 'object' && typeof exports.nodeName !== 'string' ) {
+    factory( exports );
+  } else {
+    factory( root.TinyMusic = {} );
+  }
+}( this, function ( exports ) {
+
+/*
+ * Private stuffz
+ */
+
+var enharmonics = 'B#-C|C#-Db|D|D#-Eb|E-Fb|E#-F|F#-Gb|G|G#-Ab|A|A#-Bb|B-Cb',
+  middleC = 440 * Math.pow( Math.pow( 2, 1 / 12 ), -9 ),
+  numeric = /^[0-9.]+$/,
+  octaveOffset = 4,
+  space = /\s+/,
+  num = /(\d+)/,
+  offsets = {};
+
+// populate the offset lookup (note distance from C, in semitones)
+enharmonics.split('|').forEach(function( val, i ) {
+  val.split('-').forEach(function( note ) {
+    offsets[ note ] = i;
+  });
+});
+
+/*
+ * Note class
+ *
+ * new Note ('A4 q') === 440Hz, quarter note
+ * new Note ('- e') === 0Hz (basically a rest), eigth note
+ * new Note ('A4 es') === 440Hz, dotted eighth note (eighth + sixteenth)
+ * new Note ('A4 0.0125') === 440Hz, 32nd note (or any arbitrary
+ * divisor/multiple of 1 beat)
+ *
+ */
+
+// create a new Note instance from a string
+function Note( str ) {
+  var couple = str.split( space );
+  // frequency, in Hz
+  this.frequency = Note.getFrequency( couple[ 0 ] ) || 0;
+  // duration, as a ratio of 1 beat (quarter note = 1, half note = 0.5, etc.)
+  this.duration = Note.getDuration( couple[ 1 ] ) || 0;
+}
+
+// convert a note name (e.g. 'A4') to a frequency (e.g. 440.00)
+Note.getFrequency = function( name ) {
+  var couple = name.split( num ),
+    distance = offsets[ couple[ 0 ] ],
+    octaveDiff = ( couple[ 1 ] || octaveOffset ) - octaveOffset,
+    freq = middleC * Math.pow( Math.pow( 2, 1 / 12 ), distance );
+  return freq * Math.pow( 2, octaveDiff );
+};
+
+// convert a duration string (e.g. 'q') to a number (e.g. 1)
+// also accepts numeric strings (e.g '0.125')
+// and compund durations (e.g. 'es' for dotted-eight or eighth plus sixteenth)
+Note.getDuration = function( symbol ) {
+  return numeric.test( symbol ) ? parseFloat( symbol ) :
+    symbol.toLowerCase().split('').reduce(function( prev, curr ) {
+      return prev + ( curr === 'w' ? 4 : curr === 'h' ? 2 :
+        curr === 'q' ? 1 : curr === 'e' ? 0.5 :
+        curr === 's' ? 0.25 : 0 );
+    }, 0 );
+};
+
+/*
+ * Sequence class
+ */
+
+// create a new Sequence
+function Sequence( ac, tempo, arr ) {
+  this.ac = ac || new AudioContext();
+  this.createFxNodes();
+  this.tempo = tempo || 120;
+  this.loop = true;
+  this.smoothing = 0;
+  this.staccato = 0;
+  this.notes = [];
+  this.push.apply( this, arr || [] );
+}
+
+// create gain and EQ nodes, then connect 'em
+Sequence.prototype.createFxNodes = function() {
+  var eq = [ [ 'bass', 100 ], [ 'mid', 1000 ], [ 'treble', 2500 ] ],
+    prev = this.gain = this.ac.createGain();
+  eq.forEach(function( config, filter ) {
+    filter = this[ config[ 0 ] ] = this.ac.createBiquadFilter();
+    filter.type = 'peaking';
+    filter.frequency.value = config[ 1 ];
+    prev.connect( prev = filter );
+  }.bind( this ));
+  prev.connect( this.ac.destination );
+  return this;
+};
+
+// accepts Note instances or strings (e.g. 'A4 e')
+Sequence.prototype.push = function() {
+  Array.prototype.forEach.call( arguments, function( note ) {
+    this.notes.push( note instanceof Note ? note : new Note( note ) );
+  }.bind( this ));
+  return this;
+};
+
+// create a custom waveform as opposed to "sawtooth", "triangle", etc
+Sequence.prototype.createCustomWave = function( real, imag ) {
+  // Allow user to specify only one array and dupe it for imag.
+  if ( !imag ) {
+    imag = real;
+  }
+
+  // Wave type must be custom to apply period wave.
+  this.waveType = 'custom';
+
+  // Reset customWave
+  this.customWave = [ new Float32Array( real ), new Float32Array( imag ) ];
+};
+
+// recreate the oscillator node (happens on every play)
+Sequence.prototype.createOscillator = function() {
+  this.stop();
+  this.osc = this.ac.createOscillator();
+
+  // customWave should be an array of Float32Arrays. The more elements in
+  // each Float32Array, the dirtier (saw-like) the wave is
+  if ( this.customWave ) {
+    this.osc.setPeriodicWave(
+      this.ac.createPeriodicWave.apply( this.ac, this.customWave )
+    );
+  } else {
+    this.osc.type = this.waveType || 'square';
+  }
+
+  this.osc.connect( this.gain );
+  return this;
+};
+
+// schedules this.notes[ index ] to play at the given time
+// returns an AudioContext timestamp of when the note will *end*
+Sequence.prototype.scheduleNote = function( index, when ) {
+  var duration = 60 / this.tempo * this.notes[ index ].duration,
+    cutoff = duration * ( 1 - ( this.staccato || 0 ) );
+
+  this.setFrequency( this.notes[ index ].frequency, when );
+
+  if ( this.smoothing && this.notes[ index ].frequency ) {
+    this.slide( index, when, cutoff );
+  }
+
+  this.setFrequency( 0, when + cutoff );
+  return when + duration;
+};
+
+// get the next note
+Sequence.prototype.getNextNote = function( index ) {
+  return this.notes[ index < this.notes.length - 1 ? index + 1 : 0 ];
+};
+
+// how long do we wait before beginning the slide? (in seconds)
+Sequence.prototype.getSlideStartDelay = function( duration ) {
+  return duration - Math.min( duration, 60 / this.tempo * this.smoothing );
+};
+
+// slide the note at <index> into the next note at the given time,
+// and apply staccato effect if needed
+Sequence.prototype.slide = function( index, when, cutoff ) {
+  var next = this.getNextNote( index ),
+    start = this.getSlideStartDelay( cutoff );
+  this.setFrequency( this.notes[ index ].frequency, when + start );
+  this.rampFrequency( next.frequency, when + cutoff );
+  return this;
+};
+
+// set frequency at time
+Sequence.prototype.setFrequency = function( freq, when ) {
+  this.osc.frequency.setValueAtTime( freq, when );
+  return this;
+};
+
+// ramp to frequency at time
+Sequence.prototype.rampFrequency = function( freq, when ) {
+  this.osc.frequency.linearRampToValueAtTime( freq, when );
+  return this;
+};
+
+// run through all notes in the sequence and schedule them
+Sequence.prototype.play = function( when ) {
+  when = typeof when === 'number' ? when : this.ac.currentTime;
+
+  this.createOscillator();
+  this.osc.start( when );
+
+  this.notes.forEach(function( note, i ) {
+    when = this.scheduleNote( i, when );
+  }.bind( this ));
+
+  this.osc.stop( when );
+  this.osc.onended = this.loop ? this.play.bind( this, when ) : null;
+
+  return this;
+};
+
+// stop playback, null out the oscillator, cancel parameter automation
+Sequence.prototype.stop = function() {
+  if ( this.osc ) {
+    this.osc.onended = null;
+    this.osc.disconnect();
+    this.osc = null;
+  }
+  return this;
+};
+
+  exports.Note = Note;
+  exports.Sequence = Sequence;
+}));</script>
+    <script>// create the audio context
+var ac = typeof AudioContext !== 'undefined' ? new AudioContext : new webkitAudioContext,
+  // get the current Web Audio timestamp (this is when playback should begin)
+  when = ac.currentTime,
+  // set the tempo
+  tempo = 160,
+  // initialize some vars
+  sequence1,
+  sequence2,
+  sequence3,
+  walkSequence,
+  knockSequence,
+  elevatorSequence
+  // create an array of "note strings" that can be passed to a sequence
+  lead = [
+    'G4 e',
+    '-  e',
+    'C4 e',
+    'D4  e',
+    'E4  e',
+    'G5  e',
+    'F4  e',
+    'C4  e',
+    'G4 e',
+    '-  e',
+    'C4 e',
+    'D4  e',
+    'E4  e',
+    'G5  e',
+    'F4  e',
+    'C4  e',
+    'G3  e',
+    '-  e',
+    'A3  e',
+    '-  e',
+    'B3  e',
+    '-  e',
+    'C4  e',
+    '-  e',
+    'D4  e',
+    '-  e',
+    'E4  e',
+    '-  e',
+    'C4  e',
+    'D4  e',
+    'E3  e',
+    'C4  e',
+    'C4  e',
+  ],
+  walk = ['D3  q']
+  knock = ['D5  q']
+  elevator = ['G5  q']
+  select = ['C5  q']
+
+// create 3 new sequences (one for lead, one for harmony, one for bass)
+sequence1 = new TinyMusic.Sequence( ac, tempo, lead );
+walkSequence = new TinyMusic.Sequence(ac,tempo, walk)
+knockSequence = new TinyMusic.Sequence(ac,tempo, knock)
+elevatorSequence = new TinyMusic.Sequence(ac,tempo, elevator)
+selectSequence = new TinyMusic.Sequence(ac,tempo, select)
+sequence1.gain.gain.value = .1;
+walkSequence.gain.gain.value = .1
+knockSequence.gain.gain.value = .1
+elevatorSequence.gain.gain.value = .1
+selectSequence.gain.gain.value = .1
+
+function walkSoundPlay() {
+  when = ac.currentTime;
+  //start the lead part immediately
+  walkSequence.play( when );
+
+  setTimeout(() => walkSequence.stop(), 100)
+}
+
+function knockSoundPlay() {
+  when = ac.currentTime;
+  //start the lead part immediately
+  knockSequence.play( when );
+
+  setTimeout(() => knockSequence.stop(), 100)
+}
+
+function elevatorSoundPlay() {
+  when = ac.currentTime;
+  //start the lead part immediately
+  elevatorSequence.play( when );
+
+  setTimeout(() => elevatorSequence.stop(), 100)
+}
+
+function selectSoundPlay() {
+  when = ac.currentTime;
+  //start the lead part immediately
+  selectSequence.play( when );
+
+  setTimeout(() => selectSequence.stop(), 100)
+}
+
+function playFinalSound() {
+  when = ac.currentTime;
+  //start the lead part immediately
+  sequence1.play( when );
+}</script>
+    <script>
+let playerSprite = [
+  ['-','Q','Q','Q','Q','-'],
+  ['-','T','Q','T','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','-','-','Q','-'],
+  ['-','Q','-','-','Q','-'],
+]
+
+let playerSpriteWalk = [
+  ['-','Q','Q','Q','Q','-'],
+  ['-','T','Q','T','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['Q','Q','Q','Q','Q','-'],
+  ['Q','Q','Q','Q','Q','Q'],
+  ['Q','-','-','-','-','-'],
+]
+
+let playerSpriteWalk2 = [
+  ['-','Q','Q','Q','Q','-'],
+  ['-','T','Q','T','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','-','Q','Q','-','-'],
+  ['-','-','Q','Q','-','-'],
+  ['-','-','Q','-','-','-'],
+]
+
+let playerSpriteR = [
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','T','Q','T','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','-','-','Q','-'],
+  ['-','Q','-','-','Q','-'],
+]
+
+let playerSpriteWalkR = [
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','T','Q','T','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','Q'],
+  ['Q','Q','Q','Q','Q','Q'],
+  ['-','-','-','-','-','Q'],
+]
+
+let playerSpriteWalk2R = [
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','T','Q','T','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','Q','Q','Q','Q','-'],
+  ['-','-','Q','Q','-','-'],
+  ['-','-','Q','Q','-','-'],
+  ['-','-','-','Q','-','-'],
+]
+
+let dogSprite1 = [
+  ['-','j','j','-','-','J','J','-','-','-','-','-','-','-',],
+  ['j','J','J','J','J','J','J','J','-','-','j','j','j','-',],
+  ['-','J','J','J','J','J','J','-','-','j','j','j','j','j',],
+  ['-','Q','J','J','Q','J','J','-','-','-','-','-','j','j',],
+  ['j','J','Q','J','J','J','J','-','-','-','-','-','J','j',],
+  ['j','J','K','K','J','J','J','J','J','J','J','J','J','J',],
+  ['-','J','k','k','J','J','J','J','J','J','J','J','J','-',],
+  ['J','J','J','J','J','J','J','J','J','J','J','J','-','-',],
+  ['J','J','J','J','J','J','J','J','J','J','J','J','-','-',],
+  ['-','J','J','J','J','J','J','J','J','J','J','J','-','-',],
+  ['-','-','V','V','J','V','-','V','V','J','J','-','-','-',],
+  ['-','-','V','-','J','-','-','-','V','-','J','-','-','-',],
+];
+
+let dogSprite2 = [
+  ['-','j','j','-','-','J','J','-','-','-','-','-','-','-',],
+  ['j','J','J','J','J','J','J','J','-','-','j','j','j','-',],
+  ['-','J','J','J','J','J','J','-','-','j','j','j','j','j',],
+  ['-','Q','J','J','Q','J','J','-','-','-','-','-','j','j',],
+  ['j','J','Q','J','J','J','J','-','-','-','-','-','J','j',],
+  ['j','J','K','K','J','J','J','J','J','J','J','J','J','J',],
+  ['-','J','k','k','J','J','J','J','J','J','J','J','J','-',],
+  ['J','J','J','J','J','J','J','J','J','J','J','J','-','-',],
+  ['-','J','J','J','J','J','J','J','J','J','J','J','-','-',],
+  ['-','-','V','V','J','V','-','V','V','J','J','-','-','-',],
+  ['-','-','V','-','J','-','-','-','V','-','J','-','-','-',],
+];
+
+let doorSprite = [
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "Y", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "V", "V", "V", "V", "V", "V", "V", "D"],
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D"],
+];
+let elevator = [["W", "E"]];
+
+let airductSprite = [
+['E','E','E','E','E','E','E','E','E','E','E','E','E','E','E','E',],
+['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+['E','-','E','-','-','-','-','-','-','-','-','-','-','E','-','E',],
+['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+['E','-','-','E','E','E','E','E','E','E','E','E','E','-','-','E',],
+['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+['E','-','-','E','E','E','E','E','E','E','E','E','E','-','-','E',],
+['E','-','-','-','-','-','-','Y','-','-','-','-','-','-','-','E',],
+['E','-','-','E','E','E','E','E','E','E','E','E','E','-','-','E',],
+['E','-','-','-','-','-','-','Y','Y','-','-','-','-','-','-','E',],
+['E','-','-','E','E','E','E','E','E','E','E','E','E','-','-','E',],
+['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+['E','-','E','-','-','-','-','-','-','-','-','-','-','E','-','E',],
+['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+['E','E','E','E','E','E','E','E','E','E','E','E','E','E','E','E',],
+];
+
+let airductSpriteOpen = [
+  ['E','E','E','E','E','E','E','E','E','E','E','E','E','E','E','E',],
+  ['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','E','E','E','E','E','E','E','E','E','E','E','E','-','E',],
+  ['E','-','-','-','-','-','-','-','-','-','-','-','-','-','-','E',],
+  ['E','E','E','E','E','E','E','E','E','E','E','E','E','E','E','E',],
+  ];
+
+let closet = [
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", ],
+  ["D", "A", "A", "A", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "A", "A", "A", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", ],
+  ["D", "G", "A", "A", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "G", "R", "Y", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "G", "R", "Y", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "G", "A", "D", ],
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", ],
+  ["D", "B", "B", "R", "G", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "B", "B", "R", "G", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "B", "B", "R", "G", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", ],
+  ["D", "A", "A", "A", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "A", "A", "A", "A", "A", "A", "A", "D", "A", "A", "A", "A", "A", "A", "A", "D", ],
+  ["D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", ],
+];
+
+let desk = [
+  ["D", "-", "-", "-", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", '-', '-', "-", 'D'],
+  ["D", "-", "-", "-", "-", "D", "D", "D", "D", "D", "D", "D", "D", "D", "D", "-", '-', '-', "-", 'D'],
+  ["D", "-", "-", "-", "-", "D", "-", "-", "-", "-", "-", "-", "-", "-", "D", "-", '-', '-', "-", 'D'],
+  ["D", "-", "-", "-", "-", "D", "-", "-", "-", "-", "-", "-", "-", "-", "D", "-", '-', '-', "-", 'D'],
+  ["D", "D", "D", "D", "-", "D", "-", "-", "-", "-", "-", "-", "-", "-", "D", "-", 'D', 'D', "D", 'D'],
+  ["D", "-", "-", "D", "-", "D", "-", "-", "-", "-", "-", "-", "-", "-", "D", "-", 'D', '-', "-", 'D'],
+  ["D", "-", "-", "D", "-", "D", "-", "-", "-", "-", "-", "-", "-", "-", "D", "-", 'D', '-', "-", 'D'],
+  ["D", "-", "-", "D", "-", "D", "-", "-", "-", "-", "-", "-", "-", "-", "D", "-", 'D', '-', "-", 'D'],
+];
+
+let passwordSprite = [
+  ['T','T','T','T','T','T','T','T','T','T','T','T','T','T','T'],
+  ['T','Q','Q','Q','T','Q','T','Q','T','Q','Q','Q','T','Q','T'],
+  ['T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T'],
+  ['T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T'],
+  ['T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T'],
+  ['T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T'],
+  ['T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T'],
+  ['T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T','Q','T'],
+  ['T','Q','Q','Q','T','Q','T','Q','T','Q','Q','Q','T','Q','T'],
+  ['T','T','T','T','T','T','T','T','T','T','T','T','T','T','T'],
+];
+
+let moneySprite = [
+  ['T','T','T','T','T','T','T','T','T','T','T','T','T','T','T','T',],
+  ['T','G','T','G','G','G','G','G','G','G','G','G','G','T','G','T',],
+  ['T','T','G','G','G','G','T','T','T','T','G','G','G','G','T','T',],
+  ['T','G','G','G','G','T','G','G','G','G','T','G','G','G','G','T',],
+  ['T','G','T','T','G','T','G','T','T','G','T','G','T','T','G','T',],
+  ['T','G','T','T','G','T','G','T','T','G','T','G','T','T','G','T',],
+  ['T','G','G','G','G','T','G','G','G','G','T','G','G','G','G','T',],
+  ['T','T','G','G','G','G','T','T','T','T','G','G','G','G','T','T',],
+  ['T','G','T','G','G','G','G','G','G','G','G','G','G','T','G','T',],
+  ['T','T','T','T','T','T','T','T','T','T','T','T','T','T','T','T',],
+];
+
+let keySprite = [
+  ['-','-','-','-','-','-','-','-','-','-','-','-','Y','Y','Y','-',],
+  ['-','-','-','-','-','-','-','-','-','-','-','Y','-','-','-','Y',],
+  ['Y','Y','Y','Y','Y','Y','Y','Y','Y','Y','Y','Y','-','-','-','Y',],
+  ['Y','-','Y','-','Y','-','-','-','-','-','-','Y','-','-','-','Y',],
+  ['Y','-','-','-','Y','-','-','-','-','-','-','-','Y','Y','Y','-',],
+];
+
+let screwdriverSprite = [
+['-','-','-','-','-','-','-','-','-','-','-','-','-','R','R','R',],
+['-','-','-','-','-','-','-','-','-','-','-','-','R','R','-','R',],
+['-','-','-','-','-','-','-','-','-','-','-','R','R','-','R','R',],
+['-','-','-','-','-','-','-','-','-','-','R','R','-','R','R','-',],
+['-','-','-','-','-','-','-','-','-','R','R','-','R','R','-','-',],
+['-','-','-','-','-','-','-','-','R','R','-','R','R','-','-','-',],
+['-','-','-','-','-','-','-','R','R','-','R','R','-','-','-','-',],
+['-','-','-','-','-','-','R','R','-','R','R','-','-','-','-','-',],
+['-','-','-','-','-','R','R','-','R','R','-','-','-','-','-','-',],
+['-','-','-','-','-','-','R','R','R','-','-','-','-','-','-','-',],
+['-','-','-','-','-','W','-','R','-','-','-','-','-','-','-','-',],
+['-','-','-','-','W','-','-','-','-','-','-','-','-','-','-','-',],
+['-','-','-','W','-','-','-','-','-','-','-','-','-','-','-','-',],
+['-','W','W','-','-','-','-','-','-','-','-','-','-','-','-','-',],
+['W','W','W','-','-','-','-','-','-','-','-','-','-','-','-','-',],
+['-','W','-','-','-','-','-','-','-','-','-','-','-','-','-','-',]
+];
+
+let holeSprite = [
+  ['-','-','-','-','-','-','-','W','-','-','-','-','-','-','-','-',],
+  ['-','-','-','-','-','-','W','Q','E','-','-','-','-','-','-','-',],
+  ['-','-','-','-','-','E','Q','Q','W','-','-','-','-','-','-','-',],
+  ['-','-','-','E','W','Q','Q','Q','Q','W','-','-','-','-','-','-',],
+  ['-','-','-','W','Q','Q','Q','Q','Q','Q','Q','W','-','-','-','-',],
+  ['-','-','-','Q','Q','Q','Q','Q','Q','Q','Q','Q','W','-','-','-',],
+  ['E','W','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','W','E','-','-',],
+  ['-','-','W','Q','Q','Q','Q','Q','Q','Q','Q','Q','E','-','-','-',],
+  ['-','W','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','W','-','-','-',],
+  ['-','E','W','Q','Q','Q','Q','Q','Q','Q','Q','W','W','-','-','-',],
+  ['-','-','E','Q','Q','Q','Q','Q','Q','Q','Q','E','-','-','-','-',],
+  ['-','-','E','W','Q','Q','W','Q','Q','Q','W','W','-','-','-','-',],
+  ['-','-','-','E','W','W','-','W','W','W','-','-','-','-','-','-',],
+  ['-','-','-','-','E','-','-','E','E','-','-','-','-','-','-','-',],
+  ['-','-','-','-','-','-','-','-','E','-','-','-','-','-','-','-',],
+  ['-','-','-','-','-','-','-','-','-','-','-','-','-','-','-','-',],
+]
+
+let closetSprite = [
+  ['D','D','D','D','D','D','D','D','D','D','D','D','D','D'],
+  ['-','D','-','-','-','-','-','-','-','-','-','-','D','-'],
+]
+
+let broomSprite = [
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','-','G','-','-','-','-','-','-','-'],
+  ['G','G','G','G','G','G','G','G','G','G','G','G','G','G','G'],
+  ['G','G','G','G','G','G','G','G','G','G','G','G','G','G','G'],
+  ['Q','E','Q','Q','E','Q','Q','Q','Q','E','Q','Q','E','Q','Q'],
+]
+
+let boxesSprite = [
+  ['-','-','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','-','-'],
+  ['-','Q','D','Q','D','D','D','D','D','D','D','D','D','D','D','Q','D','Q','-'],
+  ['-','Q','Q','Q','D','D','D','D','D','D','D','D','D','D','D','Q','Q','D','Q'],
+  ['-','Q','-','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','-','Q','Q'],
+  ['-','-','-','Q','D','D','D','D','D','D','D','D','D','D','D','Q','-','-','-'],
+  ['-','-','-','Q','D','D','D','D','D','D','D','D','D','D','D','Q','-','-','-'],
+  ['-','-','-','Q','D','D','D','D','D','D','D','D','D','D','D','Q','-','-','-'],
+  ['-','-','-','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','-','-','-'], 
+]
+
+let boxesSprite1 = [
+  ['Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q'],
+  ['Q','D','D','D','D','D','D','D','D','D','D','D','Q'],
+  ['Q','D','D','D','D','D','D','D','D','D','D','D','Q'],
+  ['Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q'],
+  ['Q','D','D','D','D','D','D','D','D','D','D','D','Q'],
+  ['Q','D','D','D','D','D','D','D','D','D','D','D','Q'],
+  ['Q','D','D','D','D','D','D','D','D','D','D','D','Q'],
+  ['Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q'], 
+]
+
+let cake = [
+  ['-','-','-','-','-','-','R','-','-','R','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','T','-','-','T','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','T','-','-','T','-','-','-','-','-','-'],
+  ['-','-','-','-','-','-','T','-','-','T','-','-','-','-','-','-'],
+  ['-','-','-','-','B','B','B','B','B','B','B','B','-','-','-','-'],
+  ['-','-','-','-','T','B','T','T','T','T','T','T','-','-','-','-'],
+  ['-','-','-','T','T','T','T','T','T','T','T','T','T','-','-','-'],
+  ['-','-','-','T','T','T','T','T','T','T','T','T','T','-','-','-'],
+  ['-','-','R','R','R','R','R','R','R','R','R','R','R','R','-','-'],
+  ['-','-','T','R','T','T','T','R','T','T','T','T','T','T','-','-'],
+  ['-','T','R','T','T','T','T','T','R','T','T','T','T','T','T','-'],
+  ['-','T','T','T','T','T','T','T','T','T','T','T','T','T','T','-'],
+  ['Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q','Q'],
+]</script>
+    <script>let levelBefore = (door = response = 0),
+  level = 1;
+let dialog = (question = "");
+let changeDirection = 'left'
+let showDialog = (asked = password = room202 = room401 = room404 = room405 = room501 = dog = keys = screwdriver = money = false);
+
+const doors = [100, 250, 400, 550, 700];
+var timer = -1;
+
+var keyRight = (keyUp = keyDown = keyLeft = keyEnter = keyZ = keyEscape = false);
+
+let currentHint = 0;
+let dogFrame = 0;
+let dogAnimation = 0;
+let dogSprite = [dogSprite1, dogSprite2];</script>
+    <script>const colors = {
+  "M": "grey",
+  "D": "brown",
+  "Q": "black",
+  "W": "grey",
+  "E": "darkgrey",
+  "A": "DarkGoldenRod",
+  "Y": "Yellow",
+  "O": "orange",
+  "G": "green",
+  "T": "white",
+  "B": "blue",
+  "R": "red",
+  "J": "#c47239",
+  "j": "#d79249",
+  "V": "#a55d2d",
+  "K": "#ee4530",
+  "k": "#ff5b34",
+  '-': "transparent"
+};
+
+const KEYS = {
+  up: 87,
+  down: 83,
+  right: 68,
+  left: 65,
+  shoot: 32,
+  enter: 13,
+  z: 90,
+  escape: 27,
+};</script>
+    <script>document.addEventListener("keydown", keyDownHandler, false);
+document.addEventListener("keyup", keyUpHandler, false);
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+canvas.height = 256;
+canvas.width = 800;
+
+const player = {
+  sprite: [playerSprite, playerSpriteWalk, playerSprite, playerSpriteWalk2],
+  frame: 0,
+  animation: 0,
+  x: canvas.width - 72,
+  y: canvas.height - (playerSprite.length * 10),
+  spriteIndexSize: 10,
+  jumping: false,
+  face: "right",
+  color: "white",
+  speed: 2,
+};
+
+function draw() {
+  ctx.fillStyle = "#d8ccc5";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (level == 1 && dog && !showDialog) {
+    ctx.fillStyle = "white"
+    ctx.fillRect(canvas.width - 148, canvas.height / 2 - 16, 64, 64)
+    drawSprite(dogSprite[0], canvas.width - 128, canvas.height / 2, 2, 2);
+    drawText("Lost Dog", canvas.width - 148, canvas.height / 2 + 40, 16, "black")
+  }
+
+  if (room404) {
+    drawSprite(playerSprite,570,player.y,player.spriteIndexSize,player.spriteIndexSize);
+    drawSprite(playerSprite,620,player.y,player.spriteIndexSize,player.spriteIndexSize);
+    drawSprite(playerSprite,280,player.y,player.spriteIndexSize,player.spriteIndexSize);
+    drawSprite(playerSprite,340,player.y,player.spriteIndexSize,player.spriteIndexSize);
+
+    drawSprite(doorSprite, 123, 138, 8, 8);
+
+    ctx.fillStyle="white"
+    ctx.fillRect(400, canvas.height / 2 - 80, 165, 50)
+    drawText('Congratulations', 410, canvas.height / 2 - 50, 20, "black");
+    drawText('Surprise!', 20, 32, 20, "white");
+    drawSprite(cake, 450, 142, 4, 4);
+    drawSprite(desk, 400, 194, 8, 8);
+
+  } else if (room202) {
+    drawSprite(closet, 400, 138, 8, 8);
+    drawSprite(desk, 200, 194, 8, 8);
+    drawSprite(doorSprite, 123, 138, 8, 8);
+    drawSprite(doorSprite, 560, 138, 8, 8);
+  } else if (room501) {
+    ctx.fillStyle = "lightgrey";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+    drawSprite(doorSprite, 100, 138, 8, 8);
+    drawSprite(airductSprite, 416, canvas.height - 30, 2, 2);
+
+    drawSprite(closetSprite, 500, 128, 8,8)
+    drawSprite(closetSprite, 500, 176, 8,8)
+    drawSprite(closetSprite, 620, 128, 8,8)
+    drawSprite(closetSprite, 620, 176, 8,8)
+    drawSprite(boxesSprite, 620, canvas.height - 4 * boxesSprite.length, 4,4)
+    drawSprite(boxesSprite1, 560, canvas.height - 4 * boxesSprite.length, 4,4)
+    drawSprite(broomSprite, 732, canvas.height - 4 * broomSprite.length, 4,4)  
+  } else if (room405) {
+    ctx.fillStyle = "pink";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+
+    drawSprite(doorSprite, 100, 138, 8, 8);
+    
+    drawSprite(holeSprite, 560, canvas.height/2 - 32, 8, 8);
+  } else if (showDialog) {
+    ctx.fillStyle = "white";
+    ctx.fillRect(canvas.width / 2 - 62, 62, 125, 125);
+    for (let i = 1; i <= 5; i++) {
+      if (level === i) {
+        ctx.fillStyle = "blue";
+        ctx.fillRect(canvas.width / 2 - 62, 62 + (i - 1) * 25, 125, 25);
+      }
+      let cl = level != i ? "black" : "white";
+      drawText(
+        i,
+        canvas.width / 2 - ctx.measureText(i).width / 2,
+        80 + 25 * (i - 1),
+        20,
+        cl
+      );
+    }
+    drawText("To select the floor use Z", canvas.width / 2 - 80, canvas.height - 32, 16, 'black')
+  } else if (asked) {
+    ctx.fillStyle = "white";
+    ctx.fillRect(canvas.width / 2 - 64, 64, 128, 128);
+
+    ctx.fillStyle = "blue";
+    let customHeight = !response ? 50 : 30;
+    ctx.fillRect(canvas.width / 2 - 64, 64 + customHeight, 128, 22);
+
+    drawText(
+      question,
+      canvas.width / 2 - ctx.measureText(question).width / 2 + 32,
+      86,
+      12,
+      "black"
+    );
+    drawText(
+      "yes",
+      canvas.width / 2 - ctx.measureText("yes").width / 2 - 8,
+      108,
+      20,
+      response ? "white" : "black"
+    );
+    drawText(
+      "no",
+      canvas.width / 2 - ctx.measureText("no").width / 2 - 8,
+      130,
+      20,
+      response ? "black" : "white"
+    );
+  } else {
+    doors.forEach((x, i) => {
+      if (level === 1 && i > 2) {
+      } else {
+        drawText(`${level}0${i + 1}`, x + 19, 120, 20, "white");
+      }
+      if (level === 4 && i === 3) {
+      } else if (level === 1 && i > 2) {
+      } else drawSprite(doorSprite, x, 138, 8, 8);
+    });
+    drawSprite(elevator, 0, 120, 8, 140);
+  }
+  if (!showDialog && !asked) {
+    drawSprite(
+      player.sprite[player.frame],
+      player.x,
+      player.y,
+      player.spriteIndexSize,
+      player.spriteIndexSize
+    );
+
+    if (dog) {
+      if (player.x - dogSprite[dogFrame].length - 64 < 0) drawSprite(dogSprite[dogFrame], player.x + 64, canvas.height - dogSprite[dogFrame].length * 3, 3, 3);
+      else drawSprite(dogSprite[dogFrame], player.x - 64, canvas.height - dogSprite[dogFrame].length * 3, 3, 3);
+    }
+  }
+
+  if (dialog && !showDialog && !asked) {
+    ctx.fillStyle = "darkgrey"
+    ctx.fillRect(player.x + 10, canvas.height / 2, 40, 40)
+    ctx.beginPath();
+    ctx.moveTo(player.x + 10, canvas.height / 2);
+    ctx.lineTo(player.x + 10, canvas.height / 2 + 40);
+    ctx.moveTo(player.x + 10, canvas.height / 2 + 40);
+    ctx.lineTo(player.x + 50, canvas.height / 2 + 40);
+    ctx.moveTo(player.x + 50, canvas.height / 2 + 40);
+    ctx.lineTo(player.x + 50, canvas.height / 2);
+    ctx.moveTo(player.x + 50, canvas.height / 2);
+    ctx.lineTo(player.x + 10, canvas.height / 2);
+    ctx.strokeStyle = "black";
+    ctx.stroke();
+    //drawText('Z', player.x + 22, player.y - 24, 20, "black")
+    ctx.beginPath();
+    ctx.moveTo(player.x + 30, canvas.height / 2 + 12);
+    ctx.lineTo(player.x + 20, canvas.height / 2 + 26);
+    ctx.moveTo(player.x + 20, canvas.height / 2 + 26);
+    ctx.lineTo(player.x + 40, canvas.height / 2 + 26);
+    ctx.moveTo(player.x + 40, canvas.height / 2 + 26);
+    ctx.lineTo(player.x + 30, canvas.height / 2 + 12);
+    ctx.strokeStyle = "black";
+    ctx.stroke();
+  }
+
+  drawText(dialog, 20, 32, 20, "white");
+  if (money) drawSprite(moneySprite, canvas.width - 64, 10, 2, 2);
+  if (screwdriver) drawSprite(screwdriverSprite, canvas.width - 64, 10, 2, 2);
+  if (password) drawSprite(passwordSprite, canvas.width - 64, 10, 2, 2);
+  if (keys) drawSprite(keySprite, canvas.width - 64, 10, 2, 2);
+}
+
+function update() {
+  if (showDialog) {
+    if (keyUp) {
+      elevatorSoundPlay()
+      keyUp = false;
+      level--;
+      if (level < 1) {
+        level = 5;
+      }
+    }
+    if (keyDown) {
+      elevatorSoundPlay()
+      keyDown = false;
+      level++;
+      if (level > 5) {
+        level = 1;
+      }
+    }
+    if (keyEnter || keyZ) {
+      selectSoundPlay()
+      keyEnter = keyZ = false;
+      showDialog = false;
+    }
+    if (keyEscape) {
+      keyEscape = false;
+      level = levelBefore;
+      showDialog = false;
+    }
+  } else if (asked) {
+    if (keyUp || keyDown) {
+      elevatorSoundPlay()
+      keyUp = false;
+      keyDown = false;
+      response = !response;
+    }
+    if (keyEnter || keyZ) {
+      selectSoundPlay()
+      if (response) {
+        player.x = 100;
+        if (level == 2) {
+          room202 = true;
+          dog = true;
+          asked = false;
+          question = "";
+        } else if (level == 4 && door == 2) {
+          money = false;
+          password = true;
+          asked = false;
+          question = "";
+        } else if (level == 4 && door == 1) {
+          screwdriver = true;
+          password = false;
+          asked = false;
+          question = "";
+        } else if (level == 4 && door == 5) {
+          key = false;
+          asked = false;
+          room405 = true;
+          question = "";
+        } else if (level == 5 && door == 1) {
+          room501 = true;
+          asked = false;
+          question = "";
+        }
+      } else {
+        asked = false;
+        question = "";
+      }
+    }
+  } else {
+    if (dialog == "ELEVATOR" && keyUp) {
+      elevatorSoundPlay()
+      showDialog = true;
+      levelBefore = level;
+      keyUp = false;
+    } else if (dialog.split(" ")[0] == "Open" && keyUp) {
+      knockSoundPlay()
+      gameLogic();
+      keyUp = false;
+    } else if (dialog.split(" ")[0] == "Take" && keyUp) {
+      elevatorSoundPlay()
+      closet[6][14] = "A";
+      money = true;
+      keyUp = false;
+    } else if (dialog == "Leave" && (room202 || room501) && keyUp) {
+      elevatorSoundPlay()
+      room202 = false;
+      room501 = false;
+      keyUp = false;
+    } else if (dialog[0] == "E" && (room405) && keyUp) {
+      elevatorSoundPlay()
+      playFinalSound()
+      room405 = false;
+      room404 = true;
+      keyUp = false;
+    } else if (dialog[0] == "U" && room501 && keyUp) {
+      elevatorSoundPlay()
+      player.x = 100
+      keys = true;
+      airductSprite = airductSpriteOpen
+      screwdriver = false;
+      keyUp = false;
+    } else {
+      if (keyRight) {
+        if (player.x + player.spriteIndexSize*8 > canvas.width) player.x = canvas.width - player.spriteIndexSize * 8
+        player.x += player.speed;
+        player.animation++
+        if (player.animation > 16) {
+          walkSoundPlay()
+          player.frame++
+          if (player.frame == 4) player.frame = 0
+          player.animation = 0
+        }
+      }
+      if (keyLeft) {
+        if (player.x<0) player.x = 0
+        player.x -= player.speed;
+        player.animation++
+        if (player.animation > 16) {
+          walkSoundPlay()
+          player.frame++
+          if (player.frame == 4) player.frame = 0
+          player.animation = 0
+        }
+      }
+
+      if (dog) {
+        dogAnimation++
+        if (dogAnimation > 32) {
+          dogFrame++
+          dogAnimation = 0
+          if (dogFrame == 2) {
+            dogFrame = 0
+          }
+        }
+      }
+
+      if (timer == -1) {
+        checkPlayerCollision();
+      }
+
+      if (room404) {
+        keyLeft = false
+        keyRight = false
+      }
+
+      if (changeDirection != player.face) {
+        if (player.face == "left") player.sprite = [playerSpriteR, playerSpriteWalkR, playerSpriteR, playerSpriteWalk2R]
+        else player.sprite = [playerSprite, playerSpriteWalk, playerSprite, playerSpriteWalk2]
+        player.face = changeDirection
+      }
+    }
+  }
+}
+
+function checkPlayerCollision() {
+  if (room202) {
+    if (player.x + 56 > 123 && player.x < 192) dialog = "Leave";
+    else if (player.x + 56 > 560 && player.x < 632)
+      dialog = "I'm taking a shower, I leave in a minute";
+    else if (player.x + 56 > 500 && player.x < 572 && closet[6][14] === "G")
+      dialog = "Take the money";
+    else dialog = "";
+  } else if(room404) {
+    player.x = 100
+    dialog = ""
+  } else if (room405) {
+    if (player.x + 56 > 560 && player.x < 632) {
+      dialog = "Enter the hole?"
+    }
+  }else if (room501) {
+    if (player.x + 56 > 100 && player.x < 172) dialog = "Leave";
+    else if (player.x + 56 > 416 && player.x < 488) {
+      dialog = screwdriver ? "Use Screwdriver" : "";
+    } else dialog = "";
+  } else {
+    if (player.x + 56 > 100 && player.x < 172) {
+      door = 1;
+      dialog = `Open door ${level}0${door}`;
+    } else if (player.x + 56 > 250 && player.x < 322) {
+      door = 2;
+      dialog = `Open door ${level}0${door}`;
+    } else if (player.x + 56 > 400 && player.x < 472) {
+      door = 3;
+      dialog = `Open door ${level}0${door}`;
+    } else if (player.x + 56 > 550 && player.x < 622) {
+      if (level !== 1) {
+        door = 4;
+        dialog = `Open door ${level}0${door}`;
+      }
+    } else if (player.x + 56 > 700 && player.x < 722) {
+      if (level !== 1) {
+        door = 5;
+        dialog = `Open door ${level}0${door}`;
+      }
+    } else if (player.x <= 24) {
+      dialog = "ELEVATOR";
+    } else {
+      dialog = "";
+      timer = -1;
+    }
+  }
+}
+
+function keyDownHandler(event) {
+  switch (event.keyCode) {
+    case KEYS.right:
+      keyRight = true;
+      changeDirection = 'right'
+      break;
+    case KEYS.left:
+      if (player.x > 0) {
+        keyLeft = true;
+        changeDirection = 'left'
+      }
+      break;
+    case KEYS.up:
+      keyUp = true;
+      break;
+    case KEYS.down:
+      keyDown = true;
+      break;
+    case KEYS.z:
+      keyZ = true;
+      break;
+    case KEYS.enter:
+      keyEnter = true;
+      break;
+    case KEYS.escape:
+      keyEscape = true;
+      break;
+  }
+}
+function keyUpHandler(event) {
+  switch (event.keyCode) {
+    case KEYS.right:
+      keyRight = false;
+      player.frame = 0;
+      player.animation = 0;
+      break;
+    case KEYS.left:
+      keyLeft = false;
+      player.frame = 0;
+      player.animation = 0;
+      break;
+    case KEYS.up:
+      keyUp = false;
+      break;
+    case KEYS.down:
+      keyDown = false;
+      break;
+    case KEYS.enter:
+      keyEnter = false;
+      break;
+    case KEYS.z:
+      keyZ = false;
+      break;
+    case KEYS.escape:
+      keyEscape = false;
+      break;
+  }
+}
+
+function handleHint() {
+  if (currentHint == 0) {currentHint = 1; return "Knock my door anytime you need a hint...";}
+  else if (currentHint == 1) return "In the half of your home you can find what you need";
+  if (money) { currentHint = 2; return "Money buys any information";}
+  else if (password) return "With the right password you got screw";
+  else if (screwdriver) return "Let the air flow";
+  else if (keys) return "Help thy neighbour";
+  else return "Don't be scared";
+}
+
+function gameLogic() {
+  const txt = {
+    "11": "Sorry I'm packing...",
+    "12": "I can ask someone if you want to...",
+    "13": handleHint(),
+    "21": "Sorry I'm packing...",
+    "22": "Come on in...",
+    "23": "I can't say anything",
+    "24": "Nobody lives here",
+    "25": "Buy I new home ",
+    "31": "This guy moved out...",
+    "32": "Come back latter",
+    "33": "Maybe someone else can help you...",
+    "34": "I didn't see anything diferent",
+    "35": "Maybe you need a secure ",
+    "41": `What it's the password?...${password ? "ok...you can take this" : "...no"}`,
+    "42": "How much can you pay?",
+    "43": "I can't talk to you",
+    "44": "Where is my door?",
+    "45": "Sorry, I can't open the door",
+    "51": "This is the janitor Room",
+    "52": "Maybe the room 505 could help you",
+    "53": "ZZZZzzzZZZZzzZZ",
+    "54": "...",
+    "55": "אני לא מדבר אנגלית",
+  };
+  const actions = {
+    "22": { asked: true, question: "Enter the room?" },
+    "41": { asked: password, question: "Take?" },
+    "42": { asked: money, question: "Give money?" },
+    "45": { asked: keys, question: "Open the door?" },
+    "51": { asked: true, question: "Enter the room?" },
+  };
+  let id = `${level}${door}`;
+  dialog = txt[id];
+  if (id == "22" || id == "41" || id == "42" || id == "45" || id == "51") {
+    asked = actions[id].asked;
+    question = actions[id].question;
+  }
+  timerStart();
+}
+
+const timerStart = (time = 2 * 60) => (timer = time);
+
+function drawSprite(sprite, x, y, w, h) {
+  sprite.forEach((r, rI) => {
+    r.forEach((c, cI) => {
+      ctx.fillStyle = colors[c];
+      ctx.fillRect(x + cI * w, y + rI * h, w, h);
+    });
+  });
+}
+
+function drawText(t, x, y, s, c) {
+  ctx.font = `${s}px Georgia`;
+  ctx.fillStyle = c;
+  ctx.fillText(t, x, y);
+}
+
+setInterval(function () {
+  if (timer > -1) {
+    timer--;
+    if (timer == -1) {}//timeOut();
+  }
+
+  update();
+  draw();
+}, 1000 / 60);
+</script>
+  </body>
+</html>

@@ -1,0 +1,2784 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>*{
+    margin: 0;
+}
+
+html{
+    height: 100%;
+}
+
+body{
+    overflow:hidden;
+    height: 100%;
+    width: 100%;
+    background-color:black;
+    display: table;
+}
+
+#out{
+    height:100%;
+    width:100%;
+}
+
+#in{
+    outline : 1px solid white;
+    margin: 0 auto;
+    height:100%;
+    width:100%;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+}</style>
+    <title>B</title>
+
+
+  </head>
+  <body>
+    <div id="out">
+      <div id="in">
+        <canvas id="13canvas" width="768" height="640"></canvas>
+      </div>
+    </div>
+
+
+    <script>let
+    ctx = document.getElementById("13canvas").getContext("2d"),
+    w = 768,
+    h = 640,
+
+    vx = 0,
+    mapw = 3000,
+    running = null,
+
+    keys = {},
+    gravity = 9.81,
+    dt = 0.001,
+    controlKeys = {},
+    actions = {},
+    antiActions = {},
+    groundHeight = 200,
+    fixed = false,
+    hero = null,
+    boss = null,
+    bossActive = false,
+    globalSnapshot = {},
+    heroSnapshot = [],
+    bowForce = 50,
+    shooting = false,
+    moving = false,
+    sky = [],
+    superTime = 1000,
+    cd = {
+        destory:[9000, 10000],
+        summon:[10000, 15000]
+    },
+    cycler = 1,
+    monster1Die = false,
+
+    events = [],
+    happend = [true, true, true, true, true],
+    startEvents = [],
+    startHappend = [true, true, true],
+    enemyView = 500,
+
+    groups = {},
+    isSave = true,
+    difGupContacts = {},
+    sameGupContacts = {},
+    enemyVeclocity =  3e12,
+    timeouts = []
+    bound = {
+        uX: 3000,
+        uY: 1000,
+        lX: 0,
+        lY: 0
+    },
+
+    stoneConfig = {
+        den: 0.0002,
+        space: 10
+    },
+
+    demStepInPerFrame = 100,
+
+    toolText = [
+        '↑↓←→ to move',
+        `'c' to jump`,
+        `'x' to attack`,
+        `'z' to backtracking`
+    ],
+    toolTextIndex = -1,
+    winCap = 0,
+    dieCap = 0,
+    saveCap = 0
+    ; </script>
+    <script>onresize = function () {
+    var mw = innerWidth,
+        mh = innerHeight,
+
+        ar = mw / mh, // available ratio
+        br = 1.2, // base ratio
+        w,
+        h,
+        s = document.querySelector('#in').style;
+
+    if (ar <= br) {
+        w = mw;
+        h = w / br;
+    } else {
+        h = mh;
+        w = h * br;
+    }
+
+    s.width = w + 'px';
+    s.height = h + 'px';
+}
+
+onkeydown = function (e) {
+    // this.console.log(e.keyCode)
+    switch (e.keyCode) {
+        case 38:
+            controlKeys['up'] = true
+            break;
+        case 40:
+            controlKeys['down'] = true
+            break;
+        case 37:
+            controlKeys['left'] = true
+            break;
+        case 39:
+            controlKeys['right'] = true
+            break;
+        case 67:
+            controlKeys['c'] = true
+            break;
+        case 90:
+            controlKeys['z'] = true
+            break
+        // case 87:
+        //     controlKeys['w'] = true
+        //     break
+        case 69:
+            controlKeys['e'] = true
+            break
+        case 88:
+            controlKeys['x'] = true
+            break
+        case 77:
+            controlKeys['m'] = true
+            break;
+    }
+}
+
+onkeyup = function (e) {
+    switch (e.keyCode) {
+        case 38:
+            controlKeys['up'] = false
+            break;
+        case 40:
+            controlKeys['down'] = false
+            break;
+        case 37:
+            controlKeys['left'] = false
+            break;
+        case 39:
+            controlKeys['right'] = false
+            break;
+        case 67:
+            controlKeys['c'] = false
+            break;
+        case 90:
+            controlKeys['z'] = false
+            break;
+        // case 87:
+        //     controlKeys['w'] = false
+        //     break
+        case 69:
+            controlKeys['e'] = false
+            break
+        case 88:
+            controlKeys['x'] = false
+            break
+        case 77:
+            controlKeys['m'] = false
+            break
+    }
+}</script>
+    <script>
+let dot = (v1, v2) => {
+    return v1[0] * v2[0] + v1[1] * v2[1]
+}
+
+let scale = (t , v) => {
+    return [v[0] * t, v[1] * t]
+}
+
+let normalization = (v) => {
+    let t = Math.sqrt(dot(v, v))
+    return scale(t, v)
+}
+
+let distance = (v1, v2) =>{
+    let v = minus(v1, v2)
+    return Math.sqrt(dot(v,v))
+}
+
+let minus = (v1, v2) => {
+    return [v2[0] - v1[0], v2[1] - v1[1]]
+}
+
+let plus = (v1, v2) => {
+    return [v1[0] + v2[0], v1[1] + v2[1]]
+}
+
+let randomRange = (n1, n2)=>{
+    if(n1 > n2) throw new Error(`n1-${n1} must bigger than n2-${n2}`)
+
+    let dis = n2 - n1
+    return n1 + Math.floor(Math.random()*dis)
+}</script>
+    <script>
+class ContactPlane {
+    constructor(e1Index, e2Index) {
+        this.nc = [0, 0]
+        this.gc = 0
+        this.dis = 0
+
+        this.f = [0, 0]
+
+        this.rV = [0, 0]
+        this.inD = [0, 0]
+
+        this.isContact = false
+        this.isBound = false
+        this.element1Index = e1Index
+        this.element2Index = e2Index
+    }
+}
+
+
+class Rectangle {
+    constructor(ltx, lty, w, h, vx, vy, density) {
+        this.mass = w * h * density
+        this.invm = 1 / this.mass
+
+        this.pos = [
+            ltx + w * 0.5,
+            lty + h * 0.5
+        ]
+
+        this.lt = [ltx, lty]
+
+        this.rd = [
+            ltx + w,
+            lty + h
+        ]
+
+        this.len = { w, h }
+
+        this.f = [0, 0]
+
+        this.v = [vx, vy]
+    }
+}
+
+class Contact {
+    constructor(group1Index, group2Index, kn, pkn) {
+        this.kn = kn
+        this.pkn = pkn
+        this.group1Index = group1Index
+        this.group2Index = group2Index
+        this.contactPlanes = {
+
+        }
+    }
+}   
+
+class Group {
+    constructor(name, density, damp, isRigid) {
+        this.isRigid = isRigid
+        this.damp = damp
+        this.density = density
+        this.name = name
+        this.elements = []
+        this.bc = [0, 0]
+        this.snapshots = []
+    }
+}
+</script>
+    <script>class Hero extends Rectangle {
+    constructor(ltx, lty, w, h, vx, vy, density, hp, atk) {
+        super(ltx, lty, w, h, vx, vy, density)
+
+        this.face = 1
+        this.canJump = false
+        this.isSuper = false
+        this.canBack = false
+        this.hp = hp
+        this.maxHp = hp
+        this.atk = atk
+    }
+}
+
+class Enemy extends Rectangle {
+    constructor(ltx, lty, w, h, vx, vy, density, skin, hp, atk, id) {
+        super(ltx, lty, w, h, vx, vy, density)
+        this.id = id
+        this.face = 1
+        this.canMove = true
+        this.skin = skin
+        this.hp = hp
+        this.maxHp = hp
+        this.atk = atk
+    }
+}
+
+class Boss extends Rectangle {
+    constructor(ltx, lty, w, h, vx, vy, density, hp, atk) {
+        super(ltx, lty, w, h, vx, vy, density)
+        this.hp = hp
+        this.maxHp = hp
+        this.atk = atk
+
+
+        this.skill = {
+            canDestory: false,
+            canSummon: false
+        }
+    }
+}
+
+class Ground extends Rectangle {
+    constructor(ltx, lty, w, h, vx, vy, density) {
+        super(ltx, lty, w, h, vx, vy, density)
+
+        this.stones = []
+        let num = stoneConfig.den * w * h
+        let space = stoneConfig.space
+        for (let i = 0; i < num; i++) {
+            let x = Math.random() * (w - 20)
+            let y = Math.random() * (h - 40)
+
+            let type = Math.floor(Math.random() * 5)
+
+            switch (type) {
+                case 0:
+                case 1:
+                    this.stones.push(
+                        [x, y]
+                    )
+                    break;
+                case 2:
+                    this.stones.push(
+                        [x, y], [x + space, y], [x, y + space], [x + space, y + space]
+                    )
+                    break;
+                case 3:
+                    this.stones.push(
+                        [x, y], [x + space, y]
+                    )
+                    break;
+                case 4:
+                    this.stones.push(
+                        [x, y], [x + space, y], [x + space * 2, y]
+                    )
+            }
+        }
+    }
+}
+
+
+class Arrow extends Rectangle {
+    constructor(ltx, lty, w, h, vx, vy, density, face) {
+        super(ltx, lty, w, h, vx, vy, density)
+        this.face = face
+
+    }
+}</script>
+    <script>!function(a,b){"function"==typeof define&&define.amd?define(["exports"],b):b("object"==typeof exports&&"string"!=typeof exports.nodeName?exports:a.TinyMusic={})}(this,function(a){function b(a){var c=a.split(h);this.frequency=b.getFrequency(c[0])||0,this.duration=b.getDuration(c[1])||0}function c(a,b,c){this.ac=a||new AudioContext,this.createFxNodes(),this.tempo=b||120,this.loop=!0,this.smoothing=0,this.staccato=0,this.notes=[],this.push.apply(this,c||[])}var d="B#-C|C#-Db|D|D#-Eb|E-Fb|E#-F|F#-Gb|G|G#-Ab|A|A#-Bb|B-Cb",e=440*Math.pow(Math.pow(2,1/12),-9),f=/^[0-9.]+$/,g=4,h=/\s+/,i=/(\d+)/,j={};d.split("|").forEach(function(a,b){a.split("-").forEach(function(a){j[a]=b})}),b.getFrequency=function(a){var b=a.split(i),c=j[b[0]],d=(b[1]||g)-g,f=e*Math.pow(Math.pow(2,1/12),c);return f*Math.pow(2,d)},b.getDuration=function(a){return f.test(a)?parseFloat(a):a.toLowerCase().split("").reduce(function(a,b){return a+("w"===b?4:"h"===b?2:"q"===b?1:"e"===b?.5:"s"===b?.25:0)},0)},c.prototype.createFxNodes=function(){var a=[["bass",100],["mid",1e3],["treble",2500]],b=this.gain=this.ac.createGain();return a.forEach(function(a,c){c=this[a[0]]=this.ac.createBiquadFilter(),c.type="peaking",c.frequency.value=a[1],b.connect(b=c)}.bind(this)),b.connect(this.ac.destination),this},c.prototype.push=function(){return Array.prototype.forEach.call(arguments,function(a){this.notes.push(a instanceof b?a:new b(a))}.bind(this)),this},c.prototype.createCustomWave=function(a,b){b||(b=a),this.waveType="custom",this.customWave=[new Float32Array(a),new Float32Array(b)]},c.prototype.createOscillator=function(){return this.stop(),this.osc=this.ac.createOscillator(),this.customWave?this.osc.setPeriodicWave(this.ac.createPeriodicWave.apply(this.ac,this.customWave)):this.osc.type=this.waveType||"square",this.osc.connect(this.gain),this},c.prototype.scheduleNote=function(a,b){var c=60/this.tempo*this.notes[a].duration,d=c*(1-(this.staccato||0));return this.setFrequency(this.notes[a].frequency,b),this.smoothing&&this.notes[a].frequency&&this.slide(a,b,d),this.setFrequency(0,b+d),b+c},c.prototype.getNextNote=function(a){return this.notes[a<this.notes.length-1?a+1:0]},c.prototype.getSlideStartDelay=function(a){return a-Math.min(a,60/this.tempo*this.smoothing)},c.prototype.slide=function(a,b,c){var d=this.getNextNote(a),e=this.getSlideStartDelay(c);return this.setFrequency(this.notes[a].frequency,b+e),this.rampFrequency(d.frequency,b+c),this},c.prototype.setFrequency=function(a,b){return this.osc.frequency.setValueAtTime(a,b),this},c.prototype.rampFrequency=function(a,b){return this.osc.frequency.linearRampToValueAtTime(a,b),this},c.prototype.play=function(a){return a="number"==typeof a?a:this.ac.currentTime,this.createOscillator(),this.osc.start(a),this.notes.forEach(function(b,c){a=this.scheduleNote(c,a)}.bind(this)),this.osc.stop(a),this.osc.onended=this.loop?this.play.bind(this,a):null,this},c.prototype.stop=function(){return this.osc&&(this.osc.onended=null,this.osc.disconnect(),this.osc=null),this},a.Note=b,a.Sequence=c});
+</script>
+    <script>// create the audio context
+var ac = typeof AudioContext !== 'undefined' ? new AudioContext : new webkitAudioContext,
+
+    // set the tempo
+    tempo = 240,
+
+    // create an array of "note strings" that can be passed to a sequence
+    lead = [
+        '- h', 'A4 h', 'Bb4 h', 'D5 h',
+        'C5 h', 'Bb4 q', 'A4 q', 'G4 h', 'C4 h',
+        'F4 h', 'G4 h', 'A4 h', 'Bb4 q', 'A4 q',
+        'G4 8',
+        '- h', 'A3 h', 'Bb3 h', 'D4 h',
+        'C4 w', 'G4 q', 'A4 q', 'Bb4 q', 'G4 q',
+        'A4 h', 'A3 h', 'Bb3 h', 'Bb4 h',
+        'G4 h', 'G4 q', 'A4 q', 'Bb4 h', 'G4 h',
+        'A4 w', 'C5 w',
+        'Bb4 6', 'A4 q',
+        'D5 w', 'C5 w',
+        'G4 h', 'G4 q', 'A4 q', 'Bb4 w', 'G4 w',
+        'A4 w', 'C5 w',
+        'Bb4 6', 'A4 h',
+        'D5 q', 'E4 q', 'C5 q', 'C3 q',
+        'C5 h', 'G4 q', 'A4 q', 'Bb4 h', 'B4 h',
+        'C5 h', 'G4 q', 'A4 q', 'Bb4 h', 'B4 h',
+        'C5 h', 'G4 q', 'A4 q', 'Bb4 h', 'B4 h',
+        'C5 h', 'G4 q', 'A4 q', 'Bb4 h', 'B4 h', //
+        'C5 h', 'A4 q', 'Bb4 q', 'C5 h', 'Db5 h',
+        'D5 h', 'Bb4 q', 'C5 q', 'D5 h', 'E5 h',
+        'F5 h', 'D5 q', 'E5 q', 'F5 h', 'G5 h',
+        'A5 h', 'A5 h', 'Bb5 h', 'D6 h',
+
+    ],
+
+    horn = [
+        'C3 8',
+        'C3 8',
+        'C3 8',
+        'C3 8',
+        'F3 w', 'D3 w',
+        'E3 w', 'C3 w',
+        'F3 w', 'D3 w',
+        'E3 6', 'C3 h',
+        'F3 w', 'C4 w',
+        'C4 6', 'F3 q',
+        'B2 w', 'C4 w',
+        'C4 8',
+        'F3 w', 'A3 w',
+        'G3 6', 'F3 h',
+        'F3 w', 'F3 w',
+        'G3 6', 'D4 h',
+        'G3 6', 'D4 h',
+        'G3 6', 'D4 h',
+        'G3 h', '- 6', //
+        '- h', 'A3 q', 'Bb3 q', 'C4 h', 'Cb4 h',
+        'D4 h', 'Bb3 q', 'C4 q', 'D4 h', 'E4 h',
+        'F4 h', 'D4 q', 'E4 q', 'F4 h', 'G4 h',
+        'C3 h', 'C3 h', 'C3 h', '3 h3'
+    ],
+
+    fen = 0.125,
+    shootF = [
+        `G3 ${fen}`, `A3 ${fen}`, `B3 ${fen}`, `C4 ${fen}`, `D4 ${fen}`, `E4 ${fen}`
+    ],
+
+    jumpF = [
+        'B2 s',
+        'C2 s'
+    ]
+
+// create 3 new sequences (one for lead, one for harmony, one for bass)
+mainAudio = new TinyMusic.Sequence(ac, tempo, lead),
+subAudio = new TinyMusic.Sequence(ac, tempo, horn),
+jumpAudio = new TinyMusic.Sequence(ac, tempo, jumpF),
+shootAudio = new TinyMusic.Sequence(ac, tempo, shootF),
+reverseMainAudio = new TinyMusic.Sequence(ac, tempo *10, lead.reverse()),
+reverseSubAudio = new TinyMusic.Sequence(ac, tempo * 10, horn.reverse()),
+
+// //cloase the loop play
+mainAudio.loop = true;
+subAudio.loop = true;
+reverseMainAudio.loop = true
+reverseSubAudio.loop = true
+jumpAudio.loop = false;
+shootAudio.loop = false;
+// sequence1.smoothing = 0.1
+
+// set staccato and smoothing values for maximum coolness
+mainAudio.staccato = 0.55;
+subAudio.staccato = 0.55;
+jumpAudio.staccato = 0.55;
+shootAudio.staccato = 0.55;
+
+// adjust the levels so the bass and harmony aren't too loud
+mainAudio.gain.gain.value = 0.05;
+subAudio.gain.gain.value = 0.03;
+jumpAudio.gain.gain.value = 0.03;
+shootAudio.gain.gain.value = 0.03;
+reverseMainAudio.gain.gain.value = 0.05;
+reverseSubAudio.gain.gain.value = 0.03;
+
+// apply EQ settings
+mainAudio.mid.frequency.value = 1000;
+mainAudio.mid.gain.value = 2;
+jumpAudio.mid.gain.value = 2;
+
+reverseMainAudio.mid.frequency.value = 1000;
+reverseMainAudio.mid.gain.value = 2;
+reverseSubAudio.mid.gain.value = 2;
+
+let playReserverMusic = () =>{
+    reverseMainAudio.play()
+    reverseSubAudio.play()
+}
+
+let stopReserverMusic = () => {
+    reverseMainAudio.stop()
+    reverseSubAudio.stop()
+}
+
+let playMusic = () => {
+    mainAudio.play()
+    subAudio.play()
+}
+
+let stopMusic = () => {
+    mainAudio.stop()
+    subAudio.stop()
+}
+
+let playJumpAudio = () => {
+    jumpAudio.stop()
+    jumpAudio.play()
+}
+
+let playShootMusic = () => {
+    shootAudio.stop()
+    shootAudio.play()
+}</script>
+
+    <script>heroSkin = {
+    'priority': ['face', 'cloth', 'hair', 'eye', 'bow', 'hand', 'left-foot', 'right-foot'],
+    // 'priority': ['cloth'],
+    'hair': {
+        'main': {
+            'color': '#040000',
+            'points': [
+                [[2, 1], [7, 9]],
+                [[8, 1], [12, 5]],
+                [[13, 2], [18, 4]],
+                [[6, 0], [9, 0]],
+                [3, 0], [11, 0], [12, 0], [15, 0],
+                [[15, 1], [17, 1]],
+                [19, 1],
+                [[1, 2], [1, 6]],
+                [0, 3], [19, 3], [19, 3],
+                [19, 4],
+                [0, 5],
+                [0, 6], [8, 6], [9, 6], [16, 6], [17, 6], [18, 6],
+                [8, 7], [[17, 7], [19, 7]],
+                [1, 8], [19, 8],
+                [[0, 9], [2, 9]], [10, 9],
+                [0, 10], [1, 10], [10, 10], [11, 10],
+                [11, 11],
+                [[3, 10], [6, 12]],
+                [6, 13]
+            ]
+        }
+    },
+    'face': {
+        'main': {
+            'color': '#F9D4A5',
+            'points': [
+                [[6, 5], [15, 13]],
+                [[16, 6], [16, 12]],
+                [[17, 8], [17, 10]],
+                [[6, 14], [9, 14]]
+            ]
+        }
+    },
+    'eye': {
+        'main': {
+            'color': '#FFFFFF',
+            'points': [
+                [15, 9]
+            ]
+        }
+    },
+    'cloth': {
+        'main': {
+            'color': '#404040',
+            'points': [
+                [[3, 13], [16, 30]],
+                [[17, 15], [17, 29]]
+            ]
+        }
+    },
+    'hand': {
+        'border': {
+            'color': '#000000',
+            'points': [
+                [[7, 18], [7, 25]],
+                [[13, 17], [13, 25]],
+                [[7, 26], [13, 26]]
+            ]
+        },
+        'body': {
+            'color': '#F9D4A5',
+            'points': [
+                [[9, 27], [12, 28]]
+            ]
+        }
+    },
+    'bow': {
+        'wood': {
+            'color': '#77634C',
+            'points': [
+                [0, 21], [19, 21],
+                [0, 22], [1, 22], [18, 22], [19, 22],
+                [1, 23], [2, 23], [18, 23],
+                [[2, 24], [5, 24]], [17, 24], [18, 24],
+                [[3, 25], [5, 25]], [16, 25], [17, 25],
+                [[6, 26], [8, 26]], [15, 26], [16, 26],
+                [[6, 27], [15, 27]],
+                [[8, 28], [12, 28]]
+            ]
+        },
+        'line': {
+            'color': '#777268',
+            'points': [
+                [[1, 26], [1, 18]]
+            ]
+        }
+    },
+    'left-foot': {
+        'pants': {
+            'color': '#0E0E0E',
+            'points': [
+                [[3, 31], [8, 37]]
+            ]
+        },
+        'foot': {
+            'color': '#F9D4A5',
+            'points': [
+                [[3, 38], [8, 39]]
+            ]
+        }
+    },
+    'right-foot': {
+        'pants': {
+            'color': '#0E0E0E',
+            'points': [
+                [[12, 31], [17, 37]]
+            ]
+        },
+        'foot': {
+            'color': '#F9D4A5',
+            'points': [
+                [[12, 38], [17, 39]]
+            ]
+        }
+    }
+}
+
+heroShootSkin = JSON.parse(JSON.stringify(heroSkin))
+heroShootSkin.hand = {
+    'main': {
+        'color': '#F9D4A5',
+        'points': [
+            [[7, 19], [7, 22]],
+            [8, 19]
+        ]
+    }
+}
+
+heroShootSkin.bow = {
+    'wood': {
+        'color': '#77634C',
+        'points': [
+            [12, 9], [13, 9],
+            [[13, 10], [15, 11]],
+            [[16, 11], [17, 13]], [15, 12],
+            [17, 14], [17, 15],
+            [[18, 14], [18, 19]],
+            [[19, 17], [19, 26]],
+            [[18, 24], [18, 29]],
+            [[17, 28], [17, 31]],
+            [16, 30], [16, 31], [15, 31], [15, 32],
+            [14, 32], [14, 33], [13, 33]
+        ]
+    },
+    'line': {
+        'color': '#777268',
+        'points': [
+            [[12, 10], [12, 12]],
+            [[11, 12], [11, 14]],
+            [[10, 14], [10, 16]],
+            [[9, 16], [9, 19]],
+            [[8, 20], [8, 22]],
+            [[9, 23], [9, 24]],
+            [[10, 24], [10, 26]],
+            [[11, 26], [11, 29]],
+            [[12, 29], [12, 31]],
+            [[13, 31], [13, 32]]
+        ]
+    },
+    'arrow': {
+        'color': '#55461F',
+        'points': [
+            [[9, 21], [13, 22]],
+            [[13, 20], [18, 21]]
+        ]
+    }
+}
+
+heroMoveSkin = JSON.parse(JSON.stringify(heroSkin))
+delete heroMoveSkin['left-foot']
+delete heroMoveSkin['right-foot']
+heroMoveSkin.priority.push('foot')
+heroMoveSkin['foot'] = {
+    'pants': {
+        'color': '#0E0E0E',
+        'points': [
+            [[5, 29], [15, 30]],
+            [[6, 31], [14, 31]],
+            [[8, 32], [14, 32]],
+            [[7, 33], [14, 33]],
+            [[6, 34], [15, 34]],
+            [[5, 35], [9, 35]], [[12, 35], [16, 35]],
+            [[6, 36], [8, 36]], [[14, 36], [16, 36]],
+            [15, 37], [16, 37]
+        ]
+    },
+    'foot': {
+        'color': '#F9D4A5',
+        'points': [
+            [4, 37], [5, 37], [12, 37], [16, 37],
+            [[4, 38], [7, 39]], [3, 39],
+            [12, 38], [13, 38], [16, 38], [17, 38],
+            [[12, 39], [17, 39]]
+        ]
+    }
+}
+
+heroMoveAndShoot = JSON.parse(JSON.stringify(heroSkin))
+delete heroMoveAndShoot['left-foot']
+delete heroMoveAndShoot['right-foot']
+heroMoveAndShoot.priority.push('foot')
+heroMoveAndShoot.foot = heroMoveSkin['foot']
+heroMoveAndShoot.hand = heroShootSkin.hand
+heroMoveAndShoot.bow = heroShootSkin.bow
+
+
+arrowSkin = {
+    'priority': ['arrow'],
+    'arrow': {
+        'wood': {
+            'color': '#55461F',
+            'points': [
+                [[0, 4], [6, 4]]
+            ]
+        },
+        'sliver': {
+            'color': '#C7D3CF',
+            'points': [
+                [[7, 2], [7, 6]],
+                [[8, 3], [8, 5]],
+                [9, 4]
+            ]
+        },
+        'brown-feather': {
+            'color': '#999886',
+            'points': [
+                [1, 2], [2, 3], [2, 5], [1, 6]
+            ]
+        },
+        'black-feather': {
+            'color': '#182219',
+            'points': [
+                [0, 2], [1, 3], [1, 5], [0, 6]
+            ]
+        }
+    }
+}
+
+monsterSkin1 = {
+    'priority': ['body', 'line'],
+    'body': {
+        'main':{
+            'color': '#656f7d',
+            'points': [
+                [[1,9],[5,14]],
+                [[6,7],[13,13]],
+                [[14,9],[18,14]]
+            ]
+        }
+    },
+    'line': {
+        'main':{
+            'color':'#632871',
+            'points': [
+                [[0, 9], [0, 15]], [0, 18],
+                [[1, 8], [1, 11]], [1,15],[1, 17], [1, 18],
+                [[2, 3], [2, 5]],
+                [[2, 8], [2, 10]],
+                [[2, 15], [3, 18]],
+                [[3, 5], [3, 9]],
+                [[4, 7], [4, 12]], [4, 15],
+                [5, 2], [5, 3], [[5, 6], [5, 8]], [5, 10], [5, 12], [[5, 14], [6, 17]],
+                [[6, 2], [6, 12]],
+                [[7, 5], [7, 7]], [[7, 14], [12, 14]],
+                [[8, 12], [11, 12]], [8, 13], [11, 13],
+                [[8, 4], [11, 6]],
+                [8, 1], [8, 2], [11, 1], [11, 2],
+                [[9, 2], [10, 3]],
+                [[12, 5], [12, 7]],
+                [[13, 2], [13, 12]],
+                [[13, 14], [14, 17]],
+                [14,2],[14,3],[[14,6],[14,8]],[14,12],
+                [14,10],[1,12],
+                [[15,7],[15,12]],[15,15],
+                [[16,5],[16,10]],[[16,15],[17,18]],
+                [[17,3],[17,5]],[[17,8],[17,11]],
+                [[18,9],[18,12]],[18,15],[18,17],[18,18],
+                [[19,10],[19,15]],[19,18],
+                [[6,4],[7,5]],
+            ]
+
+        }
+    }
+}
+
+monsterSkin2 = {
+    'priority': ['body', 'line'],
+    'body': {
+        'main':{
+            'color': '#656f7d',
+            'points':[
+                [17,14],
+                [[16,11],[16,14]],
+                [14,1],[[1,2],[15,17]],
+                [4,1],[3,1],
+                [13,18],[12,18],
+                [[5,18],[7,18]]
+            ]
+        }
+    },
+    'line': {
+        'main':{
+            'color': '#632871',
+            'points':[
+                [[2,0],[5,0]],[[13,0],[15,0]],
+                [1,1],[2,1],[[5,1],[13,1]],[15,1],
+                [[16,1],[16,10]],
+                [[0,2],[0,18]],[1,2],
+                [[5,3],[7,5]],[[12,4],[13,5]],
+                [[1,11],[1,13]],[[2,13],[2,15]],
+                [3,15],[[3,16],[6,16]],
+                [[4,10],[4,12]],[[6,10],[6,12]],
+                [[5,12],[5,14]],[[6,14],[6,16]],
+                [7,13],[7,14],[8,14],[8,15],[9,15],
+                [10,16],[[10,10],[10,12]],[[11,12],[11,16]],
+                [[12,10],[12,13]],[13,13],[13,14],[14,14],
+                [[14,15],[18,15]],[[17,10],[17,13]],[[18,13],[18,15]],
+                [[0,18],[4,18]],[[4,19],[8,19]],[[8,18],[11,18]],
+                [[11,19],[14,19]],[[14,18],[16,18]],
+                [[16,16],[16,18]]
+            ]
+        }
+    }
+}
+
+
+bossSkin = {
+    priority:['body', 'belly','thorn','border'],
+    'body':{
+        'main':{
+            'color':'#17A14D',
+            'points':[
+                [1,5],[1,6],[[4,1],[10,2]],
+                [[2,3],[14,8]],
+                [[5,9],[16,14]],[17,1],[17,14],
+                [[13,15],[19,36]],
+                [[12,37],[16,37]],
+                [[13,38],[15,38]],
+                [[3,35],[8,38]]
+            ]   
+        }
+    },
+    'border':{
+        'main':{
+            'color':'#211D19',
+            'points':[
+                [4,4],[5,4],[5,3],[6,3],
+                [1,4],[1,3],[2,3],[2,2],[3,2],[3,1],[4,1],
+                [[5,0],[9,0]],[9,1],[10,1],
+                [[11,2],[13,2]],[[13,1],[15,1]],[15,2],[15,3],[12,4],
+                [14,4],[13,5],[14,5],[14,6],[14,7],[15,6],
+                [[16,5],[18,5]],[18,6],[18,7],[17,8],[15,8],[15,9],
+                [[16,9],[16,11]],[[17,11],[17,13]],[18,10],[19,9],
+                [[18,13],[18,15]],[19,13],[19,15],[19,16],
+                [[0,5],[0,7]],[1,7],[1,8],[[2,9],[6,9]],[6,8],
+                [5,10],[5,11],[[4,11],[4,15]],[[5,14],[9,14]],[5,15],
+                [[9,15],[12,15]],[12,16],[13,16],[13,17],[14,17],[14,18],
+                [[15,18],[15,20]],[[16,21],[16,26]],[[17,26],[17,29]],
+                [[16,29],[16,31]],[[15,31],[15,34]],[14,34],[14,35],[13,34],
+                [[10,36],[13,36]],[11,37],[11,38],[12,38],[[12,39],[16,39]],
+                [16,38],[17,38],[17,37],[18,37],[18,36],[19,36],
+                [[3,15],[3,17]],[[2,17],[2,20]],[[1,20],[1,24]],
+                [[0,24],[0,28]],[1,28],[1,29],[2,29],[2,30],[3,31],[3,32],
+                [4,32],[4,33],[5,33],[5,34],[6,34],[[7,35],[9,35]],
+                [9,36],[9,37],[8,37],[8,38],[[3,35],[5,35]],[3,36],[3,38],
+                [[2,36],[2,38]],[[3,39],[7,39]]
+            ]
+        }
+    },
+    'belly':{
+        'main':{
+            'color':'#D9CAAD',
+            'points':[
+                [[4,15],[12,17]],
+                [[2,18],[15,24]],
+                [[1,25],[16,28]],
+                [[3,29],[15,31]],
+                [[5,32],[14,33]],
+                [[7,34],[13,35]]
+            ]
+        }
+    },
+    'thorn':{
+        'main':{
+            'color':'#172987',
+            'points':[
+                [[12,2],[14,4]],
+                [[15,6],[17,8]],
+                [[18,10],[19,13]]
+            ]
+        }
+    }
+}
+
+titleSkin = {
+    priority:['back', 'front'],
+    'back':{
+        'main':{
+            'color':'#94C756',
+            'points':[
+                [[0,1], [9,13]],
+                [[10,1],[11,9]],
+                [[12,1],[15,13]],
+                [[16,5],[22,13]],
+                [[23,4],[24,13]],
+                [[25,3],[37,13]],
+                [[38,4],[41,13]],
+                [[42,4],[43,9]]
+            ]
+        }
+    },
+    'front':{
+        'main':{
+            'color':'#2D8939',
+            'points':[
+                [[1,2],[6,3]],
+                [[3,4],[4,11]],
+    
+                [[7,6],[8,11]],
+                [[9,7],[10,8]],
+                [[10,6],[11,7]],
+    
+                [[13,3],[14,4]],
+                [[13,6],[14,11]],
+    
+                [[16,6],[17,7]],
+                [[17,7],[18,9]],
+                [[18,10],[20,11]],
+                [19,12],
+                [[20,7],[21,9]],
+                [[21,6],[22,7]],
+    
+                [[25,5],[25,7]],
+                [[26,4],[28,5]],
+                [29,5],[29,6],
+                [[26,7],[27,8]],
+                [28,8],[28,9],[29,9],[29,10],
+                [[25,11],[29,11]],[25,10],
+                [[26,12],[28,12]],
+    
+                [[31,6],[32,11]],
+                [[32,5],[36,6]],
+                [[36,6],[37,11]],
+                [[32,11],[36,12]],
+    
+                [39,6],[[39,7],[40,11]],
+                [[41,6],[42,7]],[41,8]
+            ]
+        }
+    }
+}</script>
+    <script>let initGaming = () => {
+    isSave = true
+    sky = []
+    vx = 0
+    happend = [true, true, true, true, true]
+    enemyView = 500
+    fixed = false
+    bossActive = false
+    bound = {
+        uX: 3000,
+        uY: 1000,
+        lX: 0,
+        lY: 0
+    }
+    toolTextIndex = -1
+    heroSnapshot = []
+
+    _initHero()
+    _initGround()
+    _initEnemy()
+    _initBoss()
+    _initArrow()
+    _initSky()
+
+    let snapshot = {
+        happend,
+        groups,
+        vx,
+    }
+    globalSnapshot = JSON.stringify(snapshot)
+
+    if(cycler > 1){
+        hero.canBack = true
+    }
+}
+
+let _initHero = () => {
+    let group = new Group('hero', 100, 0.999, false)
+
+    group.elements.push(
+        new Hero(100, 400, 20, 40, 0, 0, 15, 100, 20),
+    )
+
+    groups['hero'] = group
+    hero = group.elements[0]
+    // makeParallelBound(group, contact.contactPlanes, 1)
+}
+
+let _initGround = () => {
+    let group = new Group('ground', 0, 0, true)
+    group.elements.push(
+        new Ground(0, 550, 200, 90, 0, 0, 9999),
+        new Ground(200, 140, 150, 500, 0, 0, 9999),
+        new Ground(350, 400, 600, 240, 0, 0, 9999),
+        new Ground(950, 60, 120, 640, 0, 0, 9999),
+        new Ground(1070, 500, 800, 140, 0, 0, 9999),
+        new Ground(1200, 150, 820, 140, 0, 0, 9999),
+        new Ground(1870, 0, 150, 640, 0, 0, 9999),
+        new Ground(2020, 500, 980, 140, 0, 0, 9999),
+    )
+
+    contact = new Contact('hero', 'ground', 1e8, 100)
+
+    difGupContacts['ground-hero'] = contact
+    groups['ground'] = group
+
+}
+
+let _initEnemy = () => {
+    let group = new Group('enemy', 100, 0.99, false)
+
+    let a = 0.4
+    let b = 0.2
+    let hp1 = 100 * (1 + cycler * a)
+    let hp2 = 300 * (1 + cycler * b)
+    let atk1 = 10 * (1 + cycler * a)
+    let atk2 = 30 * (1 + cycler * b)
+    if (cycler <= 1) {
+        group.elements.push(
+            new Enemy(500, 200, 100, 100, 0, 0, 55, monsterSkin2, hp1, atk1, 1),
+            new Enemy(700, 200, 100, 100, 0, 0, 55, monsterSkin2, hp1, atk1, 2),
+            new Enemy(1600, 200, 100, 100, 0, 0, 55, monsterSkin1, hp2, atk2, 3)
+        )
+    } else {
+        group.elements.push(
+            new Enemy(530, 200, 100, 100, 0, 0, 55, monsterSkin2, hp1, atk1, 1),
+            new Enemy(610, 200, 100, 100, 0, 0, 55, monsterSkin2, hp1, atk1, 2),
+            new Enemy(420, 200, 100, 100, 0, 0, 55, monsterSkin1, hp1 + 100, atk1, 3),
+            new Enemy(1600, 200, 100, 100, 0, 0, 55, monsterSkin1, hp2, atk2, 4),
+            new Enemy(1092, 200, 100, 100, 0, 0, 55, monsterSkin1, hp2, atk2, 4)
+        )
+    }
+
+    let contact = new Contact('enemy', 'ground', 9e9, 100)
+    let contactHero = new Contact('enemy', 'hero', 1e10, 100)
+    let contactEnemy = new Contact('enemy', 'enemy', 1e10, 100)
+
+    groups['enemy'] = group
+    difGupContacts['enemy-ground'] = contact
+    difGupContacts['enemy-hero'] = contactHero
+    sameGupContacts['enemy-enemy'] = contactEnemy
+}
+
+let _initBoss = () => {
+    let group = new Group('boss', 100, 0.99, true)
+
+    let hp = 1000 * ( 1 + cycler * 0.3 )
+    group.elements.push(
+        new Boss(2723, 100, 200, 400, 0, 0, 100, hp, 25),
+    )
+
+
+    let groupRock = new Group('rock', 100, 0.99, true)
+    // groupRock.elements.push(
+    //     new Rectangle( 700, 0, 20, h, -30, 0, 200)
+    // )
+    let contact = new Contact('hero', 'rock', 1e8, 100)
+
+    difGupContacts['hero-rock'] = contact
+    boss = group.elements[0]
+    groups['boss'] = group
+    groups['rock'] = groupRock
+}
+
+let _initArrow = () => {
+    let group = new Group('arrow', 50, 0.999999, false)
+
+    contact = new Contact('arrow', 'ground', 1e12, 0)
+    contactEnemy = new Contact('arrow', 'enemy', 1e10, 0)
+    contactBoss = new Contact('arrow', 'boss', 1e10, 0)
+
+    difGupContacts['arrow-ground'] = contact
+    difGupContacts['arrow-enemy'] = contactEnemy
+    difGupContacts['arrow-boss'] = contactBoss
+    groups['arrow'] = group
+}
+
+let _initSky = () => {
+    sky = []
+    let den = 0.001
+    let num = w * h * 0.3333 * den
+
+    for (let i = 0; i < num; i++) {
+        let x = Math.random() * mapw
+        let y = Math.random() * 0.3333 * h
+
+        let type = Math.floor(Math.random() * 3)
+
+        let space = 5
+        switch (type) {
+            case 0:
+                sky.push(
+                    [x, y],
+                    [x + space, y + space],
+                    [x - space, y + space],
+                    [x, y + 2 * space]
+                )
+                break;
+            case 1:
+                sky.push(
+                    [x, y]
+                )
+                break;
+            case 2:
+                sky.push(
+                    [x, y], [x - space, y + space], [x, y + space], [x + space, y + space], [x, y + 2 * space]
+                )
+        }
+    }
+}
+
+//-----------------------------------------------Starting Page------------------------------------------------
+
+let initStarting = () => {
+
+    bound = {
+        uX: w,
+        uY: h + 300,
+        lX: 0,
+        lY: 0
+    }
+
+    _initStartHero()
+    _initStartGround()
+    _initArrow()
+    _initStartEnemy()
+    _initSky()
+}
+
+let _initStartHero = () => {
+    let group = new Group('hero', 100, 0.999, false)
+
+    group.elements.push(
+        new Hero(40, 400, 20, 40, 0, 0, 15, 100, 20),
+    )
+
+    groups['hero'] = group
+    hero = group.elements[0]
+}
+
+let _initStartGround = () => {
+    let group = new Group('ground', 0, 0, true)
+    group.elements.push(
+        new Ground(0, 550, 150, h - 550, 0, 0, 50),
+        new Ground(150, 400, 150, h - 400, 0, 0, 50),
+        new Ground(550, 550, 250, h - 340, 0, 0, 50),
+        new Ground(600, 400, 168, h - 350, 0, 0, 50)
+    )
+
+    contact = new Contact('hero', 'ground', 1e8, 100)
+
+    difGupContacts['ground-hero'] = contact
+    groups['ground'] = group
+}
+
+let _initStartEnemy = () => {
+    let groupEnemy = new Group('enemy', 100, 0.99, false)
+    groupEnemy.elements.push(
+        new Enemy(630, 300, 100, 100, 0, 0, 55, monsterSkin2, 30, 10, 4)
+    )
+
+    groupEnemy.elements[0].face = -1
+
+    let contact = new Contact('enemy', 'ground', 9e9, 100)
+
+
+    let groupBoss = new Group('boss', 100, 0.99, true)
+
+    groups['enemy'] = groupEnemy
+    groups['boss'] = groupBoss
+    difGupContacts['enemy-ground'] = contact
+}</script>
+    <script>// let makeParallelBound = (group, contactPlanes, dis) => {
+
+//     for (let key in contactPlanes) {
+//         let contactPlane = contactPlanes[key]
+//         let e1 = group.elements[contactPlane.element1Index]
+//         let e2 = group.elements[contactPlane.element2Index]
+
+//         if (e1.lt[0] - dis > e2.rd[0] + dis || e2.lt[0] - dis > e1.rd[0]) {
+//             continue
+//         }
+
+//         if (e1.lt[1] - dis > e1.rd[1] + dis || e2.lt[1] - dis > e1.rd[1] + dis) {
+//             continue
+//         }
+
+//         contactPlane.isBound = true
+//     }
+
+// }
+
+
+let demStep = () => {
+
+    // Contact Detection & Update Contact Plane
+    handleContact()
+
+    // Calculate for Force
+    receiveForce()
+
+    // F -> A -> V -> X
+    verlet()
+
+    // Reset F 
+    resetForce()
+}
+
+let disMax = 0.5
+let disMin = -0.5
+
+let verlet = () => {
+    for (let key in groups) {
+        let group = groups[key]
+
+        if (group.isRigid) {
+            for(let i in group.elements){
+
+                let e = group.elements[i]
+                
+                let dis = scale(dt, e.v)
+
+                if (e.lt[0] + dis[0] > bound.lX && e.rd[0] + dis[0] < bound.uX) {
+                    e.pos[0] += dis[0]
+                    e.lt[0] += dis[0]
+                    e.rd[0] += dis[0]
+                }
+
+                if (e.lt[1] + dis[1] > bound.lY && e.rd[1] + dis[1] < bound.uY) {
+                    e.pos[1] += dis[1]
+                    e.lt[1] += dis[1]
+                    e.rd[1] += dis[1]
+                }
+            }
+        }   
+        else {
+            for (let i in group.elements) {
+                let e = group.elements[i]
+
+                e.v = scale(group.damp, e.v)
+
+                let dmpInfluence = 1 - group.damp
+
+                e.v[0] += (e.f[0] * e.invm) * dmpInfluence * dt
+                e.v[1] += (e.f[1] * e.invm + gravity * e.mass) * dmpInfluence * dt
+
+                let dis = scale(dt, e.v)
+
+                if (dis[0] > disMax) {
+                    dis[0] = disMax
+                } else if (dis[0] < disMin) {
+                    dis[0] = disMin
+                }
+
+                if (dis[1] > disMax) {
+                    dis[1] = disMax
+                } else if (dis[1] < disMin) {
+                    dis[1] = disMin
+                }
+
+                if (e.lt[0] + dis[0] > bound.lX && e.rd[0] + dis[0] < bound.uX) {
+                    e.pos[0] += dis[0]
+                    e.lt[0] += dis[0]
+                    e.rd[0] += dis[0]
+                }
+
+                if (e.lt[1] + dis[1] > bound.lY && e.rd[1] + dis[1] < bound.uY) {
+                    e.pos[1] += dis[1]
+                    e.lt[1] += dis[1]
+                    e.rd[1] += dis[1]
+                }
+
+            }
+        }
+    }
+}
+
+
+let handleContact = () => {
+    for (let key in difGupContacts) {
+        let contact = difGupContacts[key]
+        let group1 = groups[contact.group1Index]
+        let group2 = groups[contact.group2Index]
+
+        for (let i = 0; i < group1.elements.length; i++) {
+            for (let j = 0; j < group2.elements.length; j++) {
+                let e1 = group1.elements[i]
+                let e2 = group2.elements[j]
+
+                let key = `${i}-${j}`
+                let contactPlane = new ContactPlane(i, j)
+                _updateContactPlane(e1, e2, contactPlane, contact)
+                contact.contactPlanes[key] = contactPlane
+
+            }
+        }
+
+    }
+
+    for (let key in sameGupContacts) {
+        let contact = sameGupContacts[key]
+        let group = groups[contact.group1Index]
+
+        for (let i = 0; i < group.elements.length; i++) {
+            for (let j = i + 1; j < group.elements.length; j++) {
+                let e1 = group.elements[i]
+                let e2 = group.elements[j]
+
+                let key = `${i}-${j}`
+                let contactPlane = new ContactPlane(i, j)
+                _updateContactPlane(e1, e2, contactPlane, contact)
+                contact.contactPlanes[key] = contactPlane
+            }
+        }
+    }
+}
+
+let _updateContactPlane = (e1, e2, contactPlane, contact) => {
+
+    contactPlane.isContact = true
+
+    if (e1.lt[0] > e2.rd[0] || e2.lt[0] > e1.rd[0]) {
+        contactPlane.isContact = false
+    }
+
+    if (e1.lt[1] > e2.rd[1] || e2.lt[1] > e1.rd[1]) {
+        contactPlane.isContact = false
+    }
+
+    if (contactPlane.isContact) {
+        contactPlane.isEverContact = true
+
+        let d = distance(e1.pos, e2.pos)
+        // let nc = scale(1 / d, minus(e1.pos, e2.pos))
+
+        // if (nc[0] === 0 && nc[1] === 0) {
+        //     nc = [1, 0]
+        // }
+
+        // let nc= [0,0]
+
+
+
+
+        let maxX = Math.max(e1.lt[0], e1.rd[0], e2.lt[0], e2.rd[0])
+        let minX = Math.min(e1.lt[0], e1.rd[0], e2.lt[0], e2.rd[0])
+        let maxY = Math.max(e1.lt[1], e1.rd[1], e2.lt[1], e2.rd[1])
+        let minY = Math.min(e1.lt[1], e1.rd[1], e2.lt[1], e2.rd[1])
+
+        let overlapX = (e1.len.w + e2.len.w) - (maxX - minX)
+        let overlapY = (e1.len.h + e2.len.h) - (maxY - minY)
+
+        if (overlapX > overlapY) {
+            if (e1.rd[1] > e2.lt[1] && e1.pos[1] < e2.pos[1]) {
+                nc = [0, 1]
+            } else {
+                nc = [0, -1]
+            }
+        } else {
+            if (e1.rd[0] > e2.lt[0] && e1.pos[0] < e2.pos[0]) {
+                nc = [1, 0]
+            } else {
+                nc = [-1, 0]
+            }
+        }
+
+        // if(e1 === hero){
+        //     console.log(nc)
+        // }
+
+
+        // let doing = true
+        // if(e1.len.w > e2.len.w){            
+        //     if(overlapX * overlapY === e2.len.w * e2.len.h){
+        //         nc = contactPlane.nc
+        //         doing = false
+        //     }
+        //     else if(overlapX === e2.len.w){
+        //         if(nc[1] > 0){
+        //             nc = [0, 1]
+        //             doing = false
+        //         }
+        //         else{
+        //             nc = [0, -1]
+        //             doing = false
+        //         }
+        //     }
+        // }
+        // else{            
+        //     if(overlapX * overlapY === e1.len.w * e1.len.h){
+        //         nc = contactPlane.nc
+        //         doing = false
+        //     }
+        //     else if(overlapX === e1.len.w){
+        //         if(nc[1] > 0){
+        //             nc = [0, 1]
+        //             doing = false
+        //         }
+        //         else{
+        //             nc = [0, -1]
+        //             doing = false
+        //         }
+        //     }
+        // }
+
+        // if(e1.len.h > e2.len.h && doing){
+        //     if(overlapY === e2.len.h){
+        //         if(nc[0] > 0){
+        //             nc = [1, 0]
+        //         }else{
+        //             nc = [-1, 0]
+        //         }
+        //     }
+        // }
+        // else if(doing){
+        //     if(overlapY === e1.len.h){
+        //         if(nc[0] > 0){
+        //             nc = [1, 0]
+        //         }else{
+        //             nc = [-1, 0]
+        //         }
+        //     }
+        // }
+
+        contactPlane.gc = overlapX * overlapY
+        contactPlane.nc = nc
+        contactPlane.f = scale(contact.kn, scale(contactPlane.gc, contactPlane.nc))
+    }
+
+    if (contactPlane.isBound) {
+
+        contactPlane.rV = minus(e2.v, e1.v)
+        contactPlane.inD = plus(contactPlane.inD, scale(dt, contactPlane.rV))
+
+        contactPlane.f = plus(contactPlane.f, scale(contact.pkn, contactPlane.inD))
+    }
+
+}
+
+let receiveForce = () => {
+    for (let key in difGupContacts) {
+        let contact = difGupContacts[key]
+
+        let group1 = groups[contact.group1Index]
+        let group2 = groups[contact.group2Index]
+        for (let i in contact.contactPlanes) {
+            let contactPlane = contact.contactPlanes[i]
+            if (!contactPlane.isContact) continue
+
+            let e1 = group1.elements[contactPlane.element1Index]
+            let e2 = group2.elements[contactPlane.element2Index]
+
+            e1.f = minus(contactPlane.f, e1.f)
+            e2.f = plus(contactPlane.f, e2.f)
+
+        }
+    }
+
+    for (let key in sameGupContacts) {
+        let contact = sameGupContacts[key]
+
+        let group = groups[contact.group1Index]
+        for (let i in contact.contactPlanes) {
+            let contactPlane = contact.contactPlanes[i]
+            if (!contactPlane.isContact && !contactPlane.isBound) continue
+
+            let e1 = group.elements[contactPlane.element1Index]
+            let e2 = group.elements[contactPlane.element2Index]
+
+            e1.f = minus(contactPlane.f, e1.f)
+            e2.f = plus(contactPlane.f, e2.f)
+        }
+    }
+
+}
+
+let resetForce = () => {
+    for (let key in groups) {
+        let group = groups[key]
+
+        for (let i in group.elements) {
+            group.elements[i].f = [0, 0]
+        }
+    }
+}
+
+
+</script>
+    <script>
+// jump
+actions['c'] = function () {
+    let group = groups['hero']
+    if (hero.canJump) {
+
+        let fun = (e) => {
+            e.f[1] -= 1e12
+        }
+
+        if (controlKeys['left']) {
+            fun = (e) => {
+                e.f[1] -= 5e11
+                // e.f[0] += 5e11
+            }
+        }
+
+        if (controlKeys['right']) {
+            fun = (e) => {
+                e.f[1] -= 5e11
+                // e.f[0] -= 5e11
+            }
+        }
+
+        group.elements.forEach(fun)
+        playJumpAudio()
+        hero.canJump = false
+    }
+}
+
+actions['right'] = function () {
+    hero.f[0] += 1e11
+    hero.face = 1
+    moving = true
+}
+
+actions['left'] = function () {
+    hero.f[0] -= 1e11
+    hero.face = -1
+    moving = true
+}
+
+actions['down'] = function () {
+
+    let group = groups['hero']
+    group.elements.forEach((e) => {
+        e.f[1] += 1e11
+    })
+}
+
+actions['up'] = function () {
+
+    let group = groups['hero']
+    group.elements.forEach((e) => {
+        e.f[1] -= 1.5e10
+    })
+}
+
+actions['z'] = function () {
+    if(hero.canBack){
+        running = heroTimeBack
+    }
+}
+
+// actions['w'] = function () {
+//     running = enemyTimeBack
+// }
+
+actions['x'] = function () {
+    if(bowForce < 200)
+        bowForce+=1
+    shooting = true
+}
+
+antiActions['x'] = function(){
+
+}
+
+actions['m'] = function() {
+    stopMusic()
+}</script>
+    <script>
+
+// move ground first time
+events.push((i, force) => {
+    if (!happend[i]) return
+
+    if (hero.pos[0] > 1078 && hero.pos[1] > 450 || force) {
+        running = eventing
+        groupMove('ground', 5, 0, -130)
+        groupMove('ground', 6, 1, 150)
+        happend[i] = false
+    }
+
+})
+
+// close boss
+events.push((i, force) => {
+    if (!happend[i]) return
+
+    if (hero.pos[0] > 2200 && hero.pos[1] > 450 || force) {
+        running = eventing
+        groupMove('ground', 6, 1, -150)
+
+        happend[i] = false
+    }
+})
+
+// init boss and fix view
+events.push((i, force) => {
+    if (!happend[i]) return
+
+    if (hero.pos[0] > 2340 || force) {
+        fixed = true
+        vx = 1955
+
+        toolTextIndex = -1
+
+        if (isSave) {
+            save()
+            isSave = false
+        }
+
+        groupMove('boss', 0, 0, -200)
+
+        timeouts.push(
+            setTimeout(() => {
+                bossActive = true
+                enemyView = 1000
+            }, 3000)
+        )
+
+
+        timeouts.push(
+            setTimeout(() => {
+                boss.skill.canSummon = true
+            }, randomRange(1000, 3000))
+        )
+
+        timeouts.push(
+            setTimeout(() => {
+                boss.skill.canDestory = true
+            }, 8000)
+        )
+
+        happend[i] = false
+    }
+
+})
+
+
+//show tool tik
+events.push((i) => {
+    let enm = groups['enemy'].elements.filter((e) => e.id === 3)
+
+    if (happend[i]) {
+        if (cycler === 1 && enm.length === 0) {
+            setTimeout(() => {
+                toolTextIndex = 3
+                hero.canBack = true
+            }, 3000)
+            happend[i] = false
+        }
+
+    }
+
+})
+
+events.push((i) => {
+    if (happend[i]) {
+
+        if (hero.pos[1] < 140 && toolTextIndex === 3) {
+            toolTextIndex = -1
+            happend[i] = false
+        }
+    }
+})
+
+let groupMove = (groupKey, index, dir, dis) => {
+
+    let divide = dis * 0.01
+    let e = groups[groupKey].elements[index]
+    let oriLt = e.lt[dir]
+
+    for (let i = 0; i < 100; i++) {
+        setTimeout(() => {
+            e.lt[dir] += divide
+        }, 20 * i)
+    }
+
+    setTimeout(() => {
+        running = gaming
+        e.pos[dir] += dis
+        e.rd[dir] += dis
+        e.lt[dir] = oriLt + dis
+    }, 2000)
+}
+
+
+
+let skepEvent = () => {
+    running = eventing
+    groupMove(5, 0, -130)
+    groupMove(6, 1, 150)
+    running = eventing
+    // groupMove(6, 1, -150)
+
+    happend[0] = false
+    happend[1] = false
+}
+
+
+let showBoss = () => {
+    vx = 1955
+    fixed = true
+}
+
+//----------------------- save and load function
+
+let save = () => {
+    console.log('save fixed', fixed)
+    let snapshot = {
+        happend,
+        groups,
+        vx,
+        bossActive,
+        fixed
+    }
+    globalSnapshot = JSON.stringify(snapshot)
+
+    for (let i = 0; i < 100; i++) {
+        setTimeout(() => {
+            saveCap = i * 0.01
+        }, i * 10)
+
+        setTimeout(() => {
+            saveCap = (99 - i) * 0.01
+        }, i * 10 + 2000)
+    }
+
+}
+
+let load = () => {
+    let load = JSON.parse(globalSnapshot)
+    groups = load.groups
+    vx = load.vx
+    happend = load.happend
+    bossActive = load.bossActive
+    fixed = load.fixed
+    hero = load.groups['hero'].elements[0]
+    hero.hp = hero.maxHp
+    boss = load.groups['boss'].elements[0]
+
+    boss.skill = {
+        canDestory: false,
+        canSummon: false
+    }
+    groups['enemy'].elements.forEach((e) => {
+        e.canMove = true
+    })
+    heroSnapshot = []
+
+    timeouts.forEach((t) => {
+        clearTimeout(t)
+    })
+    timeouts = []
+}
+
+//----------------------- starting event
+
+let tutorMove = () => {
+    if (hero.pos[0] <= 95) {
+        toolTextIndex = 0
+    }
+}
+
+let tutorJump = () => {
+    if (hero.pos[0] > 95 && hero.pos[1] > 400) {
+        toolTextIndex = 1
+    }
+}
+
+let tutorAttack = () => {
+    if (hero.pos[0] > 172 && hero.pos[0] < 280) {
+        toolTextIndex = 2
+    }
+}
+
+startEvents.push(
+    tutorMove,
+    tutorJump,
+    tutorAttack
+)</script>
+
+    <script>
+
+let drawBackground = () => {
+    let grd = ctx.createLinearGradient(0, 0, w, h)
+    grd.addColorStop(0, '#53468E');
+    grd.addColorStop(0.33, '#5B65A3');
+    grd.addColorStop(1, '#418DB0');
+
+
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+
+
+    ctx.fillStyle = '#9BADCE'
+    sky.forEach((e) => {
+        ctx.fillRect(e[0] - vx, e[1], 5.5, 5.5);
+    })
+}
+
+let drawGround = () => {
+    let group = groups['ground']
+
+    let h1 = 10
+    let h2 = 15
+
+    group.elements.forEach((e) => {
+
+        ctx.fillStyle = '#3CA836'
+        ctx.fillRect(
+            e.lt[0] - vx,
+            e.lt[1],
+            e.len.w + 1,
+            h1
+        )
+
+        ctx.fillStyle = '#978426'
+        ctx.fillRect(
+            e.lt[0] - vx,
+            e.lt[1] + h1,
+            e.len.w + 1,
+            h2
+        )
+
+        ctx.fillStyle = '#A94823'
+
+        ctx.fillRect(
+            e.lt[0] - vx,
+            e.lt[1] + h1 + h2,
+            e.len.w + 1,
+            e.len.h
+        )
+
+        ctx.fillStyle = '#A98F81'
+        e.stones.forEach((p) => {
+            ctx.fillRect(
+                p[0] - vx + e.lt[0],
+                p[1] + e.lt[1],
+                11,
+                11
+            )
+        })
+    })
+
+
+
+}
+
+let drawHero = () => {
+    ctx.fillStyle = 'blue'
+
+    let skin = heroSkin
+
+    if (shooting && moving) {
+        skin = heroMoveAndShoot
+    }
+    else if (shooting) {
+        skin = heroShootSkin
+    }
+    else if (moving) {
+        skin = heroMoveSkin
+    }
+
+    renderSkin(hero, skin, 1, 1)
+
+}
+
+let drawEnemy = () => {
+    ctx.fillStyle = '#2c362e'
+    let group = groups['enemy']
+
+    group.elements.forEach((e) => {
+        renderSkin(e, e.skin, 5, 5)
+    })
+
+    if (boss) {
+        drawBoss()
+    }
+}
+
+let drawBackEffect = (color1, color2) => {
+
+    let grd = ctx.createRadialGradient(w * 0.5, h * 0.5, 250, w * 0.5, h * 0.5, 450)
+    grd.addColorStop(0, color1);
+    grd.addColorStop(1, color2)
+    ctx.fillStyle = grd
+    ctx.fillRect(0, 0, w, h)
+}
+
+let drawArrow = () => {
+    let group = groups['arrow']
+    group.elements.forEach((e) => {
+        renderSkin(e, arrowSkin, 1, 1)
+    })
+}
+
+let drawBoss = () => {
+    let skin = bossSkin
+    boss.face = 1
+
+    let hpLen = 130
+    let percent = boss.hp / boss.maxHp * hpLen
+
+    if(boss.hp < 0) percent = 0
+    ctx.fillStyle = '#121211'
+    ctx.fillRect(boss.lt[0] - vx + 20, boss.lt[1] - 40, hpLen, 10)
+
+
+    ctx.fillStyle = '#ebc934'
+    ctx.fillRect(boss.lt[0] - vx + 20, boss.lt[1] - 40, percent, 10)
+
+
+    renderSkin(boss, skin, 10, 10)
+}
+
+let drawRock = () =>{
+    let rocks = groups['rock'].elements
+    
+    rocks.forEach((e)=>{
+        let grd = ctx.createLinearGradient(e.lt[0] -vx, 0, e.rd[0] -vx, 0)
+        grd.addColorStop(0,"#ad5e09");
+        grd.addColorStop(0.25,"#81e629");
+        grd.addColorStop(0.75,"#81e629");
+        grd.addColorStop(1,"#ad5e09");
+        ctx.fillStyle = grd
+        ctx.fillRect(e.lt[0] -vx, e.lt[1], e.len.w, e.len.h)
+    })
+}
+let drawHead = () => {
+
+    ctx.fillStyle = '#060001'
+    ctx.lineWidth = 5;
+    ctx.lineJoin = "round";
+    ctx.strokeRect(98, 18, 205, 24);
+
+    let hpw = hero.hp / hero.maxHp * 200
+    let losew = (hero.maxHp - hero.hp) / hero.maxHp * 200
+
+    ctx.fillStyle = '#E61E18'
+    ctx.fillRect(100, 20, hpw, 20)
+
+    ctx.fillStyle = '#474646'
+    ctx.fillRect(100 + hpw, 20, losew, 20)
+
+    //draw 
+    ctx.fillStyle = '#87372f'
+    ctx.beginPath();
+    ctx.arc(25, 15, 80, 0, 2 * Math.PI);
+    ctx.fill();
+
+
+    ctx.strokeStyle = "black";
+    ctx.stroke();
+
+    let skin = heroSkin
+    let priority = ['face', 'hair', 'eye']
+
+    let space = 4;
+    let dis = [10, 10]
+
+    for (let i in priority) {
+        let part = skin[priority[i]]
+
+        for (let key in part) {
+            let draw = part[key]
+            ctx.fillStyle = draw.color
+
+            ctx.fillStyle = draw.color
+
+            draw.points.forEach((p) => {
+                if (Array.isArray(p[0])) {
+                    for (let j = p[0][0]; j <= p[1][0]; j++) {
+                        for (let k = p[0][1]; k <= p[1][1]; k++) {
+                            ctx.fillRect(
+                                j * space + dis[0],
+                                k * space + dis[1],
+                                space,
+                                space
+                            )
+                        }
+                    }
+                } else {
+                    ctx.fillRect(
+                        p[0] * space + dis[0],
+                        p[1] * space + dis[1],
+                        space,
+                        space
+                    )
+                }
+            })
+
+        }
+    }
+}
+
+let renderSkin = (e, skin, sw, sh) => {
+
+    let priority = skin.priority
+    if (e.face === 1) {
+        for (let i in priority) {
+            let part = skin[priority[i]]
+
+            for (let key in part) {
+                let draw = part[key]
+
+                ctx.fillStyle = draw.color
+                draw.points.forEach((p) => {
+                    if (Array.isArray(p[0])) {
+                        for (let j = p[0][0]; j <= p[1][0]; j++) {
+                            for (let k = p[0][1]; k <= p[1][1]; k++) {
+                                ctx.fillRect(
+                                    e.lt[0] + j * sw - vx,
+                                    e.lt[1] + k * sh,
+                                    sw + 1,
+                                    sh + 1
+                                )
+                            }
+                        }
+                    } else {
+                        ctx.fillRect(
+                            e.lt[0] + p[0] * sw - vx,
+                            e.lt[1] + p[1] * sh,
+                            sw + 1,
+                            sh + 1
+                        )
+                    }
+                })
+            }
+        }
+    }
+    else {
+        for (let i in priority) {
+            let part = skin[priority[i]]
+
+            for (let key in part) {
+                let draw = part[key]
+
+                ctx.fillStyle = draw.color
+
+                let len = e.len.w / sw
+                draw.points.forEach((p) => {
+                    if (Array.isArray(p[0])) {
+                        for (let j = len - p[1][0]; j <= len - p[0][0]; j++) {
+                            for (let k = p[0][1]; k <= p[1][1]; k++) {
+                                ctx.fillRect(
+                                    e.lt[0] + j * sw - vx,
+                                    e.lt[1] + k * sh,
+                                    sw,
+                                    sh
+                                )
+                            }
+                        }
+                    } else {
+                        ctx.fillRect(
+                            e.lt[0] + (len - p[0]) * sw - vx,
+                            e.lt[1] + p[1] * sh,
+                            sw,
+                            sh
+                        )
+                    }
+                })
+            }
+        }
+    }
+
+}
+
+let drawWin = () => {
+    ctx.fillStyle = `rgb(124, 161, 159, ${winCap})`
+    ctx.fillRect(0, 0, w, h)
+}
+
+let drawDie = () => {
+    ctx.fillStyle = `rgb(255, 41, 41, ${dieCap})`
+    ctx.fillRect(0, 0, w, h)
+}
+
+let drawCycle = () => {
+    if(cycler > 1){
+        ctx.fillStyle= 'rgb(125, 85, 85, 0.8)'
+        ctx.fillRect(570, 10, 200, 40)
+
+        ctx.fillStyle = '#bd9d9d'
+        ctx.font = "bold 18pt Arial";
+        ctx.fillText(`${cycler} New Game +`, 580, 40)
+    }
+}
+
+
+// --------- darw title
+
+let drawTitle = () => {
+    let e = {
+        face: 1,
+        lt: [100, 50]
+    }
+
+    renderSkin(e, titleSkin, 13, 13)
+}
+
+
+let drawText = () => {
+
+    if(toolTextIndex >= 0){
+        ctx.fillStyle = '#34ebd2'
+        ctx.font = "20px Arial";
+        let text = toolText[toolTextIndex]
+        let disX = text.length * 3
+        ctx.fillText(text, hero.lt[0] - disX - vx, hero.lt[1] - 10);
+    }
+
+
+    ctx.fillStyle = `rgb(52, 235, 210, ${saveCap})`
+    ctx.fillText('saving ...', 680, 630)
+
+}</script>
+    <script>let handleArrowContact = () => {
+
+    let dead = {}
+
+    //handle with group
+
+    for (let key in difGupContacts['arrow-ground'].contactPlanes) {
+        let plane = difGupContacts['arrow-ground'].contactPlanes[key]
+        if (plane.isEverContact) {
+            dead[plane.element1Index] = true
+        }
+    }
+
+    for (let key in difGupContacts['arrow-enemy'].contactPlanes) {
+        let plane = difGupContacts['arrow-enemy'].contactPlanes[key]
+        if (plane.isEverContact) {
+            dead[plane.element1Index] = true
+            groups['enemy'].elements[plane.element2Index].hp -= hero.atk
+        }
+    }
+
+    for (let key in difGupContacts['arrow-boss'].contactPlanes) {
+        let plane = difGupContacts['arrow-boss'].contactPlanes[key]
+        if (plane.isEverContact) {
+            dead[plane.element1Index] = true
+            boss.hp -= hero.atk
+        }
+    }
+
+    //handle arrive bounding
+    groups['arrow'].elements.forEach((e, i) => {
+        if (e.lt[0] <= bound.lX + 1 || e.rd[0] >= bound.uX - 1) {
+            dead[i] = true
+        }
+    })
+
+
+    groups['arrow'].elements = groups['arrow'].elements.filter((e, i) => {
+        return (!dead[i])
+    })
+
+    difGupContacts['arrow-ground'].contactPlanes = {}
+    difGupContacts['arrow-enemy'].contactPlanes = {}
+    difGupContacts['arrow-boss'].contactPlanes = {}
+}
+
+let handleEnemyMove = () => {
+    let enemys = groups['enemy'].elements
+
+    enemys.forEach((e) => {
+        let vel = enemyVeclocity * (1 + cycler * 0.4)
+        if (e.canMove) {
+            let dis = distance(hero.pos, e.pos)
+            if (dis < enemyView) {
+                let target = hero.pos[0] > e.pos[0] ? 1 : -1
+                e.face = target
+
+                e.f = plus(e.f, scale(vel, [target, -10]))
+
+                e.canMove = false
+                setTimeout(() => e.canMove = true, 100)
+            }
+        }
+    })
+
+}
+
+let handleViewMove = () => {
+
+    if (fixed) return
+
+    let pos = hero.pos
+    let lower = pos[0] - w * 0.5
+    let upper = pos[0] + w * 0.5
+
+    if (lower > 0) {
+        if (upper < mapw) {
+            vx = lower
+        }
+    }
+    else {
+        vx = 0
+    }
+}
+
+
+let handleHeroAttaced = () => {
+    if (!hero.isSuper) {
+        for (let key in difGupContacts['enemy-hero'].contactPlanes) {
+            let plane = difGupContacts['enemy-hero'].contactPlanes[key]
+            if (plane.isEverContact) {
+                hero.isSuper = true
+                hero.hp -= groups['enemy'].elements[plane.element1Index].atk
+
+                setTimeout(() => {
+                    hero.isSuper = false
+                }, superTime)
+            }
+        }
+    }
+
+    for (let key in difGupContacts['hero-rock'].contactPlanes) {
+        let plane = difGupContacts['hero-rock'].contactPlanes[key]
+        if (plane.isEverContact) {
+
+            hero.hp = -1
+        }
+    }
+
+
+}
+
+
+let handleControl = () => {
+    moving = false
+
+    for (let key in controlKeys) {
+        if (controlKeys[key]) {
+            if (actions[key]) {
+                actions[key]()
+            }
+        }
+    }
+
+    if (controlKeys['z']) {
+        if (hero.canBack) {
+            stopMusic()
+            playReserverMusic()
+        }
+    }
+}
+
+let handleShooting = () => {
+    if (shooting && !controlKeys['x']) {
+        let v = scale(bowForce, [hero.face, -0.1])
+
+        playShootMusic()
+
+        if (cycler > 1) {
+            groups['arrow'].elements.push(
+                new Arrow(
+                    hero.pos[0],
+                    hero.pos[1] - 4,
+                    10,
+                    10,
+                    v[0],
+                    v[1],
+                    200,
+                    hero.face
+                )
+            )
+
+            groups['arrow'].elements.push(
+                new Arrow(
+                    hero.pos[0],
+                    hero.pos[1] + 6,
+                    10,
+                    10,
+                    v[0],
+                    v[1],
+                    200,
+                    hero.face
+                )
+            )
+        }
+        else {
+            groups['arrow'].elements.push(
+                new Arrow(
+                    hero.pos[0],
+                    hero.pos[1],
+                    10,
+                    10,
+                    v[0],
+                    v[1],
+                    200,
+                    hero.face
+                )
+            )
+        }
+
+        bowForce = 100
+        shooting = false
+    }
+}
+
+let handleHeroCanJump = () => {
+    for (let key in difGupContacts) {
+        if (key.indexOf('hero') === -1) continue
+
+        let planes = difGupContacts[key].contactPlanes
+
+        for (let key2 in planes) {
+            if (hero.canJump) continue
+            if (planes[key2].isEverContact) {
+                hero.canJump = true
+                break
+            }
+        }
+    }
+
+
+    for (let key in difGupContacts) {
+        if (key.indexOf('hero') === -1) continue
+
+        let planes = difGupContacts[key].contactPlanes
+        for (let key2 in planes) {
+            planes[key2].isEverContact = false
+        }
+    }
+
+}
+
+handleBossActive = () => {
+    if (!bossActive) return
+
+    if (boss.skill.canSummon) {
+
+        let number = Math.floor(Math.random() * 3) + 1
+
+        let enemys = groups['enemy'].elements
+        let hp = 100 * (1 + cycler * 0.4)
+        let atk = 12 * (1 + cycler * 0.4)
+
+        for (let i = 0; i < number; i++) {
+            enemys.push(new Enemy(2530 + i * 100, 400, 100, 100, 0, 0, 55, monsterSkin2, hp, atk, 10))
+        }
+
+
+        boss.skill.canSummon = false
+
+        timeouts.push(
+            setTimeout(() => {
+                boss.skill.canSummon = true
+            }, randomRange(cd.summon[0], cd.summon[1]))
+        )
+    }
+
+    if (boss.skill.canDestory) {
+        boss.skill.canDestory = false
+
+        let m = Math.floor(Math.random() * 4)
+
+        switch (m) {
+            case 0:
+                groups['rock'].elements.push(
+                    new Rectangle(2700, 0, 20, h, -30, 0, 200)
+                )
+                break;
+            case 1:
+                groups['rock'].elements.push(
+                    new Rectangle(1800, 0, 20, h, 30, 0, 200)
+                )
+                break;
+            case 2:
+                if (cycler >= 3) {
+                    groups['rock'].elements.push(
+                        new Rectangle(1800, 0, 1200, 20, 0, 20, 200)
+                    )
+                }
+                else {
+                    groups['rock'].elements.push(
+                        new Rectangle(1800, 680, 1200, 20, 0, -20, 200)
+                    )
+                }
+                break;
+            case 3:
+                groups['rock'].elements.push(
+                    new Rectangle(1800, 680, 1200, 20, 0, -20, 200)
+                )
+                break;
+        }
+
+        timeouts.push(
+            setTimeout(() => {
+                boss.skill.canDestory = true
+            }, randomRange(cd.destory[0], cd.destory[1]))
+        )
+    }
+}
+
+let handleEnemyDie = () => {
+    groups['enemy'].elements = groups['enemy'].elements.filter((e) => {
+        return e.hp > 0
+    })
+
+    if (boss) {
+        if (boss.hp < 0) {
+            running = winning
+
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    winCap = i * 0.01
+                }, i * 50)
+            }
+            setTimeout(() => {
+                cycler++
+                initGaming()
+                running = gaming
+            }, 5000)
+        }
+    }
+}
+
+let handleResetContactPlane = () => {
+    for (let key in difGupContacts) {
+        difGupContacts[key].contactPlanes = {}
+    }
+
+    for (let key in sameGupContacts) {
+        sameGupContacts[key].contactPlanes = {}
+    }
+}
+
+let handleMakeSnapshot = () => {
+    heroSnapshot.push({
+        pos: [hero.pos[0], hero.pos[1]],
+        v: [hero.v[0], hero.v[1]],
+        lt: [hero.lt[0], hero.lt[1]],
+        rd: [hero.rd[0], hero.rd[1]],
+        vx,
+        hp: hero.hp,
+        face: hero.face
+    })
+    // for (let key in groups) {
+    //     let group = groups[key]
+
+    //     let snapshot = {
+    //         elements: []
+    //     }
+
+    //     for (let i in group.elements) {
+    //         let e = group.elements[i]
+    //         snapshot.elements.push()
+    //     }
+    //     snapshot.vx = vx
+
+    //     group.snapshots.push(snapshot)
+    // }
+}
+
+let handleHeroDie = () => {
+    if (hero.hp < 0) {
+        running = dieing
+
+        for (let i = 0; i < 100; i++) {
+            setTimeout(() => {
+                dieCap = i * 0.01
+            }, i * 20)
+        }
+
+        setTimeout(() => {
+            load()
+            running = gaming
+        }, 2000)
+    }
+}
+
+// let handleEnemyTimeBack = () => {
+//     let group = groups['enemy']
+
+//     if (group.snapshots.length > 0) {
+//         _copyState(group)
+//         group.snapshots.pop()
+//     } else {
+//         console.log('snapshot is no more')
+//     }
+// }
+
+let handleHeroTimeBack = () => {
+    console.log('back tracking !!!')
+    if (heroSnapshot.length > 0) {
+        let snapshot = heroSnapshot[heroSnapshot.length - 1]
+        hero.pos[0] = snapshot.pos[0]
+        hero.pos[1] = snapshot.pos[1]
+        hero.lt[0] = snapshot.lt[0]
+        hero.lt[1] = snapshot.lt[1]
+        hero.rd[0] = snapshot.rd[0]
+        hero.rd[1] = snapshot.rd[1]
+        hero.v[0] = snapshot.v[0]
+        hero.v[1] = snapshot.v[1]
+        hero.hp = snapshot.hp
+        hero.face = snapshot.face
+
+        vx = snapshot.vx
+
+        heroSnapshot.pop()
+    }
+    else {
+        console.log('snapshot is no more')
+    }
+
+    // let group = groups['hero']
+
+    // if (group.snapshots.length > 0) {
+    //     _copyState(group, true)
+    //     group.snapshots.pop()
+    // } else {
+    //     console.log('snapshot is no more')
+    // }
+}
+
+// let _copyState = (group, move = false) => {
+//     let snapshot = group.snapshots[group.snapshots.length - 1]
+
+//     for (let i in group.elements) {
+//         let e = group.elements[i]
+//         e.pos[0] = snapshot.elements[i].pos[0]
+//         e.pos[1] = snapshot.elements[i].pos[1]
+//         e.lt[0] = snapshot.elements[i].lt[0]
+//         e.lt[1] = snapshot.elements[i].lt[1]
+//         e.rd[0] = snapshot.elements[i].rd[0]
+//         e.rd[1] = snapshot.elements[i].rd[1]
+//         e.v[0] = snapshot.elements[i].v[0]
+//         e.v[1] = snapshot.elements[i].v[1]
+//     }
+
+//     if (move) {
+//         vx = snapshot.vx
+//     }
+// }
+
+
+//----------------------------------------------- Handle Starting Page------------------------------------------------
+
+
+let handleIdel = () => {
+    if (hero.pos[1] > 700) {
+        initStarting()
+    }
+}
+
+let handleEnterGaming = () => {
+    if (groups['enemy'].elements.length === 0) {
+        running = gaming
+        initGaming()
+    }
+}</script>
+    <script>// using for control the game's flow 
+let winning = () =>{
+
+    drawBackground()
+    drawGround()
+    drawHero()
+    drawEnemy()
+    drawArrow()
+    drawHead()
+    drawWin()
+}
+
+let starting = () =>{
+    drawBackground()
+    drawGround()
+    drawHero()
+    drawEnemy()
+    drawArrow()
+    drawTitle()
+    drawText()
+    
+
+    for (let i = 0; i < demStepInPerFrame; i++) {
+        demStep()
+    }
+
+    
+
+    startEvents.forEach((e, i) => e(i))
+
+    handleControl()
+    handleArrowContact()
+    handleShooting()
+    handleHeroCanJump()
+    handleResetContactPlane()
+    handleEnemyDie()
+    handleIdel()
+    handleEnterGaming()
+
+
+}
+
+let dieing = () =>{
+    drawBackground()
+    drawGround()
+    drawHero()
+    drawEnemy()
+    drawArrow()
+    drawHead()
+    drawDie()
+}
+
+let gaming = () => {
+    drawBackground()
+    drawGround()
+    drawHero()
+    drawEnemy()
+    drawArrow()
+    drawHead()
+    drawText()
+    drawCycle()
+    drawRock()
+
+    for (let i = 0; i < demStepInPerFrame; i++) {
+        demStep()
+    }
+
+
+    events.forEach((e, i) => e(i))
+
+    handleViewMove()
+    handleControl()
+    handleArrowContact()
+    handleEnemyMove()
+    handleHeroAttaced()
+    handleShooting()
+    handleMakeSnapshot()
+    handleHeroCanJump()
+    handleEnemyDie()
+    handleResetContactPlane()
+    handleBossActive()
+    handleHeroDie()
+
+}
+
+let eventing = () => {
+    drawBackground()
+    drawGround()
+    drawHero()
+    drawEnemy()
+    drawArrow()
+    drawHead()
+}
+
+function execute() {
+    running();
+    requestAnimationFrame(execute)
+}
+
+
+let heroTimeBack = () => {
+    drawBackground()
+    drawGround()
+    drawEnemy()
+    drawHero()
+    drawArrow()
+    drawRock()
+
+    drawBackEffect('rgb(34, 150, 227, 0.08', 'rgb(0, 183, 255, 1')
+
+
+    handleHeroTimeBack()
+
+    if (controlKeys['z'] === false) {
+        if(hero.canBack){
+            running = gaming
+            stopReserverMusic()
+            playMusic()
+        }
+    }
+
+}
+
+// let enemyTimeBack = () => {
+//     drawBackground()
+//     drawGround()
+//     drawEnemy()
+//     drawHero()
+//     drawArrow()
+
+//     drawBackEffect('rgb(63, 64, 61, 0.1', 'rgb(227, 32, 64, 1')
+
+
+//     handleEnemyTimeBack()
+
+//     if (controlKeys['w'] === false) {
+//         running = gaming
+//     }
+// }
+
+
+
+
+
+
+
+
+
+</script>
+    <script>
+const main = () => {
+    onresize()
+    initStarting()
+
+    running = starting
+    execute()
+    
+    setTimeout(()=>{
+        playMusic()
+    }, 1000)
+}
+
+window.onload = main</script>
+
+  </body>
+</html>

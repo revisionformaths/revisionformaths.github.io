@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Unicorn Sugarworld: Deathball</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0b0a10;
+  font-family:Georgia,'Times New Roman',serif;overscroll-behavior:none;touch-action:none;user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:5;padding:18px;
+  background:rgba(8,6,12,.78)}
+.ov.on{display:flex}
+.p{max-width:430px;width:100%;text-align:center;color:#f2e6cf;
+  background:#14122a;border:1px solid #3d3a6a;border-radius:6px;padding:26px 22px;
+  box-shadow:0 0 60px rgba(120,110,255,.12)}
+.p h1{font-size:34px;letter-spacing:.06em;color:#fff;margin-bottom:6px;font-weight:400}
+.p h2{font-size:24px;color:#fff;margin-bottom:12px;font-weight:400}
+.p p{font-size:15px;line-height:1.55;color:#cfc0a8;margin-bottom:14px;font-style:italic}
+#title{background:radial-gradient(120% 90% at 50% 10%,#2b2666,#0a0818)}
+#title .p{background:none;border:0;box-shadow:none;color:#fff;max-width:340px}
+#title h1.k{font-size:14px;letter-spacing:.3em;color:#fff;opacity:.55;font-weight:700;margin:0}
+#title h2.t{font-size:34px;color:#fff;font-weight:600;margin:2px 0 6px;letter-spacing:.02em}
+#title p{color:#fff;opacity:.62;font-style:normal;font-size:12px;margin-bottom:18px}
+#title .b{display:inline-block;width:auto;border:2px solid #fff;background:transparent;color:#fff;border-radius:999px;padding:12px 34px;font-weight:700;margin:0}
+#title .b:hover{background:#ffffff1a}
+.b{display:block;width:100%;border:1px solid #6a63a8;background:#1d1a3a;color:#fff;
+  border-radius:4px;padding:13px;margin-top:9px;font-family:inherit;font-size:17px;cursor:pointer;letter-spacing:.04em}
+.b:active{background:#332438}
+.u{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid #4a3a2c;background:#221a2a;
+  border-radius:4px;padding:11px 13px;margin-top:9px;cursor:pointer}
+.u:active{background:#2e2338}
+.u .e{font-size:27px}
+.u .n{font-size:16px;color:#ffcf8a}
+.u .d{font-size:13px;color:#a8977f;font-style:italic}
+#toast{position:fixed;left:50%;top:11%;transform:translateX(-50%);z-index:4;pointer-events:none;
+  color:#e8d6b4;font-style:italic;font-size:17px;text-align:center;max-width:84vw;opacity:0;
+  transition:opacity .4s;text-shadow:0 2px 8px #000}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="toast"></div>
+
+<div class="ov on" id="title"><div class="p">
+  <h1 class="k">UNICORN SUGARWORLD</h1>
+  <h2 class="t">Deathball</h2>
+  <p>Made by Jesse Rogers for JS13kGames</p>
+  <button class="b" id="bStart">Roll</button>
+</div></div>
+
+<div class="ov" id="lvl"><div class="p">
+  <h2>THE BALL TIGHTENS</h2>
+  <div id="picks"></div>
+</div></div>
+
+<div class="ov" id="pause"><div class="p">
+  <h2>STILL</h2>
+  <p>The tomb waits. It has waited longer than this.</p>
+  <button class="b" id="bResume">BACK TO IT</button>
+</div></div>
+
+<div class="ov" id="dead"><div class="p">
+  <h2>THEY TOOK YOU APART</h2>
+  <p id="deadMsg"></p>
+  <button class="b" id="bAgain">AGAIN</button>
+</div></div>
+
+<div class="ov" id="win"><div class="p">
+  <h2>THE CHORD</h2>
+  <p id="winMsg"></p>
+  <button class="b" id="bRoam">STAY A WHILE</button>
+  <button class="b" id="bAgain2">AGAIN</button>
+</div></div>
+
+<script>
+(()=>{'use strict';
+const TAU=Math.PI*2,clamp=(v,a,b)=>v<a?a:v>b?b:v,rand=(a,b)=>a+Math.random()*(b-a),
+      pick=a=>a[a.length*Math.random()|0],hyp=Math.hypot,$=i=>document.getElementById(i);
+
+/* ---------- canvas ---------- */
+const cv=$('c'),ctx=cv.getContext('2d');
+let W=0,H=0,dpr=1;
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);
+  cv.width=W*dpr|0;cv.height=H*dpr|0;}
+addEventListener('resize',resize);resize();
+
+/* ---------- procedural art (no fonts, no glyphs, nothing to render wrong) ---------- */
+const BONE='#cfc0a4';
+function el(x,y,rx,ry,rot,fill){ctx.fillStyle=fill;ctx.beginPath();
+  ctx.ellipse(x,y,rx,ry,rot||0,0,TAU);ctx.fill();}
+/* the remains of an ancient unicorn: skull with a long spiral horn, spine, ribcage,
+   four folded legs. Drawn once as a shape function so it can litter the whole tomb. */
+function dSkeleton(x,y,s,rot,a){
+  ctx.save();ctx.translate(x,y);ctx.rotate(rot||0);ctx.scale(s,s);
+  ctx.globalAlpha=a===undefined?.3:a;
+  const B='#c9bba0',D='rgba(40,32,28,.5)';
+  ctx.strokeStyle=D;ctx.lineWidth=1.2;
+  // spine
+  ctx.fillStyle=B;
+  for(let i=0;i<11;i++){const t=i/10;
+    el(-26+t*54,Math.sin(t*2.2)*3,3.4-t*.8,2.6,0,B);}
+  // ribcage — paired arcs off the spine
+  ctx.strokeStyle=B;ctx.lineWidth=2.2;ctx.lineCap='round';
+  for(let i=0;i<7;i++){const bx=-18+i*5.4,h=13-Math.abs(i-3)*1.6;
+    for(const sd of[-1,1]){ctx.beginPath();ctx.moveTo(bx,0);
+      ctx.quadraticCurveTo(bx+3,sd*h,bx-2,sd*(h+4));ctx.stroke();}}
+  // pelvis + shoulder
+  ctx.fillStyle=B;
+  el(-27,0,6,9,0,B);el(28,0,5,7.5,0,B);
+  // legs, folded as if it lay down
+  ctx.lineWidth=2.6;ctx.strokeStyle=B;
+  const leg=(bx,sd,k)=>{ctx.beginPath();ctx.moveTo(bx,sd*6);
+    ctx.lineTo(bx-6*k,sd*17);ctx.lineTo(bx+5*k,sd*25);ctx.stroke();
+    el(bx+5*k,sd*26,2.6,2.2,0,B);};
+  leg(-24,-1,1);leg(-24,1,1);leg(25,-1,-1);leg(25,1,-1);
+  // skull + horn
+  ctx.save();ctx.translate(36,0);ctx.rotate(-.25);
+  el(0,0,9,6,0,B);el(10,1,7,3.6,0,B);          // cranium + muzzle
+  ctx.fillStyle=D;el(1,-1.6,2.2,1.8,0,D);       // eye socket
+  ctx.fillStyle=B;
+  ctx.beginPath();ctx.moveTo(2,-5);ctx.lineTo(20,-19);ctx.lineTo(5,-3);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(40,32,28,.35)';ctx.lineWidth=.8;   // spiral grooves
+  for(let i=1;i<5;i++){ctx.beginPath();
+    ctx.moveTo(2+i*3.4,-5-i*2.8);ctx.lineTo(4+i*3.2,-3.4-i*2.8);ctx.stroke();}
+  ctx.restore();
+  ctx.restore();
+}
+/* a war statue: an ancient unicorn rearing in barding, horn levelled like a lance.
+   Nothing about it matches the world Athena grew up in. */
+function dStatue(x,y,s,a){
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.globalAlpha=a===undefined?.62:a;
+  const S='#5f5668',L='#8a8194',K='#3e3745',E='rgba(235,205,160,.28)';
+  // shadow pool and plinth, with a carved line nobody can read any more
+  el(0,40,42,7,0,'rgba(0,0,0,.35)');
+  ctx.fillStyle=K;ctx.fillRect(-36,26,72,16);
+  ctx.fillStyle=S;ctx.fillRect(-32,20,64,8);
+  ctx.strokeStyle=E;ctx.lineWidth=1;ctx.strokeRect(-36,26,72,16);
+  ctx.strokeStyle='rgba(20,16,24,.6)';
+  for(let i=0;i<9;i++){ctx.beginPath();ctx.moveTo(-26+i*6,31);ctx.lineTo(-24+i*6,31+(i%3?4:2));ctx.stroke();}
+  ctx.lineCap='round';ctx.lineJoin='round';
+  // tail, thrown back
+  ctx.strokeStyle=S;ctx.lineWidth=5;
+  ctx.beginPath();ctx.moveTo(-22,-14);ctx.quadraticCurveTo(-42,-10,-38,12);ctx.stroke();
+  ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-24,-10);ctx.quadraticCurveTo(-38,-2,-34,14);ctx.stroke();
+  const leg=(pts,w)=>{ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(pts[0],pts[1]);
+    for(let i=2;i<pts.length;i+=2)ctx.lineTo(pts[i],pts[i+1]);ctx.stroke();};
+  // far legs first, in shadow
+  ctx.strokeStyle=K;leg([-6,-2,-4,12,-8,22],6);leg([16,-18,32,-16,42,-8],5);
+  // the body in parts, so the silhouette reads as a horse and not a stone:
+  // barrel, neck, head. Rearing, so the barrel is tilted up.
+  ctx.fillStyle=S;
+  el(-4,-12,21,12.5,-.55,S);                                        // barrel
+  ctx.beginPath();ctx.moveTo(6,-26);ctx.lineTo(20,-8);ctx.lineTo(42,-40);ctx.lineTo(34,-54);ctx.closePath();ctx.fill();  // neck
+  ctx.beginPath();ctx.moveTo(32,-56);ctx.quadraticCurveTo(40,-60,48,-56);ctx.lineTo(62,-44);   // head
+  ctx.quadraticCurveTo(58,-38,48,-38);ctx.lineTo(38,-42);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=E;ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(-24,-24);ctx.quadraticCurveTo(-6,-30,10,-26);ctx.lineTo(34,-54);ctx.quadraticCurveTo(40,-60,48,-56);ctx.lineTo(62,-44);ctx.stroke();
+  // near legs: hind planted on the plinth, fore striking out
+  ctx.strokeStyle=S;leg([-16,0,-20,12,-15,22],7);
+  leg([18,-12,34,-8,44,2],6);
+  ctx.strokeStyle=E;ctx.lineWidth=1;leg([18,-12,34,-8,44,2],1);
+  ctx.fillStyle=K;el(-15,23,4,2.5,0,K);el(45,3,3.5,2.4,.6,K);      // hooves
+  // barding: crinet plates down the neck, peytral across the chest, chamfron on the face
+  ctx.fillStyle=L;ctx.strokeStyle='rgba(20,16,24,.5)';ctx.lineWidth=.9;
+  for(let i=0;i<4;i++){ctx.beginPath();
+    ctx.ellipse(15+i*6,-31+i*(-6),5.5,3.2,-1.0,0,TAU);ctx.fill();ctx.stroke();}
+  ctx.beginPath();ctx.moveTo(22,-14);ctx.quadraticCurveTo(16,-4,8,0);ctx.quadraticCurveTo(18,-2,26,-8);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(46,-56);ctx.lineTo(58,-45);ctx.lineTo(53,-40);ctx.lineTo(42,-51);ctx.closePath();ctx.fill();ctx.stroke();
+  // ears, and the horn levelled like a lance
+  ctx.fillStyle=S;
+  ctx.beginPath();ctx.moveTo(35,-57);ctx.lineTo(35,-66);ctx.lineTo(41,-58);ctx.closePath();ctx.fill();
+  ctx.fillStyle=L;
+  ctx.beginPath();ctx.moveTo(52,-58);ctx.lineTo(88,-50);ctx.lineTo(54,-50);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(20,16,24,.45)';ctx.lineWidth=.8;
+  for(let i=1;i<7;i++){ctx.beginPath();ctx.moveTo(52+i*5,-57+i*1.1);ctx.lineTo(53+i*5,-50.5+i*.2);ctx.stroke();}
+  el(50,-52,1.8,1.4,0,'rgba(20,16,24,.75)');                      // eye, a hollow
+  ctx.restore();
+}
+function dBone(x,y,L,w,rot,fill){ctx.save();ctx.translate(x,y);ctx.rotate(rot||0);
+  ctx.fillStyle=fill||BONE;
+  ctx.beginPath();ctx.rect(-L/2,-w/2,L,w);ctx.fill();
+  for(const s of[-1,1]){el(s*L/2,-w*.7,w*.72,w*.66,0,fill||BONE);
+    el(s*L/2,w*.7,w*.72,w*.66,0,fill||BONE);}
+  ctx.restore();}
+/* a sarcophagus slab of candied sugar-glass */
+function dSlab(x,y,w,h,rot,a){ctx.save();ctx.translate(x,y);ctx.rotate(rot||0);
+  ctx.globalAlpha=a===undefined?.5:a;
+  ctx.fillStyle='#2a2233';ctx.beginPath();
+  ctx.moveTo(-w/2,-h/2);ctx.lineTo(w/2,-h/2+h*.06);ctx.lineTo(w/2,h/2);
+  ctx.lineTo(-w/2,h/2-h*.05);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(220,200,175,.30)';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='rgba(230,215,190,.10)';
+  ctx.fillRect(-w*.32,-h*.28,w*.64,h*.14);
+  ctx.restore();}
+/* an eternal flame: layered teardrops, live flicker */
+function dFlame(x,y,s,ph){const n=performance.now();
+  const f=1+.14*Math.sin(n/150+ph)+.06*Math.sin(n/57+ph*3);
+  const lean=Math.sin(n/310+ph)*.12;
+  ctx.save();ctx.translate(x,y);ctx.rotate(lean);
+  const cols=['rgba(226,92,30,.85)','rgba(255,166,54,.92)','rgba(255,232,160,.95)'];
+  for(let i=0;i<3;i++){const k=(1-i*.3)*s*f;
+    ctx.fillStyle=cols[i];ctx.beginPath();
+    ctx.moveTo(0,-k*1.7);ctx.quadraticCurveTo(k*.8,-k*.3,0,k*.55);
+    ctx.quadraticCurveTo(-k*.8,-k*.3,0,-k*1.7);ctx.fill();}
+  ctx.restore();
+  // brazier
+  ctx.fillStyle='#241c22';ctx.beginPath();
+  ctx.moveTo(x-s*.8,y+s*.5);ctx.lineTo(x+s*.8,y+s*.5);
+  ctx.lineTo(x+s*.55,y+s*1.15);ctx.lineTo(x-s*.55,y+s*1.15);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(230,200,160,.35)';ctx.lineWidth=1.5;ctx.stroke();}
+/* an ant: three segments, six legs, two antennae — faces its heading */
+function dAnt(a){ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.hd||0);
+  const w=Math.sin(a.ph*2)*.5;
+  ctx.strokeStyle='#2b1d12';ctx.lineWidth=2;ctx.lineCap='round';
+  for(let i=0;i<3;i++){const bx=-2+i*5;
+    for(const s of[-1,1]){ctx.beginPath();ctx.moveTo(bx,s*3);
+      ctx.lineTo(bx-4+i*2,s*(9+w*2));ctx.lineTo(bx-8+i*3,s*(13+w*3));ctx.stroke();}}
+  ctx.beginPath();ctx.moveTo(11,-2);ctx.lineTo(19,-6-w);ctx.moveTo(11,2);ctx.lineTo(19,6+w);ctx.stroke();
+  el(-9,0,8,6.5,0,'#4a3018');
+  el(0,0,5.5,4.6,0,'#3a2513');
+  el(9,0,6,5.2,0,'#241a10');
+  el(11,-2.2,1.4,1.4,0,'#c9a06a');el(11,2.2,1.4,1.4,0,'#c9a06a');
+  ctx.restore();}
+/* a flute: tapered sugar-glass pipe with a colored band and finger holes */
+function dFlute(x,y,rot,hue,glow,n){ctx.save();ctx.translate(x,y);ctx.rotate(rot||0);
+  const L=64,w=9;
+  if(glow>0){ctx.strokeStyle=hue;ctx.globalAlpha=glow;ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,0,30+(1-glow)*42,0,TAU);ctx.stroke();ctx.globalAlpha=1;}
+  // body: pale bone tinted toward its own color, so the hue reads at a glance
+  const g=ctx.createLinearGradient(0,-w,0,w);
+  g.addColorStop(0,'#f6eeda');g.addColorStop(.55,hue);g.addColorStop(1,'#6d6350');
+  ctx.globalAlpha=.92;
+  ctx.fillStyle=g;ctx.beginPath();
+  ctx.moveTo(-L/2,-w*.6);ctx.lineTo(L/2,-w);ctx.lineTo(L/2,w);ctx.lineTo(-L/2,w*.6);
+  ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+  ctx.strokeStyle='rgba(50,38,30,.45)';ctx.lineWidth=1;ctx.stroke();
+  // bound rings at both ends — sinew wrap, not a lit tip
+  ctx.strokeStyle='rgba(245,238,222,.9)';ctx.lineWidth=2;
+  for(const bx of[-L/2+5,L/2-6]){ctx.beginPath();
+    ctx.moveTo(bx,-w*.85);ctx.lineTo(bx,w*.85);ctx.stroke();}
+  // blow hole then four finger holes
+  ctx.fillStyle='rgba(30,22,16,.85)';
+  ctx.beginPath();ctx.ellipse(-L/2+11,0,2.6,1.8,0,0,TAU);ctx.fill();
+  for(let i=0;i<4;i++){ctx.beginPath();ctx.arc(-20+i*7,0,1.9,0,TAU);ctx.fill();}
+  ctx.fillStyle='rgba(255,255,255,.32)';ctx.fillRect(-L/2+5,-w*.45,L*.5,1.4);
+  // notches: this flute's number, cut clean through the far end in the same tally
+  // the sockets use. Colour is never the only channel.
+  ctx.lineCap='round';
+  for(let i=0;i<(n||0);i++){const bx=5+i*4.4;
+    ctx.strokeStyle='rgba(30,22,16,.9)';ctx.lineWidth=3.2;
+    ctx.beginPath();ctx.moveTo(bx,-w*1.05);ctx.lineTo(bx,w*1.05);ctx.stroke();
+    ctx.strokeStyle='#f6eeda';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(bx,-w*1.05);ctx.lineTo(bx,w*1.05);ctx.stroke();}
+  ctx.restore();}
+/* the same count, carved beside a socket's cradle */
+function dNotch(x,y,n,col,a){ctx.save();ctx.translate(x,y);
+  ctx.globalAlpha=a;ctx.strokeStyle=col;ctx.lineWidth=2.2;ctx.lineCap='round';
+  for(let i=0;i<n;i++){const bx=(i-(n-1)/2)*6;
+    ctx.beginPath();ctx.moveTo(bx,-5);ctx.lineTo(bx,5);ctx.stroke();}
+  ctx.restore();}
+
+/* Instructions carved into the tomb floor. They fade in as she nears them and
+   fade back out once she has moved on, so nothing is ever a modal or a tutorial box. */
+const COARSE=matchMedia('(pointer:coarse)').matches;
+function carve(txt,x,y,s,a){
+  if(a<=.01)return;
+  ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font=s+'px Georgia';
+  try{ctx.letterSpacing=(s*.22|0)+'px';}catch(e){}
+  ctx.globalAlpha=a*.85;ctx.fillStyle='#07050c';ctx.fillText(txt,x,y+1.6);
+  ctx.globalAlpha=a*.5;ctx.fillStyle='#d8c6a2';ctx.fillText(txt,x,y);
+  ctx.restore();}
+function carveAlpha(x,y){const d=hyp(P.x-x,P.y-y);return clamp(1-(d-230)/280,0,1);}
+
+/* ---------- Athena SVG (single layer, rotates to heading) ----------
+   The cage itself is drawn procedurally so it can ACCRETE: every upgrade adds more
+   of the same element (ribs, shards, web) at higher density. One asset, growing look. */
+const ART={ok:false};
+const ATHENA=`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240"><defs>
+<radialGradient id="w" cx="44%" cy="32%" r="78%"><stop offset="0" stop-color="#fffaf2"/><stop offset=".6" stop-color="#e6dbcd"/><stop offset="1" stop-color="#b3a494"/></radialGradient>
+<linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ad4ff"/><stop offset="1" stop-color="#3d7fc4"/></linearGradient>
+<linearGradient id="h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3c9"/><stop offset="1" stop-color="#d9a94e"/></linearGradient></defs>
+<g transform="translate(120,128)">
+<path d="M-8 44 q-16 16 -30 18 q10 -20 22 -30z" fill="url(#m)" opacity=".85"/>
+<ellipse cx="-2" cy="26" rx="40" ry="30" fill="url(#w)"/>
+<path d="M-34 6 q-26 -8 -40 10 q22 6 30 22 q6 -18 12 -24z" fill="url(#m)" opacity=".9"/>
+<ellipse cx="26" cy="-6" rx="24" ry="27" fill="url(#w)"/>
+<path d="M14 -22 q-18 -16 -34 -8 q14 4 20 16z" fill="url(#m)"/>
+<path d="M40 -24 l16 -34 l4 5 l-12 34z" fill="url(#h)"/>
+<ellipse cx="38" cy="-16" rx="6" ry="8" fill="#f2e7d8"/>
+<circle cx="34" cy="-8" r="3.2" fill="#241a1a"/>
+<circle cx="33" cy="-9.2" r="1.1" fill="#fff" opacity=".8"/>
+<ellipse cx="46" cy="6" rx="8" ry="6" fill="#f6ece0"/>
+<circle cx="49" cy="6" r="1.6" fill="#8a7060"/>
+</g></svg>`;
+(()=>{const im=new Image();im.onload=()=>{const cn=document.createElement('canvas');
+  cn.width=cn.height=120;cn.getContext('2d').drawImage(im,0,0,120,120);ART.a=cn;ART.ok=true;};
+  im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(ATHENA);})();
+
+/* ================================================================
+   AUDIO — "the tomb tuning itself"
+   One clock, one scalar. dens = seated/7. Everything moves with it.
+   Inverted from Looking Up: there, density rising meant doom closing in.
+   Here the player's own hands are on the dial, and a full timeline is
+   the win. Each seated flute OWNS pulses in a 12-slot bell and keeps
+   playing them forever, so the loop is literally woven by the player.
+   Before the first flute there is no music at all — only the tomb.
+   Reactive hits (smush, bump, hurt, loop) stay OFF-GRID: the ants are
+   chaos and must never fall into tempo.
+   ================================================================ */
+let AC=null,MUTE=false;
+const AU=(()=>{
+let M=null,dry=null,bedG=null,bedF=null,cache={},pulse=0,dens=0,clock=0,booted=false;
+/* pentatonic, no leading tone — every one of the 127 possible subsets is consonant.
+   Deliberately UNORDERED against color, so a partial set never sounds like a
+   half-finished scale run. */
+const DEG=[7,0,12,3,15,5,10];
+/* the standard 12-pulse West African timeline. Each flute claims one slot. */
+const OWN=[0,3,6,9,2,7,10];
+/* plucked string. Noisier excitation + brighter filter + long decay reads as a
+   blown pipe rather than a harp. */
+function ks(freq,dec,sr,bright){
+  const n=Math.round(sr/freq),len=sr*3|0,b=new Float32Array(len),d=new Float32Array(n);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-Math.random()*.4);
+  let lp=0,p=0;
+  for(let i=0;i<len;i++){
+    const v=d[p];lp+=(v-lp)*bright;
+    d[p]=(lp*.62+d[(p+1)%n]*.38)*dec;p=(p+1)%n;
+    b[i]=v*.5*Math.exp(-i/sr*.5);}
+  const f=sr*.3|0;for(let i=0;i<f;i++)b[len-1-i]*=i/f;
+  return b;}
+function one(midi,g,pan,dec,when){
+  if(!AC||MUTE)return;
+  try{
+    const f=55*Math.pow(2,(midi-33)/12),k=midi.toFixed(2)+'|'+dec.toFixed(3);
+    let b=cache[k];
+    if(!b){const a=ks(f,dec,AC.sampleRate,.55);
+      b=AC.createBuffer(1,a.length,AC.sampleRate);b.copyToChannel(a,0);cache[k]=b;}
+    const s=AC.createBufferSource();s.buffer=b;
+    const gn=AC.createGain();gn.gain.value=g;s.connect(gn);
+    if(AC.createStereoPanner){const p=AC.createStereoPanner();p.pan.value=pan;
+      gn.connect(p).connect(dry);}else gn.connect(dry);
+    s.start(AC.currentTime+(when||0));}catch(e){}}
+/* double course: two strings a few cents apart, like a seperewa */
+function pluck(midi,g,pan,dec,when){
+  one(midi,g,pan,dec,when);
+  one(midi+.12,g*.6,pan*-.7,dec*.998,(when||0)+.013);}
+function boot(){
+  if(booted||!AC)return;booted=true;
+  try{
+    M=AC.createGain();M.gain.value=.6;
+    const cmp=AC.createDynamicsCompressor();cmp.threshold.value=-18;cmp.ratio.value=3;
+    M.connect(cmp).connect(AC.destination);
+    dry=AC.createGain();dry.gain.value=1;dry.connect(M);
+    // stone reflections: a long feedback delay is what makes it a tomb and not a room
+    const dl=AC.createDelay(3);dl.delayTime.value=.5;
+    const fb=AC.createGain();fb.gain.value=.44;
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1900;
+    const wet=AC.createGain();wet.gain.value=.4;
+    dry.connect(dl);dl.connect(lp);lp.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(M);
+    // the bed IS the tomb: filtered noise, not a synth pad. Survives phone speakers.
+    const sr=AC.sampleRate,nb=AC.createBuffer(1,sr*3,sr),nd=nb.getChannelData(0);
+    let l=0;for(let i=0;i<nd.length;i++){l+=((Math.random()*2-1)-l)*.05;nd[i]=l*3;}
+    const src=AC.createBufferSource();src.buffer=nb;src.loop=true;
+    bedF=AC.createBiquadFilter();bedF.type='bandpass';bedF.frequency.value=120;bedF.Q.value=1.2;
+    bedG=AC.createGain();bedG.gain.value=.16;
+    src.connect(bedF).connect(bedG).connect(M);src.start();
+    weave();
+  }catch(e){}}
+/* One clock. What the light— the flute count —changes is not the tempo so much
+   as whether there is a tempo at all: at zero flutes nothing plays and the few
+   hits there are get smeared; by seven the timeline is hard and full. */
+function weave(){
+  if(!AC)return;
+  const d=dens,p=pulse++%12,step=lerpA(.42,.30,d),
+        jit=lerpA(.26,.01,d)*(Math.random()-.5)*step*2;
+  for(let i=0;i<7;i++){
+    if(!SEATED[i])continue;
+    if(OWN[i]!==p&&!(d>.55&&OWN[i]===(p+6)%12&&Math.random()<.28))continue;
+    const oct=i%3?0:-12;
+    pluck(45+DEG[i]+oct,lerpA(.16,.22,d),(i-3)/4,lerpA(.985,.9945,d),Math.max(0,jit));}
+  // the answering voice, high and thin, only once a few are in
+  if(d>.28&&Math.random()<.10+d*.34)
+    pluck(69+DEG[(p*3)%7],.04+.05*d,-.28,.976,step*.5+jit);
+  // the low one: a funeral drum arriving late to its own procession
+  if(!p&&d>.28)pluck(26,.12+.28*d,0,.997,0);
+  if(p===6&&d>.7)pluck(28,.10+.16*d,.15,.996,0);
+  clock=setTimeout(weave,step*1000);}
+const SEATED=[0,0,0,0,0,0,0];
+return{
+  boot(){boot();},
+  /* the one dial */
+  dens(v,ants){dens=clamp(v,0,1);
+    if(bedG&&AC)try{
+      // pressure you can hear: the bed opens with the swarm as well as the tuning
+      const pr=clamp((ants||0)/34,0,1);
+      bedG.gain.setTargetAtTime(MUTE?0:.14+.16*dens+.12*pr,AC.currentTime,1.1);
+      bedF.frequency.setTargetAtTime(120+150*dens+220*pr,AC.currentTime,1.1);
+      bedF.Q.value=1.2+1.4*pr;
+    }catch(e){}},
+  /* a flute finds its socket: its voice joins the loop permanently, and the
+     timeline restarts underneath it so the new note lands on beat one */
+  seat(i){SEATED[i]=1;pulse=0;
+    pluck(45+DEG[i],.30,0,.994,0);
+    pluck(26,.34,0,.997,.02);
+    pluck(45+DEG[i]+12,.14,.3,.99,.16);},
+  /* the breath preview when the ball nudges an unseated flute — off-grid, quiet */
+  breath(i){pluck(45+DEG[i]-12,.055,rand(-.4,.4),.985,0);},
+  /* the chord: every voice at once, and the room keeps ringing */
+  chord(){for(let i=0;i<7;i++){
+    pluck(45+DEG[i],.20,(i-3)/4,.9965,i*.055);
+    pluck(57+DEG[i],.10,-(i-3)/4,.995,.5+i*.07);}
+    pluck(26,.34,0,.998,.02);pluck(38,.2,0,.997,.9);},
+  dead(){[0,.2,.46,.86,1.4].forEach((t,i)=>pluck(26-i,.30-i*.03,0,.997,t));},
+  reset(){for(let i=0;i<7;i++)SEATED[i]=0;pulse=0;dens=0;}
+};})();
+function lerpA(a,b,t){return a+(b-a)*t;}
+function ainit(){if(!AC){try{AC=new (AudioContext||webkitAudioContext)();}catch(e){}}
+  if(AC&&AC.state==='suspended')AC.resume();AU.boot();}
+function setMute(m){MUTE=m;if(AC)try{m?AC.suspend():AC.resume();}catch(e){}}
+/* --- off-grid reactive layer: the ants are chaos and never fall into tempo --- */
+function tone(f,d,type,v,f2,delay){if(!AC||MUTE)return;try{
+  const t=AC.currentTime+(delay||0),o=AC.createOscillator(),g=AC.createGain();
+  o.type=type||'sine';o.frequency.setValueAtTime(f,t);
+  if(f2)o.frequency.exponentialRampToValueAtTime(Math.max(20,f2),t+d);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v||.15,t+.02);
+  g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.connect(g).connect(AC.destination);o.start(t);o.stop(t+d+.05);}catch(e){}}
+function noise(d,v,fc){if(!AC||MUTE)return;try{
+  const n=AC.sampleRate*d|0,b=AC.createBuffer(1,n,AC.sampleRate),ch=b.getChannelData(0);
+  for(let i=0;i<n;i++)ch[i]=(Math.random()*2-1)*(1-i/n);
+  const s=AC.createBufferSource();s.buffer=b;
+  const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=fc||700;
+  const g=AC.createGain();g.gain.value=v||.2;
+  s.connect(f).connect(g).connect(AC.destination);s.start();}catch(e){}}
+const sfx={
+  smush(){noise(.09,.22,320);tone(190,.07,'sawtooth',.05,70);},
+  bump(){noise(.05,.18,420);tone(130,.07,'square',.08,80);},
+  hurt(){tone(190,.22,'sawtooth',.16,70);},
+  arm(){tone(220,.08,'triangle',.07,440);},
+  lvl(){AU.breath(1);AU.breath(4);},
+  loop(){noise(.22,.2,520);tone(110,.26,'sawtooth',.16,55);}
+};
+
+/* ---------- world ---------- */
+const ROOM={w:1700,h:1250};
+/* seven flutes, seven colors of the Rainbow — each has a pitch and one true socket */
+const HUE=['#e5484d','#e08b2f','#e8c93f','#5ac36a','#4aa3e0','#6a5ce0','#a856d6'];
+const CNAME=['Red','Orange','Gold','Green','Blue','Indigo','Violet'];
+/* set dressing is procedural — see the deco pass in render() */
+const K_BASE=155;                      // momentum threshold: above it you are a weapon
+const TUNE={DV:20,BOUNCE:.5,SOFTIF:.3};
+
+let P,ants,flutes,sockets,parts,floats,flames,path,odo,spawnT,gameT,cam,shake,
+    state,seated,xp,xpNeed,plevel,loopCd,loopFx,kills,museT,ended,roam,bloom,pulseT,hintF,hitstop,flash,flashC;
+
+function defP(){return{x:300,y:ROOM.h/2,vx:0,vy:0,r:26,base:250,acc:1,spd:1,
+  hp:3,maxhp:3,inv:0,soft:0,rot:0,heading:0,
+  shards:0,web:2,size:0,lasso:1,tuning:0,wasLethal:false};}
+function K(){return K_BASE;}
+function mass(){return 1+P.size*.35;}          // bigger ball shoves flutes harder
+function ballR(){return 26+P.size*4;}
+
+function reset(){
+  P=defP();ants=[];parts=[];floats=[];flutes=[];sockets=[];flames=[];
+  path=[{x:P.x,y:P.y,t:0,o:0}];odo=0;spawnT=1.2;gameT=0;cam={x:0,y:0};shake=0;
+  seated=0;xp=0;xpNeed=6;plevel=0;loopCd=0;loopFx=null;kills=0;museT=6;hitstop=0;flash=0;flashC='255,240,210';
+  ended=false;roam=false;bloom=0;pulseT=2;AU.reset();
+  // seven flutes + seven sockets, scattered apart
+  for(let i=0;i<7;i++){
+    const a=i/7*TAU+.4;
+    sockets.push({x:ROOM.w/2+Math.cos(a)*400,y:ROOM.h/2+Math.sin(a)*300,i,filled:false});
+    let x,y,tries=0;
+    do{x=rand(220,ROOM.w-220);y=rand(200,ROOM.h-200);tries++;}
+    while(tries<40&&(hyp(x-P.x,y-P.y)<340||flutes.some(f=>hyp(x-f.x,y-f.y)<180)));
+    flutes.push({x,y,vx:0,vy:0,r:22,i,seated:false,cd:0,glow:0});
+  }
+  hintF=flutes.reduce((a,b)=>hyp(a.x-P.x,a.y-P.y)<hyp(b.x-P.x,b.y-P.y)?a:b);
+  // eternal flames — the only light in here
+  for(let i=0;i<9;i++)flames.push({x:rand(160,ROOM.w-160),y:rand(140,ROOM.h-140),ph:rand(0,TAU)});
+  flames.push({x:ROOM.w/2,y:ROOM.h/2,ph:0});
+}
+
+/* ---------- input ---------- */
+const keys={},JOYR=60,joy={on:false,id:0,ox:0,oy:0,dx:0,dy:0};
+addEventListener('keydown',e=>{keys[e.code]=1;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.code]=0;});
+cv.addEventListener('pointerdown',e=>{if(state!=='PLAY'||joy.on)return;
+  // top-right corner holds the mute and pause buttons — don't start a drag there
+  if(e.clientY<52){
+    if(e.clientX>W-52){setMute(!MUTE);return;}
+    if(e.clientX>W-100){setState('PAUSE');return;}
+  }
+  joy.on=true;joy.id=e.pointerId;joy.ox=e.clientX;joy.oy=e.clientY;joy.dx=joy.dy=0;
+  cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('pointermove',e=>{if(!joy.on||e.pointerId!==joy.id)return;
+  let dx=e.clientX-joy.ox,dy=e.clientY-joy.oy,m=hyp(dx,dy);
+  if(m>JOYR){joy.ox=e.clientX-dx/m*JOYR;joy.oy=e.clientY-dy/m*JOYR;dx=dx/m*JOYR;dy=dy/m*JOYR;}
+  joy.dx=dx;joy.dy=dy;});
+const jend=e=>{if(joy.on&&e.pointerId===joy.id){joy.on=false;joy.dx=joy.dy=0;}};
+cv.addEventListener('pointerup',jend);cv.addEventListener('pointercancel',jend);
+function inputVec(){let x=0,y=0;
+  if(keys.KeyA||keys.ArrowLeft)x--;if(keys.KeyD||keys.ArrowRight)x++;
+  if(keys.KeyW||keys.ArrowUp)y--;if(keys.KeyS||keys.ArrowDown)y++;
+  if(joy.on&&(joy.dx||joy.dy)){x=joy.dx/JOYR;y=joy.dy/JOYR;}
+  const m=hyp(x,y);if(m>1){x/=m;y/=m;}return[x,y];}
+
+/* ---------- upgrades (four axes, all stackable) ---------- */
+const UPG=[
+ {n:'Wider Cage',k:0,d:'the ball grows — heavier shoves, wider kill',f:()=>{P.size++;}},
+ {n:'Bone Shards',k:1,d:'splintered ribs bite deeper on impact',f:()=>{P.shards++;}},
+ {n:'Rainbow Wake',k:2,d:'longer trail — close a loop, crush everything inside',f:()=>{P.web++;P.lasso*=1.18;}},
+ {n:'Downhill',k:3,d:'she winds up faster from a standstill',f:()=>{P.acc*=1.3;}},
+ {n:'Old Bones',k:4,d:'+1 heart, and mended',f:()=>{P.maxhp++;P.hp=P.maxhp;}},
+ {n:'Resonance',k:5,d:'every seated flute pulses — ants near it freeze',f:()=>{P.tuning++;}}
+];
+/* each card's icon is drawn, not typed — a tiny canvas per upgrade */
+function upgIcon(k){
+  const c=document.createElement('canvas');c.width=c.height=34;
+  const x=c.getContext('2d');x.translate(17,17);x.lineCap='round';
+  if(k===0){x.strokeStyle='#ffcf8a';x.lineWidth=2.4;
+    x.beginPath();x.arc(0,0,12,0,TAU);x.stroke();
+    x.globalAlpha=.4;x.beginPath();x.arc(0,0,6,0,TAU);x.stroke();}
+  else if(k===1){x.fillStyle='#e6d9c0';
+    for(let i=0;i<3;i++){x.save();x.rotate(i*TAU/3);
+      x.beginPath();x.moveTo(-2,-4);x.lineTo(13,0);x.lineTo(-2,4);x.closePath();x.fill();x.restore();}}
+  else if(k===2){x.lineWidth=2.6;
+    for(let i=0;i<5;i++){x.strokeStyle='hsl('+(i*52)+',80%,62%)';
+      x.beginPath();x.arc(0,6,4+i*2.4,Math.PI,TAU);x.stroke();}}
+  else if(k===3){x.strokeStyle='#cfe6ff';x.lineWidth=2.4;
+    for(let i=0;i<3;i++){const y=-7+i*7;
+      x.beginPath();x.moveTo(-12+i*3,y);x.lineTo(11,y);x.stroke();}}
+  else if(k===4){x.fillStyle='#e6d9c0';
+    x.fillRect(-3,-11,6,22);
+    for(const s of[-1,1]){x.beginPath();x.arc(s*4,-11,4,0,TAU);x.fill();
+      x.beginPath();x.arc(s*4,11,4,0,TAU);x.fill();}}
+  else{x.strokeStyle='#a856d6';x.lineWidth=2;
+    for(let i=1;i<4;i++){x.globalAlpha=1-i*.22;
+      x.beginPath();x.arc(0,0,i*4.5,0,TAU);x.stroke();}
+    x.globalAlpha=1;x.fillStyle='#f4ead6';x.fillRect(-2,-2,4,4);}
+  return c;
+}
+function offerUpgrades(){
+  const box=$('picks');box.innerHTML='';
+  const pool=UPG.slice(),out=[];
+  while(out.length<3&&pool.length)out.push(pool.splice(Math.random()*pool.length|0,1)[0]);
+  for(const u of out){
+    const d=document.createElement('div');d.className='u';
+    d.innerHTML='<div><div class="n">'+u.n+'</div><div class="d">'+u.d+'</div></div>';
+    d.insertBefore(upgIcon(u.k),d.firstChild);
+    d.onclick=()=>{u.f();sfx.lvl();P.inv=Math.max(P.inv,1.1);P.soft=Math.max(P.soft,1.1);flash=.5;setState('PLAY');};
+    box.appendChild(d);
+  }
+  setState('LVL');
+}
+
+/* ---------- state ---------- */
+const OV={TITLE:'title',LVL:'lvl',DEAD:'dead',WIN:'win',PAUSE:'pause'};
+function setState(s){state=s;for(const k in OV)$(OV[k]).classList.toggle('on',OV[k]===OV[s]);}
+function togglePause(){if(state==='PLAY')setState('PAUSE');else if(state==='PAUSE')setState('PLAY');}
+addEventListener('keydown',e=>{
+  if(e.code==='Escape'||e.code==='KeyP')togglePause();
+  if(e.code==='KeyM')setMute(!MUTE);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='PLAY')setState('PAUSE');});
+addEventListener('blur',()=>{if(state==='PLAY')setState('PAUSE');});
+let toastT;
+function toast(m,ms){const t=$('toast');t.textContent=m;t.style.opacity=1;
+  clearTimeout(toastT);toastT=setTimeout(()=>t.style.opacity=0,ms||3000);}
+
+/* Athena talking to herself — the only place Anansi appears */
+const MUSE=[
+ 'Sticks and web and somebody else\u2019s bones. He calls this a gift.',
+ '\u201cThe story belongs to whoever is left to tell it.\u201d Fine. I\u2019ll be left.',
+ 'I know this room. I saw it from the floor.',
+ 'Seven flutes. They kept singing. Even the ones it took kept singing.',
+ 'These are unicorn bones. All of them. Rooms of them.',
+ 'That statue has its horn down like a spear. Now I know what it was pointed at.',
+ 'Nobody at the Palace ever mentioned this. The ones who could have told them flew away.',
+ 'If he\u2019s watching \u2014 and he is \u2014 I hope he\u2019s bored.',
+ 'Dad made me a board. Anansi made me a wrecking ball.',
+ 'One wing. Doesn\u2019t matter down here. Nothing flies in a tomb.'
+];
+
+/* ---------- fx ---------- */
+function splat(x,y,c,n){for(let i=0;i<n;i++){const a=rand(0,TAU),s=rand(50,190);
+  parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,life:rand(.3,.6),c,s:rand(2,5)});}}
+function floater(x,y,txt,c){floats.push({x,y,txt,c:c||'#e8d6b4',t:0});}
+
+/* ---------- flute seating ---------- */
+function seatFlute(f){
+  const s=sockets[f.i];
+  f.seated=true;f.x=s.x;f.y=s.y;f.vx=f.vy=0;f.glow=1;s.filled=true;seated++;
+  AU.seat(f.i);
+  splat(s.x,s.y,HUE[f.i],26);shake=Math.max(shake,11);hitstop=Math.max(hitstop,.09);
+  flash=.42;flashC=HUE[f.i].slice(1).match(/../g).map(h=>parseInt(h,16)).join(',');
+  floater(s.x,s.y-34,CNAME[f.i]+'  '+seated+'/7',HUE[f.i]);
+  if(seated===7)finale();
+}
+function finale(){
+  ended=true;bloom=1;flash=1;flashC='255,245,230';shake=16;
+  // the chord: all seven at once, soft and long
+  AU.chord();
+  for(const a of ants)a.flee=true;
+  $('winMsg').innerHTML='Seven notes at once, and the walls remember them. That is the sound. The last thing it heard.<br>'+
+    'The light goes every color at once. Every ant in the dark turns and runs.<br><br>'+
+    '<b>'+kills+'</b> underfoot &nbsp;·&nbsp; '+fmt(gameT);
+  setTimeout(()=>{if(state==='PLAY')setState('WIN');},2600);
+  toast('The tomb sings. They\u2019re leaving.',4000);
+}
+function fmt(t){const m=t/60|0,s=t%60|0;return m+':'+(s<10?'0':'')+s;}
+
+/* ---------- trail / loop ---------- */
+function pushPath(){const h=path[0],d=hyp(P.x-h.x,P.y-h.y);
+  if(d<3)return;odo+=d;path.unshift({x:P.x,y:P.y,t:gameT,o:odo});
+  const need=(260+P.web*90)*P.lasso;
+  while(path.length>2){const l=path[path.length-1];
+    if(odo-l.o>need&&gameT-l.t>3.4)path.pop();else break;}
+  if(path.length>600)path.length=600;}
+function inPoly(px,py,poly){let s=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+    if((yi>py)!==(yj>py)&&px<(xj-xi)*(py-yi)/(yj-yi)+xi)s=!s;}
+  return s;}
+function tryLoop(){
+  if(loopCd>0||P.web<2)return;
+  for(let k=4;k<path.length;k++){const p=path[k];
+    if(odo-p.o<150||gameT-p.t<.45)continue;
+    if(gameT-p.t>3.2*P.lasso)break;
+    if(hyp(P.x-p.x,P.y-p.y)<20){
+      const poly=path.slice(0,k+1);let A=0;
+      for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];A+=a.x*b.y-b.x*a.y;}
+      if(Math.abs(A/2)<2800)return;
+      loopCd=1.1;shake=13;hitstop=Math.max(hitstop,.1);flash=.4;flashC='255,220,150';sfx.loop();loopFx={poly:poly.map(p=>({x:p.x,y:p.y})),t:.45};
+      for(let i=ants.length-1;i>=0;i--)if(inPoly(ants[i].x,ants[i].y,poly))killAnt(ants[i],i);
+      return;}}
+}
+
+/* ---------- ants ---------- */
+function spawnAnt(){
+  if(ants.length>60||(ended&&!roam))return;
+  for(let k=0;k<20;k++){
+    const x=rand(50,ROOM.w-50),y=rand(50,ROOM.h-50);
+    if(hyp(x-P.x,y-P.y)<420)continue;
+    ants.push({x,y,r:13,hp:2+gameT/70,spd:rand(58,92)*(1+gameT/300),
+      ph:rand(0,TAU),hcd:0,acd:0,kx:0,ky:0,stun:0,flee:false});
+    return;}
+}
+function killAnt(a,i){ants.splice(i,1);kills++;sfx.smush();
+  splat(a.x,a.y,'#7f5b32',14);splat(a.x,a.y,'#c9a06a',4);
+  hitstop=Math.max(hitstop,.05);shake=Math.max(shake,6);
+  if(!ended){xp++;if(xp>=xpNeed){xp=0;plevel++;xpNeed=6+plevel*4;offerUpgrades();}}}
+function hurt(){
+  if(P.inv>0||ended)return;
+  P.inv=1.2;P.hp--;shake=13;hitstop=Math.max(hitstop,.07);flash=.5;flashC='229,72,77';sfx.hurt();floater(P.x,P.y-34,'\u2014','#e5484d');
+  if(P.hp<=0){$('deadMsg').innerHTML='The cage cracks. Somewhere very far up, a spider is not surprised.<br><br>'+
+    seated+' / 7 flutes &nbsp;·&nbsp; '+kills+' underfoot';setState('DEAD');}
+}
+
+/* ---------- update ---------- */
+function update(dt){
+  gameT+=dt;
+  if(P.inv>0)P.inv-=dt;if(P.soft>0)P.soft-=dt;
+  if(loopCd>0)loopCd-=dt;if(shake>0)shake=Math.max(0,shake-32*dt);
+  if(flash>0)flash=Math.max(0,flash-dt*2.2);
+  if(loopFx){loopFx.t-=dt;if(loopFx.t<=0)loopFx=null;}
+  // Athena's asides
+  museT-=dt;if(museT<=0&&MUSE.length){museT=rand(22,34);toast(pick(MUSE),4600);}
+
+  // --- movement: a ball coasts, it does not stop on a dime
+  const[ix,iy]=inputVec(),sp=P.base*P.spd;
+  if(ix||iy){const l=Math.min(1,dt*3.4*P.acc);P.vx+=(ix*sp-P.vx)*l;P.vy+=(iy*sp-P.vy)*l;}
+  else{const f=Math.pow(.36,dt);P.vx*=f;P.vy*=f;}
+  const spd=hyp(P.vx,P.vy),R=ballR();
+  if(spd>15)P.heading=Math.atan2(P.vy,P.vx);
+  const lethal=spd>=K();
+  if(lethal&&!P.wasLethal)sfx.arm();
+  P.wasLethal=lethal;
+  P.x+=P.vx*dt;P.y+=P.vy*dt;P.rot+=spd*dt/R*(P.vx<0?-1:1);
+  P.x=clamp(P.x,R,ROOM.w-R);P.y=clamp(P.y,R,ROOM.h-R);
+  pushPath();tryLoop();
+
+  // --- flutes: bump them toward their socket
+  for(const f of flutes){
+    if(f.glow>0)f.glow-=dt*.6;
+    if(f.seated)continue;
+    if(f.cd>0)f.cd-=dt;
+    f.x+=f.vx*dt;f.y+=f.vy*dt;
+    // heavy drag: a stone flute skids, it doesn't sail. Eases as the cage grows.
+    const fr=Math.pow(.004+.006*P.size,dt);f.vx*=fr;f.vy*=fr;
+    // walls kick back — a flute can never end up pinned somewhere you can't bump it
+    if(f.x<f.r){f.x=f.r+(f.r-f.x)*.5;f.vx=Math.abs(f.vx)*.55+40;}
+    if(f.x>ROOM.w-f.r){f.x=ROOM.w-f.r-(f.x-(ROOM.w-f.r))*.5;f.vx=-Math.abs(f.vx)*.55-40;}
+    if(f.y<f.r){f.y=f.r+(f.r-f.y)*.5;f.vy=Math.abs(f.vy)*.55+40;}
+    if(f.y>ROOM.h-f.r){f.y=ROOM.h-f.r-(f.y-(ROOM.h-f.r))*.5;f.vy=-Math.abs(f.vy)*.55-40;}
+    f.x=clamp(f.x,f.r,ROOM.w-f.r);f.y=clamp(f.y,f.r,ROOM.h-f.r);
+    const s=sockets[f.i],ds=hyp(f.x-s.x,f.y-s.y);
+    if(ds<34){seatFlute(f);continue;}
+    if(ds<80){const a=Math.atan2(s.y-f.y,s.x-f.x);f.vx+=Math.cos(a)*160*dt;f.vy+=Math.sin(a)*160*dt;}
+    const d=hyp(P.x-f.x,P.y-f.y),rr=R+f.r;
+    if(d<rr){
+      const nx=(P.x-f.x)/(d||1),ny=(P.y-f.y)/(d||1);
+      if(spd>50&&f.cd<=0){
+        f.cd=.18;sfx.bump();
+        // a soft breath of its note on contact — a hint at what it wants to be
+        AU.breath(f.i);
+        const imp=spd*1.5*mass();
+        f.vx-=nx*imp;f.vy-=ny*imp;
+        P.vx*=.9;P.vy*=.9;
+        splat(f.x,f.y,HUE[f.i],3);
+      }
+      P.x=f.x+nx*rr;P.y=f.y+ny*rr;
+    }
+  }
+
+  // --- ants
+  if(bloom>0)bloom-=dt*.35;
+  // the one dial: how much of the tomb is back in tune, plus how loud the swarm is
+  AU.dens(seated/7,ants.length);
+  // Resonance: each seated flute pulses, freezing ants that stray near it
+  if(P.tuning>0){pulseT-=dt;
+    if(pulseT<=0){pulseT=2.2;
+      for(const f of flutes){if(!f.seated)continue;
+        f.glow=Math.max(f.glow,.5);
+        const rr=90+P.tuning*36;
+        for(const a of ants)if(hyp(a.x-f.x,a.y-f.y)<rr){a.stun=.9+P.tuning*.3;}}
+      AU.breath(0);}}
+
+  // pressure tracks the WORK DONE, not the clock: every flute you seat wakes the tomb further.
+  // 7 left ≈ one ant every 2.7s · 1 left ≈ one every second. In roam, it holds at that pace.
+  if(!ended||roam){spawnT-=dt;
+    if(spawnT<=0){const left=ended?1:7-seated;
+      spawnT=.65+left*.29;
+      spawnAnt();if(left<=2)spawnAnt();}}
+  const KK=K();
+  for(let i=ants.length-1;i>=0;i--){
+    const a=ants[i];a.ph+=dt*3;a.hcd-=dt;a.acd-=dt;
+    if(a.stun>0){a.stun-=dt;a.kx*=Math.pow(.02,dt);a.ky*=Math.pow(.02,dt);}
+    const dx=P.x-a.x,dy=P.y-a.y,d=hyp(dx,dy)||1,sgn=a.flee?-1:1,w=Math.sin(a.ph)*.35;
+    let mx=sgn*dx/d+(-dy/d)*w,my=sgn*dy/d+(dx/d)*w;const m=hyp(mx,my)||1;
+    a.hd=Math.atan2(my,mx);a.dirx=mx;
+    const mv=a.stun>0?0:1;
+    a.x+=(mx/m*a.spd*mv+a.kx)*dt;a.y+=(my/m*a.spd*mv+a.ky)*dt;
+    a.kx*=Math.pow(.02,dt);a.ky*=Math.pow(.02,dt);
+    a.x=clamp(a.x,a.r,ROOM.w-a.r);a.y=clamp(a.y,a.r,ROOM.h-a.r);
+    if(a.flee&&(a.x<20||a.x>ROOM.w-20||a.y<20||a.y>ROOM.h-20)){ants.splice(i,1);continue;}
+    if(d<a.r+R+2){
+      if(spd>=KK){                                   // SMUSH
+        if(a.hcd<=0){a.hcd=.3;
+          a.hp-=(1.6+P.shards*1.1)*(spd/KK);
+          const v=spd||1;a.kx+=P.vx/v*260;a.ky+=P.vy/v*260;
+          const ns=Math.max(0,spd-TUNE.DV/mass());   // each body costs speed
+          if(spd>0){P.vx*=ns/spd;P.vy*=ns/spd;}
+          splat(a.x,a.y,'#fff',2);
+          if(a.hp<=0){killAnt(a,i);continue;}}
+      }else{                                          // BOUNCE — you are prey
+        if(a.acd<=0&&P.inv<=0&&P.soft<=0){a.acd=.9;hurt();}
+        if(P.soft<=0){P.soft=TUNE.SOFTIF;
+          const nx=dx/-d,ny=dy/-d,vn=P.vx*nx+P.vy*ny;
+          if(vn<0){P.vx-=(1+TUNE.BOUNCE)*vn*nx;P.vy-=(1+TUNE.BOUNCE)*vn*ny;}
+          P.x=a.x+nx*(a.r+R+2);P.y=a.y+ny*(a.r+R+2);
+          tone(120,.06,'square',.08,70);}
+      }
+    }
+  }
+  // separation
+  for(let i=0;i<ants.length;i++)for(let j=i+1;j<ants.length;j++){
+    const a=ants[i],b=ants[j],rr=a.r+b.r,dx=b.x-a.x,dy=b.y-a.y;
+    if(dx>rr||dx<-rr||dy>rr||dy<-rr)continue;
+    const d2=dx*dx+dy*dy;
+    if(d2<rr*rr&&d2>.001){const d=Math.sqrt(d2),p=(rr-d)/2,nx=dx/d,ny=dy/d;
+      a.x-=nx*p;a.y-=ny*p;b.x+=nx*p;b.y+=ny*p;}}
+
+  // fx
+  for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.t+=dt;
+    p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.92;p.vy*=.92;if(p.t>p.life)parts.splice(i,1);}
+  for(let i=floats.length-1;i>=0;i--){const f=floats[i];f.t+=dt;f.y-=34*dt;
+    if(f.t>1.1)floats.splice(i,1);}
+
+  // camera
+  const tx=clamp(P.x-W/2,0,Math.max(0,ROOM.w-W)),ty=clamp(P.y-H/2,0,Math.max(0,ROOM.h-H));
+  cam.x+=(tx-cam.x)*Math.min(1,dt*6);cam.y+=(ty-cam.y)*Math.min(1,dt*6);
+}
+
+/* ---------- render ---------- */
+function render(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#0b0a10';ctx.fillRect(0,0,W,H);
+  const sx=shake?rand(-shake,shake):0,sy=shake?rand(-shake,shake):0;
+  ctx.save();ctx.translate(-cam.x+sx,-cam.y+sy);
+
+  // floor
+  ctx.fillStyle='#16121a';ctx.fillRect(0,0,ROOM.w,ROOM.h);
+  ctx.strokeStyle='rgba(255,220,180,.035)';ctx.lineWidth=1;
+  for(let x=0;x<ROOM.w;x+=160){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ROOM.h);ctx.stroke();}
+  for(let y=0;y<ROOM.h;y+=160){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(ROOM.w,y);ctx.stroke();}
+
+  // eternal flames — pools of warm light on cold stone
+  const now=performance.now();
+  for(const f of flames){
+    const fl=.82+.18*Math.sin(now/170+f.ph)+.06*Math.sin(now/61+f.ph*3);
+    const g=ctx.createRadialGradient(f.x,f.y,6,f.x,f.y,300*fl);
+    g.addColorStop(0,'rgba(255,180,90,.30)');g.addColorStop(.45,'rgba(210,110,50,.10)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(f.x,f.y,300*fl,0,TAU);ctx.fill();
+  }
+
+  // seated flutes light the room in their own color — the rainbow assembles as you play
+  for(const f of flutes){
+    if(!f.seated)continue;
+    const p=.85+.15*Math.sin(now/420+f.i);
+    const g2=ctx.createRadialGradient(f.x,f.y,4,f.x,f.y,230*p);
+    g2.addColorStop(0,HUE[f.i]+'55');g2.addColorStop(.5,HUE[f.i]+'18');
+    g2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g2;ctx.beginPath();ctx.arc(f.x,f.y,230*p,0,TAU);ctx.fill();
+  }
+  // the chord blooms rainbow across the whole tomb
+  if(bloom>0){
+    for(let i=0;i<7;i++){
+      ctx.strokeStyle='hsla('+(i*51+now/20)%360+',90%,62%,'+(bloom*.5)+')';
+      ctx.lineWidth=26;
+      ctx.beginPath();ctx.arc(ROOM.w/2,ROOM.h/2,(1-bloom)*1500+i*34,0,TAU);ctx.stroke();}
+  }
+
+  // set dressing: this tomb was built BY unicorns, for unicorns — their dead lie everywhere,
+  // and their war statues watch it happen.
+  let s=1337;const rn=()=>{s=s*16807%2147483647;return s/2147483647;};
+  for(let i=0;i<6;i++)dSlab(rn()<.5?170+rn()*240:ROOM.w-170-rn()*240,
+    130+rn()*(ROOM.h-260),120+rn()*90,190+rn()*70,rn()*.5-.25,.5);
+  for(let i=0;i<9;i++)dSkeleton(120+rn()*(ROOM.w-240),120+rn()*(ROOM.h-240),
+    .9+rn()*.9,rn()*TAU,.24+rn()*.1);
+  for(let i=0;i<5;i++)dStatue(rn()<.5?150+rn()*180:ROOM.w-150-rn()*180,
+    150+rn()*(ROOM.h-300),1.5+rn()*.9,.55);
+  for(let i=0;i<12;i++)dBone(100+rn()*(ROOM.w-200),100+rn()*(ROOM.h-200),
+    26+rn()*34,4.5+rn()*3,rn()*TAU,'rgba(198,182,158,.20)');
+
+  // flames on top of their own glow
+  for(const f of flames)dFlame(f.x,f.y,15,f.ph);
+
+  // carved floor instructions
+  {const a1=carveAlpha(320,ROOM.h/2+120);
+   carve(COARSE?'SWIPE ANYWHERE TO ROLL':'W A S D  OR  ARROWS TO ROLL',320,ROOM.h/2+120,21,a1);
+   carve('GO FAST TO SQUISH THEM',320,ROOM.h/2+152,21,a1);
+   carve('CLOSE A LOOP TO CRUSH WHAT IS INSIDE',320,ROOM.h/2+188,15,a1*.8);
+   if(hintF&&!hintF.seated){const a2=carveAlpha(hintF.x,hintF.y+96);
+     carve('BUMP EACH FLUTE ONTO ITS NOTCHES',hintF.x,hintF.y+96,17,a2);}}
+
+  // sockets
+  for(const so of sockets){
+    const p=.5+.5*Math.sin(now/500+so.i);
+    ctx.strokeStyle=so.filled?HUE[so.i]:'rgba(230,210,180,'+(.18+.14*p)+')';
+    ctx.lineWidth=so.filled?3:2;ctx.setLineDash(so.filled?[]:[9,7]);
+    ctx.beginPath();ctx.arc(so.x,so.y,34,0,TAU);ctx.stroke();ctx.setLineDash([]);
+    if(!so.filled){
+      // a carved cradle: the flute-shaped notch cut for this one colour
+      ctx.save();ctx.translate(so.x,so.y);ctx.rotate(-.5);
+      ctx.strokeStyle=HUE[so.i];ctx.globalAlpha=.28+.22*p;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(-20,0);ctx.lineTo(20,0);ctx.stroke();
+      ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(-20,-6);ctx.lineTo(-20,6);
+      ctx.moveTo(20,-6);ctx.lineTo(20,6);ctx.stroke();
+      ctx.globalAlpha=1;ctx.restore();}
+    dNotch(so.x,so.y+46,so.i+1,so.filled?HUE[so.i]:'rgba(230,210,180,.55)',so.filled?.9:.4+.2*p);
+  }
+  // flutes
+  for(const f of flutes){
+    ctx.fillStyle=HUE[f.i];ctx.globalAlpha=f.seated?.30:.22;
+    ctx.beginPath();ctx.arc(f.x,f.y,f.r+(f.seated?16:9),0,TAU);ctx.fill();ctx.globalAlpha=1;
+    dFlute(f.x,f.y,f.seated?-.5:Math.sin(now/700+f.i)*.25,HUE[f.i],f.glow,f.i+1);
+  }
+  // ants
+  for(const a of ants){
+    ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();
+    ctx.ellipse(a.x,a.y+9,12,5,0,0,TAU);ctx.fill();
+    dAnt(a);
+  }
+
+  // rainbow wake
+  const spd=hyp(P.vx,P.vy),lethal=spd>=K();
+  ctx.lineWidth=lethal?5:3;ctx.lineCap='round';
+  for(let i=0;i<path.length-1&&i<220;i+=2){
+    const age=gameT-path[i].t;if(age>2.8)break;
+    ctx.strokeStyle='hsla('+((i*6+now/9)%360)+',85%,62%,'+((lethal?.55:.28)-age*.14)+')';
+    ctx.beginPath();ctx.moveTo(path[i].x,path[i].y);ctx.lineTo(path[i+1].x,path[i+1].y);ctx.stroke();}
+  if(loopFx){ctx.fillStyle='rgba(255,220,150,'+(loopFx.t*.7)+')';
+    ctx.beginPath();ctx.moveTo(loopFx.poly[0].x,loopFx.poly[0].y);
+    for(const p of loopFx.poly)ctx.lineTo(p.x,p.y);ctx.closePath();ctx.fill();}
+
+  drawBall();
+  for(const p of parts){ctx.globalAlpha=1-p.t/p.life;ctx.fillStyle=p.c;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.s,0,TAU);ctx.fill();ctx.globalAlpha=1;}
+  ctx.textAlign='center';
+  for(const f of floats){ctx.globalAlpha=1-f.t/1.1;ctx.fillStyle=f.c;ctx.font='20px Georgia';
+    ctx.fillText(f.txt,f.x,f.y);ctx.globalAlpha=1;}
+  ctx.restore();
+  if(flash>0){ctx.fillStyle='rgba('+flashC+','+(flash*.5)+')';ctx.fillRect(0,0,W,H);}
+  hud();
+}
+/* The cage: Athena inside, then ribs + shards + web woven around her.
+   Every upgrade adds MORE OF THE SAME ELEMENT — the ball visibly thickens. */
+function drawBall(){
+  const R=ballR(),spd=hyp(P.vx,P.vy),lethal=spd>=K(),blink=P.inv>0&&(performance.now()/90|0)%2===0;
+  ctx.save();ctx.translate(P.x,P.y);
+  // squash and stretch along travel: the ball deforms as it winds up
+  if(spd>20){const st=1+Math.min(.16,spd/2600),a=Math.atan2(P.vy,P.vx);
+    ctx.rotate(a);ctx.scale(st,1/st);ctx.rotate(-a);}
+  ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(0,R*.6,R*.9,R*.35,0,0,TAU);ctx.fill();
+  if(blink)ctx.globalAlpha=.45;
+  // Athena, oriented to travel
+  // she fills the cage now — the ribs frame her instead of burying her.
+  // Travelling left must MIRROR her, not roll her over: mirror first, then rotate
+  // by (heading − π), so her feet stay down at every heading.
+  if(ART.ok){ctx.save();
+    if(Math.abs(P.heading)>Math.PI/2){ctx.rotate(P.heading-Math.PI);ctx.scale(-1,1);}
+    else ctx.rotate(P.heading);
+    const d=R*2.05;ctx.drawImage(ART.a,-d/2,-d/2,d,d);ctx.restore();}
+  else{ctx.fillStyle='#efe4d4';ctx.beginPath();ctx.arc(0,0,R*.75,0,TAU);ctx.fill();}
+  // cage rotates with actual roll — kept thin and open so she reads through it
+  ctx.save();ctx.rotate(P.rot);
+  const ribs=3+P.web;
+  ctx.strokeStyle=lethal?'rgba(255,225,180,.62)':'rgba(210,196,172,.36)';
+  ctx.lineWidth=1.4;
+  for(let i=0;i<ribs;i++){const a=i/ribs*Math.PI;
+    ctx.beginPath();ctx.ellipse(0,0,R,R*.34,a,0,TAU);ctx.stroke();}
+  ctx.strokeStyle=lethal?'rgba(255,235,200,.9)':'rgba(235,225,205,.7)';ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.stroke();
+  // web strands: a sparse rim lattice, denser with the Rainbow Wake upgrade
+  ctx.strokeStyle='rgba(230,230,245,.22)';ctx.lineWidth=1;
+  for(let r=0;r<P.web;r++){ctx.beginPath();ctx.arc(0,0,R*(.82-r*.09),0,TAU);ctx.stroke();}
+  // bone shards: same shard, repeated more densely with each pick
+  const n=4+P.shards*5;
+  for(let i=0;i<n;i++){const a=i/n*TAU;
+    ctx.save();ctx.rotate(a);ctx.translate(R,0);
+    ctx.fillStyle=lethal?'#fff6e2':'#ded2be';
+    ctx.beginPath();ctx.moveTo(-2,-4);ctx.lineTo(7+P.shards*1.6,0);ctx.lineTo(-2,4);ctx.closePath();ctx.fill();
+    ctx.restore();}
+  ctx.restore();
+  if(lethal&&spd>1){ctx.strokeStyle='rgba(255,220,150,.55)';ctx.lineWidth=2;
+    const a=Math.atan2(P.vy,P.vx);
+    for(let k=-1;k<=1;k+=2){const ox=Math.cos(a+1.5708)*k*9,oy=Math.sin(a+1.5708)*k*9;
+      ctx.beginPath();
+      ctx.moveTo(-Math.cos(a)*(R+6)+ox,-Math.sin(a)*(R+6)+oy);
+      ctx.lineTo(-Math.cos(a)*(R+24)+ox,-Math.sin(a)*(R+24)+oy);ctx.stroke();}}
+  ctx.restore();
+}
+function hud(){
+  // hearts
+  ctx.textAlign='left';
+  for(let i=0;i<P.maxhp;i++){
+    const hx=26+i*24,hy=28,s=7;
+    ctx.fillStyle=i<P.hp?'#e5484d':'rgba(255,255,255,.14)';
+    ctx.beginPath();
+    ctx.moveTo(hx,hy+s*.9);
+    ctx.bezierCurveTo(hx-s*1.5,hy-s*.2,hx-s*.55,hy-s*1.2,hx,hy-s*.35);
+    ctx.bezierCurveTo(hx+s*.55,hy-s*1.2,hx+s*1.5,hy-s*.2,hx,hy+s*.9);
+    ctx.closePath();ctx.fill();}
+  // flutes seated — seven pips in their colors
+  ctx.textAlign='center';
+  for(let i=0;i<7;i++){const x=W/2+(i-3)*26;
+    ctx.fillStyle=sockets[i].filled?HUE[i]:'rgba(255,255,255,.13)';
+    ctx.beginPath();ctx.arc(x,28,7,0,TAU);ctx.fill();}
+  ctx.fillStyle='rgba(240,225,200,.6)';ctx.font='13px Georgia';
+  ctx.fillText(seated+' / 7 in tune  ·  '+fmt(gameT),W/2,54);
+  // xp bar
+  const bw=Math.min(240,W-60);
+  ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(W/2-bw/2,H-26,bw,6);
+  ctx.fillStyle='#ffcf8a';ctx.fillRect(W/2-bw/2,H-26,bw*(xp/xpNeed),6);
+  // speed / lethality tell
+  const spd=hyp(P.vx,P.vy);
+  ctx.fillStyle=spd>=K()?'rgba(255,207,138,.85)':'rgba(255,255,255,.28)';
+  ctx.font='12px Georgia';ctx.fillText(spd>=K()?'LETHAL':'too slow',W/2,H-36);
+  // mute + pause, top right
+  ctx.save();ctx.translate(W-30,26);
+  ctx.fillStyle='rgba(240,225,200,.6)';
+  ctx.beginPath();ctx.moveTo(-8,-3);ctx.lineTo(-4,-3);ctx.lineTo(0,-8);
+  ctx.lineTo(0,8);ctx.lineTo(-4,3);ctx.lineTo(-8,3);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(240,225,200,.6)';ctx.lineWidth=1.8;
+  if(MUTE){ctx.beginPath();ctx.moveTo(3,-5);ctx.lineTo(10,5);ctx.moveTo(10,-5);ctx.lineTo(3,5);ctx.stroke();}
+  else{for(let i=1;i<3;i++){ctx.beginPath();ctx.arc(1,0,i*4,-.7,.7);ctx.stroke();}}
+  ctx.restore();
+  ctx.fillStyle='rgba(240,225,200,.5)';
+  ctx.fillRect(W-80,20,4,13);ctx.fillRect(W-73,20,4,13);
+  // off-screen marker for the nearest unseated flute
+  let best=null,bd=1e9;
+  for(const f of flutes)if(!f.seated){const d=hyp(f.x-P.x,f.y-P.y);if(d<bd){bd=d;best=f;}}
+  if(best){const px=best.x-cam.x,py=best.y-cam.y;
+    if(px<40||px>W-40||py<70||py>H-70){
+      const mx=clamp(px,30,W-30),my=clamp(py,80,H-60),ang=Math.atan2(py-my,px-mx);
+      ctx.save();ctx.translate(mx,my);ctx.rotate(ang);
+      ctx.fillStyle=HUE[best.i];ctx.globalAlpha=.85;
+      ctx.beginPath();ctx.moveTo(11,0);ctx.lineTo(-7,-8);ctx.lineTo(-7,8);ctx.closePath();ctx.fill();
+      ctx.restore();ctx.globalAlpha=1;}}
+  if(joy.on){ctx.strokeStyle='rgba(255,255,255,.22)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(joy.ox,joy.oy,JOYR,0,TAU);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.28)';
+    ctx.beginPath();ctx.arc(joy.ox+joy.dx,joy.oy+joy.dy,22,0,TAU);ctx.fill();}
+}
+
+/* ---------- loop ---------- */
+let last=performance.now(),acc=0;const STEP=1/60;
+function frame(now){requestAnimationFrame(frame);
+  let dt=(now-last)/1000;last=now;if(dt>.1)dt=.1;
+  if(hitstop>0){hitstop-=dt;dt=0;}
+  if(state==='PLAY'){acc+=dt;let n=0;
+    while(acc>=STEP&&n<4){update(STEP);acc-=STEP;n++;if(state!=='PLAY')break;}
+    if(n===4)acc=0;}
+  render();}
+requestAnimationFrame(frame);
+
+/* ---------- buttons ---------- */
+const go=()=>{ainit();reset();setState('PLAY');toast(MUSE[0],5200);museT=26;};
+$('bStart').onclick=go;$('bAgain').onclick=go;$('bAgain2').onclick=go;
+$('bResume').onclick=()=>{ainit();setState('PLAY');};
+$('bRoam').onclick=()=>{roam=true;spawnT=1;
+  for(const a of ants)a.flee=false;
+  setState('PLAY');toast('Nothing left to fix. They still come. That\u2019s a choice now.',4600);};
+reset();setState('TITLE');
+})();
+</script>
+</body>
+</html>

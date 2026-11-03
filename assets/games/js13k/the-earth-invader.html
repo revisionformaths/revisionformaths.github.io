@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Earth Invader</title>
+	
+	<script>///////////////// GLOBAL VARIABLES \\\\\\\\\\\\\\\\\
+var currentcanvas; // Used for resizing the screen
+var keysDown = {}; // Used for keyboard buttons
+var mouseX = 0; // global mouse coords
+var mouseY = 0;
+var soundarray = [];
+
+var winheight = 0; // Window width & height
+var winwidth = 0;
+
+var score = 0;
+var enemiesKilled = 1; // Total enemies killed, used in score calculating, starts at 1 to prevent a score of 0
+var time = 0;
+var scoremult = 1; // Score Multiplier, rewards using weaker weapons on certain planets
+var paused = false;
+var starting = true; // Used to draw start timer
+var timer = 3;
+var highscore = localStorage.getItem('highscore'); // Saves highscore
+
+////////////////// LOAD IN SPRITES \\\\\\\\\\\\\\\\\\
+var sprite_player = new Image(); // Player
+
+// Enemy sprites
+var sprite_fire = new Image();
+var sprite_rock = new Image();
+var sprite_water = new Image();
+var sprite_air = new Image();
+
+// Enemy death sprites
+var boom_fire = new Image();
+var boom_rock = new Image();
+var boom_water = new Image();
+var boom_air = new Image();
+
+// Sprite sources in base64
+sprite_player.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAMAAADzN3VRAAAA+VBMVEUAAAAaGRZBQDsiIRoyMS0REAxUT0pKSUM+OzYsKiUpJx/oPxFmYFgWFhLrNgd3dHF3aGBXVVHUy0egiVNbUEfHnDtoQDGvSiyEPyqFKBXAMBHyPA7SNQ769tqBfnzW0G5oZV9+XlJtUkV9d0OYTDmSSC5FQiBPTR85NxwiIBDeNAiJg4CDc2+Tg2LKxFt0YFlfWVTAl1CwllCPe1DIoE3Gt0hwajhWPTLKSSdgXCCyPR2VOBx1bhuSihqoNRpUJhTgPxMCAgL8+vLx77/587OEaVqWbFmubkysXEpeXEB8Uj3KkzrToTLisy6fmCdsLxyvlhe8sxH0Iw3AHj8YAAAAAXRSTlMAQObYZgAAAR9JREFUKM+l0WlXglAQBmDvwr2XC7ggASqm7Eilpqm5ZNm+b///xxQWUVSffD/Oc2bOmZnCpin+U5ekE0n6o75/eavrpu/ZeTjYkyljEFba27+AMBEzSPulnR+jhjLFCAGRMSp/p61hf6UAgFDSpcnl6y+palARQDQNowhPljrxUhhDzAEK3FbrMeRPljkx14s1hA5QgKJ0pq3mmXp0XKvP58s4kdcHVUiiuN3Tpvpcq8eWZcXFj56AcwDAzah5vu7xzVl6ppFLMUdo0VVfQrFWnDlGKoVBj0AR8fEiELFe9+zDbJ9qOSGAuMiI07tIJKMKBCsBQ1ppl3Yz+CSEaQK5k94PyppGCJFTyHJ3ZRiG79jZqCwN6f2r+WJqhQ3zBgiwHGmiI+BQAAAAAElFTkSuQmCC';
+sprite_fire.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMBAMAAACkW0HUAAAAJ1BMVEUAAAD/kwD/fwD/nQD/xgD/vgD/0wD/hwD/6AD/swD/qAD/3AD/dwDjrSRSAAAAAXRSTlMAQObYZgAAAFhJREFUCNdjYGAwzWAAAkH1sB0MDOxKxlOzGxiYziiudNvAYHSo0HhKBoO6sqDVEm+GQ4LCUqFuDEZKhZJAilGwfOqUBAZ2ReGV3g1A7VIhO0DGWHkwMAAAMMMS9FP4uwAAAAAASUVORK5CYII=';
+sprite_rock.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMBAMAAACkW0HUAAAAG1BMVEUAAACDQBFvNw+WTBeKRBN2OxBiMQ6QSBVIJQ0e7G3aAAAAAXRSTlMAQObYZgAAAFRJREFUCB0FwUEKgCAQQNEPdgAVxf2ArhO7QBS0no7gIlwWdIbO3XtAawBtdRuYGjXMmCjiLIcvXRPPOb4cqDI+CSy+XDkxeelqMS6q3rCsLgG8O/zaXAvNfQ96oAAAAABJRU5ErkJggg==';
+sprite_water.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAMAAABhq6zVAAAAM1BMVEUAAACE0vsJgsETicYKebIgkswIfrsLdKoRgbo0oNdCqd46pd0disBXt+cwnNN8zvdtxfMmMafIAAAAAnRSTlMAEoUqvHAAAABbSURBVAjXJY3JEcAwCAMdcxpf6b/aCLIv7YCggUdA+5mDeldfmUdQp67MDAlB5iVutYTM+52wzGp+7yZrJ/cNk6CcVNuJFKUjOAxVqzcwgH5aHBFxbsUTsur/B9V6As3dixo5AAAAAElFTkSuQmCC';
+sprite_air.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMBAMAAACkW0HUAAAAJFBMVEUAAADs7Ozo5+fv7u7a1tbo5+fj39/d2trSzs7Iw8O7tbWsqKgpHvYvAAAAA3RSTlMAOSIhkgiAAAAAWklEQVQI12NgEDQOUWRgYAw1NvUUYFBNdynNWMigbGya4tLAYGxsbOrRxWBs4u7iMZshLL28pGM1SDCsYjYDq7GxWcUsBtGwFBePRQyM6cVmngoMDELGZkwMADJcE8vDAZzpAAAAAElFTkSuQmCC';
+boom_fire.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAMAAAAolt3jAAAARVBMVEUAAAD/Og3/MQ7/dgP/kAP/agX/VQf/iAP/SQn/Owv/HRH/fgT/Swj/YQb/ZQX/hwD/Kw7/GRH/FBP/pwH/mwL/zAD/uQH8kbg4AAAAE3RSTlMABAr8/vv7/fn1E/7s+e4e8/EtiDeSTQAAAIJJREFUCB0FwYcBwzAMBLF7kupylZz9Rw0AuiS4pwEde54GMwN6DKzVpOpCrQqkw49ZkqUkoEsevt0DRM0Zj71iD3Fhp49Yv+8XnmQAp+/v+1bx1ABS2WutFV0XVtPwWCNK6RL5OO30neMYGWMCs6RWqLmDAa28dzLVbEjXna2/VQB/9KkFByfSWq4AAAAASUVORK5CYII=';
+boom_rock.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOBAMAAADtZjDiAAAAMFBMVEWLcw1+Zw6Cag9zXA6IcQ90XhB6Yw6ReQ1kTg9tVw9/aA9kThBnUQ+ZgA6Mcw+tkRcIyT11AAAADXRSTlMCCv4V/P39/fz69XzZbo3lQQAAAHJJREFUCNdjYGAQ4GIEkmILGZYwGDkycGgxqAMhA2PfgndsF4ASba6x6gxAYKkUe0+AgcHQSun9tam7Ge7evfv/ikoag2BH6/8nzMJAY/ruPgMZJOJaniooyMDgZFwgOpmRgSmRsUBgDjMDpwGzI+NURgDNzRvdY8ialAAAAABJRU5ErkJggg==';
+boom_water.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAMAAAAolt3jAAAAWlBMVEUAAAAwdcwxe84rgc4zdMwxh9A4jdMqe8w6ldYpd8tAoNocZsVIpt1DkdY5ktQxidE2kNQxf88veMw9itI3jNM4idEjbsg6jtNIoNo6mNdKs+AzjNJRvuREqtw2p81NAAAAGXRSTlMABw/7HP39/PPy/vIlFf3w9OmmUMGki2WIXxOO3gAAAIxJREFUCB0FwYUBwzAQALF7MIdTst3uv2YlEBfkkQUQRWJxYd8ElqzIFZ8rRwfP2cE/dq85iu71CYo+UuvzbbWs4O4vCzXYLywIR7AUbIwRb0UxC6HX73fEGexEWJr9xqgxWdkRtPU5e+xvREHalq40r213FF5bWrVMvfupsB5N8BKFJZ8CCiwlOKjIH6dABrw3FL34AAAAAElFTkSuQmCC';
+boom_air.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAMAAAAolt3jAAAAY1BMVEUAAADo4eHx7e3u5+fUy8vi2tra09PVysrv7Ozs5ubc09Pf2dnPxsbo4+PZ0tLw7u7CsrLi2dn08/PVzMzh29vn5OS/s7P+/Pzz8vLEtbXz8fHn4+PNwMDr5eXr4+P18vLd09OP7aMuAAAAHnRSTlMA/P7+Cf35+PTyR/X17u3bLxX15uO/hksf8eaglGdMQRepAAAAe0lEQVQIHQXBh0EDMRAAMJ3t7z2dBPzZf0okYNzuUJ7Ggld/w2tdvNfxUPpgn+Lp0y9j2Yds7zKs/XBta/r7nuBoI+ea4pxBeXRRa/1GB4+fuWuaFE1Oqbm6D0PUqLVmHNDWlM8zA0w1STmh4LcJtJcFzDGB2wUAhW3jH7FEBefzYq9lAAAAAElFTkSuQmCC';
+/////////////////------------------\\\\\\\\\\\\\\\\\
+
+var renderops = { // Used to fix canvases being drawn when they shouldn't be
+	main: false,
+	levelselect: false,
+	game: false
+};
+
+var Options = { // Keeps track of planet and weapon type
+	planType: "fire",
+	wepType: "fire",
+	volume: 0.1,
+	difficulty: 0,
+	resize: false
+};
+
+var powerups = { // Toggles and timers for powerups
+	multishot: {
+		toggle: false,
+		timer: 1000
+	},
+	fastshot: {
+		toggle: false,
+		nrof: 15, // Normal rate of fire, gets changed in game init
+		frof: 12, // Fastshot rate of fire
+		timer: 1000
+	},
+	penetrate: {
+		toggle: false,
+		timer: 1000
+	},
+	splash: {
+		toggle: false,
+		timer: 1000
+	},
+	invincibility: {
+		toggle: false,
+		timer: 1000
+	}
+};
+
+var planTraits = { // Color is the circle color, stroke is the outline
+	fire: {
+		plancolor: "#F72A0A",
+		planstroke: "#CF2308"
+	},
+	air: {
+		plancolor: "#DEDEDE",
+		planstroke: "#BFBFBF"
+	},
+	water: {
+		plancolor: "#076DF2",
+		planstroke: "#0658C4"
+	},
+	rock: {
+		plancolor: "#6B4303",
+		planstroke: "#593802"
+	}
+}
+
+var wepTraits = { // Traits for the player weapons
+	fire: {
+		color: "orange",
+		rof: 5, // Rate of fire
+		speed: 15,
+		damage: 3
+	},
+	air: {
+		color: "ghostwhite",
+		rof: 50,
+		speed: 15,
+		damage: 20
+	},
+	water: {
+		color: "deepskyblue",
+		rof: 20,
+		speed: 20,
+		damage: 10
+	},
+	rock: {
+		color: "saddlebrown",
+		rof: 30,
+		speed: 10,
+		damage: 25
+	}
+}
+
+var enemyTraits = {
+	fire: {
+		img: sprite_fire,
+		boom: boom_fire,
+		speed: 4,
+		rof: 20,
+		health: 100,
+		damage: 10,
+		bulletColor: "orange"
+	},
+	air: {
+		img: sprite_air,
+		boom: boom_air,
+		speed: 5,
+		rof: 100,
+		health: 50,
+		damage: 5,
+		bulletColor: "ghostwhite"
+	},
+	water: {
+		img: sprite_water,
+		boom: boom_water,
+		speed: 3,
+		rof: 100,
+		health: 150,
+		damage: 15,
+		bulletColor: "deepskyblue"
+	},
+	rock: {
+		img: sprite_rock,
+		boom: boom_rock,
+		speed: 2,
+		rof: 100,
+		health: 200,
+		damage: 20,
+		bulletColor: "saddlebrown"
+	}
+
+}
+
+var mults = { // Multipliers used for damage and score, kept key value style to save lines
+	fire: {
+		waterdmg: 1.5,
+		waterscore: 0.5,
+		airdmg: 0.5,
+		airscore: 1.5,
+		firedmg: 1.0,
+		firescore: 1.0,
+		rockdmg: 1.0,
+		rockscore: 1.0
+	},
+	air: {
+		waterdmg: 1.0,
+		waterscore: 1.0,
+		airdmg: 1.0,
+		airscore: 1.0,
+		firedmg: 1.5,
+		firescore: 0.5,
+		rockdmg: 0.5,
+		rockscore: 1.5
+	},
+	water: {
+		waterdmg: 1.0,
+		waterscore: 1.0,
+		airdmg: 1.0,
+		airscore: 1.0,
+		firedmg: 0.5,
+		firescore: 1.5,
+		rockdmg: 1.5,
+		rockscore: 0.5
+	},
+	rock: {
+		waterdmg: 0.5,
+		waterscore: 1.5,
+		airdmg: 1.5,
+		airscore: 0.5,
+		firedmg: 1.0,
+		firescore: 1.0,
+		rockdmg: 1.0,
+		rockscore: 1.0
+	}
+}
+/////////////////------------------\\\\\\\\\\\\\\\\\</script>
+	<script>//////////////////////////////////////////////////////
+///   Commonly Used functions throughout the game
+//////////////////////////////////////////////////////
+
+function distance (x1,y1,x2,y2) { // Finds distance between two objects with pythagorean theorem
+	dX2 = Math.pow((x2-x1),2);
+	dY2 = Math.pow((y2-y1),2);
+	return Math.sqrt(dX2 + dY2);
+} 
+
+function collision (a,b) { // Checks if two objects are colliding, works with circles
+	space = a.radius + b.radius;
+	if (distance(a.x,a.y,b.x,b.y) < space) {
+		return true; // Collision
+	}
+	else {
+		return false; // No Collision
+	}
+}
+
+function resize() { // Re-init's the menu/ls/game if screen size changes
+	if (currentcanvas === 'mm') {
+		initMainMenu();
+	} else if (currentcanvas === 'ls') {
+		initStars();
+		initLevelSelect();
+	} else if (currentcanvas === 'gc') {
+		starting = true;
+		initStars();
+		initGame();
+	}
+}
+
+var clicksound = function() { // Plays a click sound, used only in menu. Not enough space for more sounds. :P
+	var clicksnd = new Audio();
+	clicksnd.src="data:audio/x-wav;base64,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";
+	clicksnd.volume = Options.volume;
+	clicksnd.play();
+}
+</script>
+	<script>//////////////////////////////////////////////////////
+///   Enemy Class - Standard enemies and minibosses
+//////////////////////////////////////////////////////
+
+Enemy = function(x, y, width, height, orbit, type, pBullets, eBullets, isboss) {
+	this.x = x;
+	this.y = y;
+	this.width = width;
+	this.height = height;
+
+	this.isboss = isboss;
+	this.type = type;
+	this.speed = enemyTraits[this.type].speed;
+	this.orbit = orbit; // Property determining distance of orbit
+	this.health = enemyTraits[this.type].health;
+	this.damage = enemyTraits[this.type].damage;
+
+	this.damagemult = 1;
+
+	this.rof = enemyTraits[this.type].rof; // Rate of fire
+	this.count = 0; //counter for shooting
+	this.trigger = Math.floor(Math.random() * this.rof); // Number 0 to rof-1 that will be used as signal to fire
+
+	this.pBullets = pBullets; // Player bullets, object will check for collision with these
+	this.eBullets = eBullets; // Enemy bullets, object will push a new Bullet to these every time it shoots
+	this.burncount = 0; // Determines how long to take burn damage if hit by flamethrower
+	this.slowcount = 0; // Determines how long to move slowly if hit by water weapon
+	this.dmgcount = 0; // Used in shield regenerating
+	this.splashcount = 0; // Used to draw the water boom sprite for splash
+
+	this.radius = this.width * 1.2; // Have collision circle cover corners better at expense of overcoverage on middle of sides
+
+	this.alive = true; // Used for determining damage and whether to draw
+	this.explode = false; // Draws the boom sprite if true
+	this.shield = 0; // For minibosses only
+
+	this.rotation = 0; //This allows for the enemy to rotate to face the player
+
+	if (this.isboss) { // Set the neccessary buffs if the enemy is a boss
+		this.shield = this.health * 2;
+		this.health *= 10;
+		this.speed = 3;
+		this.damage *= 3;
+		this.dmgcount = 0;
+		this.maxshield = this.shield;
+	}
+	this.slowspeed = this.speed / 2; // Used to adjust speed when hit by water weapon
+	this.normspeed = this.speed; // Used to adjust speed when hit by water weapon
+	this.regen = false; // Var used to make the shields take longer to start regenerating after hitting 0
+};
+
+Enemy.prototype.assigntarget = function(target) { // Tells the enemy object which object to shoot
+	this.player = target;
+};
+
+Enemy.prototype.assignorbit = function(object) { // Tells the enemy object which object to orbit
+	this.orbitthis = object;
+};
+
+Enemy.prototype.update = function(planet, earray) { // Update the enemy's position and variables
+	if(! (this.player === undefined) && this.alive) { // Only update if alive
+		this.count = (this.count+1) % this.rof; // Update counter
+		var ctx = ctx;
+		var enemies = earray;
+		if (Options.difficulty === 0 ) {
+			this.orbitcheck = this.orbitthis.name !== "Planet";
+		} else {
+			this.orbitcheck = true;
+		}
+
+		// Calculate Shooting Params
+		this.playerX = this.player.x;
+		this.playerY = this.player.y;
+		// Calculate direction towards target
+		var toPlayerX = this.playerX - this.x;
+		var toPlayerY = this.playerY - this.y;
+		// Normalize
+		var toPlayerLength = Math.sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY);
+		toPlayerX = toPlayerX / toPlayerLength;
+		toPlayerY = toPlayerY / toPlayerLength;
+
+		// Calculate Movement Params
+		this.orbitX = this.orbitthis.x;
+		this.orbitY = this.orbitthis.y;
+		// Calculate direction towards orbit
+		var toOrbitX = this.orbitX - this.x;
+		var toOrbitY = this.orbitY - this.y;
+		// Normalize
+		var toOrbitLength = Math.sqrt(toOrbitX * toOrbitX + toOrbitY * toOrbitY);
+		toOrbitX = toOrbitX / toPlayerLength;
+		toOrbitY = toOrbitY / toPlayerLength;
+
+		this.rotation = Math.atan2(toPlayerY, toPlayerX); // Face the player
+
+		//////////////////////////
+		//////// MOVEMENT ////////
+		//////////////////////////
+
+		if ((toOrbitLength > this.orbit+5 || this.orbitthis.shield <= 0)) { // Move towards the player. If shield is down enemy will kamikaze 
+			this.angle = Math.atan2(toOrbitY,toOrbitX)+Math.PI;
+			this.x += toOrbitX * this.speed;
+			this.y += toOrbitY * this.speed;
+
+		} else if (toOrbitLength < this.orbit-5) { // Move away from player
+			this.angle = Math.atan2(toOrbitY, toOrbitX)+Math.PI;
+			this.x -= toOrbitX * this.speed * 2;
+			this.y -= toOrbitY * this.speed * 2;
+
+		} else { // Orbit player
+			this.angle -= 0.02;
+			this.x = ((toOrbitLength * Math.cos(this.angle)) + (this.orbitthis.x));
+			this.y = ((toOrbitLength * Math.sin(this.angle)) + (this.orbitthis.y));
+			
+		}
+
+		if (this.slowcount > 0) { // If slowed, slow speed and reduce timer
+			this.slowcount--;
+			this.speed = this.slowspeed;
+		} else {
+			this.speed = this.normspeed; // Else go back to normal speed
+		}
+		if (this.burncount > 0) { // If burning, take damage and reduce timer
+			this.burncount--;
+			this.health--;
+		}
+		if (this.dmgcount > 0) { // When dmgcount is 0, shields will start to regenerate
+			this.dmgcount--;
+		}
+		if (this.splashcount > 0) { // Same idea as burncount, used to draw the splash sprite
+			this.splashcount--;
+		}
+		if (this.shield < this.maxshield && this.shield >=0 && this.dmgcount == 0) {
+			this.shield += 0.25; // Shield will regenerate very slowly
+			this.regen = false; 
+		}
+		if (this.shield > 0) { // Make radius the length of the shield radius for consistency
+			this.radius = 60;
+		}
+
+		if (this.shield <= 0) {
+			this.radius = this.width * 1.2; // Set radius back to just above sprite size when shield is down
+		}
+		if (this.shield < 0) {
+			this.shield = 0;
+			this.dmgcount = 300; // Creates the longer shield regen
+			this.regen = true;
+		}
+
+		//////////////////////////
+		//////// SHOOTING ////////
+		//////////////////////////
+
+		if (this.count == this.trigger && this.orbitcheck) {
+			if (this.isboss) {
+				var bullet = new Bullet(this.x, this.y, 6, toPlayerX, toPlayerY, 8, this.damage, enemyTraits[this.type].bulletColor, this.type, this, false); // Create bullet/Has bigger bullets
+			} else {
+				var bullet = new Bullet(this.x, this.y, 3, toPlayerX, toPlayerY, 8, this.damage, enemyTraits[this.type].bulletColor, this.type, this, false); // Create bullet
+			}
+			this.eBullets.push(bullet); // Push bullet to enemy bullet array so player can collision check
+		}
+
+		//////////////////////////
+		//////// COLLISIONS //////
+		//////////////////////////
+
+		for (var i = 0; i < this.pBullets.length; i++) { // Check for collision with bullet
+			this.damagemult = mults[Options.wepType][this.type + "dmg"]; // Set damage multiplier based on the enemy type and the bullet type
+			if (this.pBullets[i].alive && collision(this,this.pBullets[i]) && this.shield > 0) { // If the enemy has a shield
+				if (!this.pBullets[i].penetrate) {
+					this.pBullets[i].alive = false; // Normal bullet collision
+					this.shield -= wepTraits[Options.wepType].damage * this.damagemult; // Normal bullet collision
+				} else if (this.pBullets[i].penetrate && this !== this.pBullets[i].currentenemy) { // If bullet should penetrate, set this enemy to the bullets current enemy so it doesnt collide again
+					this.pBullets[i].currentenemy = this;
+					this.pBullets[i].penetratecount += 1; // When the bullets penetrate count reaches 3, the bullet dies
+					this.shield -= wepTraits[Options.wepType].damage * this.damagemult;
+				}
+				if(Options.wepType === "water" || powerups.splash.toggle) { // If the bullet is water/splash powerup
+					enemies.forEach(function(enemy) {
+						if(enemy !== this) {
+							if(distance(this.x, this.y, enemy.x, enemy.y) <= 250) { // Damage and slow all enemies in a 250 radius
+								this.splashcount = 10; // Set the timer to deal with the sprite
+								enemy.slowcount = 100; // Set the timer to deal with the slowdown
+								if (enemy.shield > 0) {
+									enemy.shield -= wepTraits[Options.wepType].damage * this.damagemult; // Accounts for minibosses caught in splash
+								} else {
+									enemy.health -= wepTraits[Options.wepType].damage * this.damagemult;
+								}
+							}
+						}
+					});
+					this.slowcount = 100;
+				}
+				if (Options.wepType === "fire") {
+					this.burncount = 100; // Burn enemy
+				}
+				if (Options.wepType === "air") { // Pushes enemies back, special power of air
+					this.angle = Math.atan2(toPlayerY, toPlayerX)+Math.PI;
+					this.x -= toPlayerX * this.speed * 30;
+					this.y -= toPlayerY * this.speed * 30;
+				}
+				if (!this.regen) {
+					this.dmgcount = 100; // Only set dmgcount, which makes the shields regen after some time after getting hit, if the shield isnt at regen, which means the shields were below 0
+				}
+			} if (this.pBullets[i].alive && collision(this,this.pBullets[i]) && this.health > 0) { // Same code as above, but does damage to health instead of shields
+				if (!this.pBullets[i].penetrate) {
+					this.pBullets[i].alive = false;
+					this.health -= wepTraits[Options.wepType].damage * this.damagemult;
+				} else if (this.pBullets[i].penetrate && this !== this.pBullets[i].currentenemy) {
+					this.pBullets[i].currentenemy = this;
+					this.pBullets[i].penetratecount += 1;
+					this.health -= wepTraits[Options.wepType].damage * this.damagemult;
+				}
+				if(Options.wepType === "water" || powerups.splash.toggle){
+					enemies.forEach(function(enemy){
+						if(enemy !== this){
+							if(distance(this.x, this.y, enemy.x, enemy.y) <= 250){
+								this.splashcount = 10;
+								enemy.slowcount = 100;
+								if (enemy.shield > 0) {
+									enemy.shield -= wepTraits[Options.wepType].damage * this.damagemult; // Accounts for minibosses caught in splash
+								} else {
+									enemy.health -= wepTraits[Options.wepType].damage * this.damagemult;
+								}
+							}
+						}
+					});
+					this.slowcount = 100;
+				}
+				if (Options.wepType === "fire") {
+					this.burncount = 100;
+				}
+				if (Options.wepType === "air") {
+					this.angle = Math.atan2(toPlayerY, toPlayerX)+Math.PI;
+					this.x -= toPlayerX * this.speed * 30;
+					this.y -= toPlayerY * this.speed * 30;
+				}
+			} else if (this.pBullets[i].alive && collision(this,this.pBullets[i])) { // If the enemy has no health and shields, kill it
+				this.alive = false;
+				enemiesKilled += 1;
+				this.explode = 1; // Draw explosion sprite
+			}
+		}
+	}
+};
+
+Enemy.prototype.draw = function(ctx, array) { // Draw the enemy
+	if (this.alive) { // only draw if alive
+		ctx.save();
+		ctx.translate(this.x, this.y);
+		ctx.rotate(this.rotation);
+		if (this.isboss) {
+			ctx.drawImage(enemyTraits[this.type].img,-18,-18,36,36); // Draw sprite larger for bosses
+			var shieldColor = "#"; 
+			for (var i = 0; i < 3; i++) {
+				shieldColor += (Math.floor(Math.random()*200)+55).toString(16); // Keeping individual RGB values between 100 and 200, just b/c
+			}
+			ctx.beginPath();
+			ctx.arc(0, 0, 60, 0, 2 * Math.PI, false);
+			ctx.lineWidth = 4;
+			ctx.strokeStyle = shieldColor;
+			if (this.shield > 0) { // Only draw shield if greater than 0
+				ctx.stroke(); 
+			}
+			ctx.closePath();
+		} else {
+			ctx.drawImage(enemyTraits[this.type].img,-6,-6); // Normal sprite
+		}
+		if (this.burncount > 0) {
+			ctx.globalAlpha = 0.75
+			if (this.isboss) {
+				ctx.drawImage(enemyTraits.fire.boom,-20,-20,40,40); // Draw burn sprite, larger for bosses
+			} else {
+				ctx.drawImage(enemyTraits.fire.boom,-10,-10,20,20); // Draw burn sprite
+			}
+			ctx.globalAlpha = 1.0
+		}
+		if(this.splashcount > 0){
+			ctx.globalAlpha = 0.75;
+			ctx.drawImage(enemyTraits.water.boom,-30,-30,60,60); // Draw splash sprite
+			ctx.globalAlpha = 1.0
+		}
+		ctx.restore();
+	} else if (this.explode) {
+		ctx.save();
+		ctx.translate(this.x, this.y);
+		ctx.rotate(this.rotation);
+		if (this.isboss) {
+			ctx.drawImage(enemyTraits[this.type].boom,-24,-24,48,48); // Draw boom sprite, larger for bosses
+		} else {
+			ctx.drawImage(enemyTraits[this.type].boom,-14,-14,28,28); // Draw boom sprite
+		}
+		ctx.restore();
+		this.explode = (this.explode+1)%7; // Add a count, when this.explode hits 4 (or 0) it will go false
+	} else if (!this.alive && !this.boom) { // Remove from array if not alive or exploding
+		var index = array.indexOf(this);
+		array.splice(index, 1);
+	}
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Turret Class - The player
+//////////////////////////////////////////////////////
+
+Turret = function (x,y, eArrays, eBullets, powerups) { // Takes position, name, enemies, their bullets, and powerups
+	this.x = x; 
+	this.y = y;
+	this.speed = 200;
+	this.health = 1000; // Balance parameter
+	this.shield = 400;
+	this.direction = 0; // In radians
+	this.dmgcount = 0; // Count for timing since last damaged, will be used for regenerating shield
+	this.powerups = powerups; // Powerup array
+	this.name = "Player";
+
+	this.radius = 40;
+	this.eArrays = eArrays; // Array of enemies 
+	this.eBullets = eBullets; // Array of enemy bullets
+	this.alive = true;
+	this.regen = false; // Used to regenerate shield after reaching 0
+
+};
+
+Turret.prototype.checkCollision = function (enemyArray, isbullet, ispowerup) { // Check collision, works for enemies, bullets, and powerups
+	for (var i = 0; i < enemyArray.length; i++) {
+		if (ispowerup && collision(this,enemyArray[i])) { // If the colliding object is a powerup, grant the corresponding power and set their timers
+			if (enemyArray[i].type === "air") {
+				if (!powerups.multishot.toggle) {
+					powerups.multishot.toggle = true;
+				} else {
+					powerups.multishot.timer = 1000;
+				}
+			} else if (enemyArray[i].type === "fire") {
+				if (!powerups.fastshot.toggle) {
+					powerups.fastshot.toggle = true;
+				} else {
+					powerups.fastshot.timer = 1000;
+				}
+			} else if (enemyArray[i].type === "water") {
+				if (!powerups.splash.toggle) {
+					powerups.splash.toggle = true;
+				} else {
+					powerups.splash.timer = 1000;
+				}
+			} else if (enemyArray[i].type === "rock") {
+				if (!powerups.penetrate.toggle) {
+					powerups.penetrate.toggle = true;
+				} else {
+					powerups.penetrate.timer = 1000;
+				}
+			} else if (enemyArray[i].type === "health") {
+				this.health = 1000;
+				this.shield = 400;
+			} else if (enemyArray[i].type === "invincibility") {
+				if (!powerups.invincibility.toggle) {
+					powerups.invincibility.toggle = true;
+				} else {
+					powerups.invincibility.timer = 1000;
+				}
+			}
+			enemyArray[i].alive = false; // Kill the powerup
+		} else { // If not a powerup
+			if (enemyArray[i].alive && collision(this,enemyArray[i])) {
+				if (this.shield > 0 && !powerups.invincibility.toggle) { // If shilds and no invincibility, take shield damage
+					if (isbullet) {
+						this.shield -= enemyArray[i].damage; // Take the correct damage if the object is a bullet
+						enemyArray[i].alive = false;
+					} else {
+						this.shield -= 20; // If the object is an enemy, take a constant damage
+					}
+					if (!this.regen) {
+						this.dmgcount = 120; // If not in regen, set shield delay to 120
+					}
+				} else if (this.shield <= 0 && this.health > 0 && !powerups.invincibility.toggle) { // If no shilds and no invincibility, take health damage. Same as above, but no shield behavior 
+					if (isbullet) {
+						this.health -= 20;
+						enemyArray[i].alive = false;
+					} else {
+						this.health -= enemyArray[i].damage;
+					}
+				}
+			}
+		}
+	}
+}
+
+Turret.prototype.update = function (delta, gc) { // Update position and vars
+	// Keyboard handlers, for movement
+	if (65 in keysDown) { // Left
+		if (this.x > 0) {
+			this.x -= this.speed * delta;
+		} else {
+			this.x = gc.width;
+		}
+	}
+	if (87 in keysDown) { // Up
+		if (this.y > 0) {
+			this.y -= this.speed * delta;
+		} else {
+			this.y = gc.height;
+		}
+	}
+	if (68 in keysDown) { // Right
+		if (this.x < gc.width) {
+			this.x += this.speed * delta;
+		} else {
+			this.x = 0;
+		}
+	}
+	if (83 in keysDown) { // Down
+		if (this.y < gc.height) {
+			this.y += this.speed * delta;
+		} else {
+			this.y = 0;
+		}
+	}
+	var dDir = this.findDirection(mouseX,mouseY); // Delta in direction
+
+	// Collision
+	for (var i = 0; i < this.eArrays.length; i++) {
+		this.checkCollision(this.eArrays[i], false, false);
+	}
+	this.checkCollision(this.eBullets, true, false);
+	this.checkCollision(this.powerups, false, true);
+
+
+	// Damage-related stuff
+
+	if (this.dmgcount > 0) {
+		this.dmgcount--; // Reduce shield regen delat
+	}
+
+	if (this.shield < 400 && this.shield >=0 && this.dmgcount == 0) { // When delay is 0, regen
+		this.shield += 0.25; // Shield will regenerate very slowly
+		this.regen = false;
+	}
+	if (this.shield > 0) {
+		this.radius = 40; // Increase radius when shields are up
+	}
+
+	if (this.shield <= 0) {
+		this.radius = 10; // Collision detection radius set to 40 (shield), reduced when shield is 
+	}
+	if (this.shield < 0) {
+		this.shield = 0;
+		this.dmgcount = 540; // Long delay when shields hit 0
+		this.regen = true;
+	}
+
+	if (this.health < 0) {
+		this.health = 0;
+		this.alive = false; // Dead
+	}
+
+	this.direction += dDir; // Point in the right direction
+};
+
+Turret.prototype.draw = function (ctx) { // Draw the player
+	if (this.alive) {
+		ctx.save(); // Save the state to stack before rotating
+		ctx.translate(this.x,this.y);
+		ctx.rotate(this.direction);
+
+		// Draw shield
+		var shieldColor = "#"; 
+		for (var i = 0; i < 3; i++) {
+			shieldColor += (Math.floor(Math.random()*200)+55).toString(16); // Keeping individual RGB values between 100 and 200, just b/c
+		}
+		ctx.beginPath();
+		ctx.arc(0, 0, 40, 0, 2 * Math.PI, false);
+		ctx.lineWidth = 4;
+		ctx.strokeStyle = shieldColor;
+		if (this.shield > 0) { // Only draw if greater than 0
+			ctx.stroke(); 
+		}
+		ctx.closePath();	
+
+		ctx.drawImage(sprite_player,-12,-12);
+		ctx.restore(); // Restore back to original
+	}
+};
+
+Turret.prototype.findDirection = function (mX,mY) { // Used to make the player point in the right direction
+	var distanceX = this.x - mX;
+	var distanceY = this.y - mY;
+	var newDir = Math.atan2(distanceY,distanceX); // Find angle from arctangent
+	var dDir = newDir - this.direction; // Delta in direction
+	return dDir;
+};</script>
+	<script>//////////////////////////////////////////////////////
+///   Planet Class - Creates the main goal/enemy
+//////////////////////////////////////////////////////
+
+Planet = function(x, y, name, color, stroke, bullets) {
+	this.x = x;
+	this.y = y;
+	this.health = 10000; // Massive value to ensure game doesn't end too quickly with powerups
+	this.shield = 6000; // Massive value to ensure game doesn't end too quickly with powerups
+	this.name = name; // Name sent to healthbar 
+	this.radius = 100;
+	this.color = color;
+	this.bullets = bullets;
+	this.stroke = stroke; // For outline around planet
+	this.alive = true;
+	this.damagemult = 1; // Used to make certain weapons stronger/weaker
+	this.totaldamage = 1; // Used in calculating score
+	this.dmgcount = 0; // Used to determine when shields should regenerate
+	this.regen = false; // Used to make regen after shields hit 0 take longer
+}
+
+Planet.prototype.update = function() { // Update the health and vars
+	for (var i = 0; i < this.bullets.length; i++) { // Loop through all the bullets
+		this.damagemult = mults[Options.wepType][Options.planType + "dmg"]; // Set the damage multiplier
+		if (this.bullets[i].alive && collision(this,this.bullets[i]) && this.shield > 0) { // If there are shields
+			this.shield -= wepTraits[Options.wepType].damage * this.damagemult; // Take damage
+			this.totaldamage += wepTraits[Options.wepType].damage * this.damagemult; // Add to totaldamage
+			if (!this.regen) {
+				this.dmgcount = 180; // If not regenerating from 0, set dmgcount (shield delay) to 180
+			}
+			this.bullets[i].alive = false; // Kill bullet
+		} else if (this.bullets[i].alive && collision(this,this.bullets[i]) && this.health > 0) { // When shields are down, same as above but loses health instead of shields
+			this.radius = 70;
+			this.health -= wepTraits[Options.wepType].damage * this.damagemult;
+			this.totaldamage += wepTraits[Options.wepType].damage * this.damagemult;
+			this.bullets[i].alive = false;
+		} else if (this.bullets[i].alive && collision(this,this.bullets[i])) { // If shields are down and health is 0
+			this.bullets[i].alive = false;
+			this.alive = false;
+		}
+	}
+	if (this.dmgcount > 0) { // Slowly reduce damagecount
+		this.dmgcount--;
+	}
+	if (this.shield < 6000 && this.shield >= 0 && this.dmgcount == 0) {
+		this.shield += 0.25; // Shield will regenerate very slowly
+		this.regen = false;
+	}
+	if (this.shield > 0) {
+		this.radius = 135; // Make radius larger when shields are up
+	}
+	if (this.shield <= 0) {
+		this.radius = 70; // Reduce radius when shields are down
+	}
+	if (this.shield < 0) {
+		this.shield = 0;
+		this.dmgcount = 1500; // Long shield delay for regen after 0
+		this.regen = true;
+	}
+	if (this.health <= 0) {
+		this.health = 0;
+		this.alive = true;
+	}
+}
+
+Planet.prototype.draw = function(ctx) { // Draw the Planet
+	if (this.alive) {
+		ctx.beginPath();
+		ctx.arc(this.x, this.y, 70, 0, 2 * Math.PI, false);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+		ctx.lineWidth = 5;
+		ctx.strokeStyle = this.stroke; // Outline
+		ctx.stroke();
+
+		// Draw shield
+		var shieldColor = "#"; 
+		for (var i = 0; i < 3; i++) {
+			shieldColor += (Math.floor(Math.random()*200)+55).toString(16); // Keeping individual RGB values between 100 and 200, just b/c
+		}
+
+		ctx.beginPath();
+		ctx.arc(this.x, this.y, 135, 0, 2 * Math.PI, false);
+		ctx.lineWidth = 7;
+		ctx.strokeStyle = shieldColor;
+		if (this.shield > 0) { // Only draw if greater than 0
+			ctx.stroke(); 
+		}
+		ctx.closePath();
+	}
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Bullet Class - Used by Player and all enemies
+//////////////////////////////////////////////////////
+
+Bullet = function(x, y, r, dx, dy, speed, damage, color, type, owner, playershot) {
+	this.x = x;
+	this.y = y;
+	this.radius = r; // For drawing the bullet
+	this.dx = dx;
+	this.dy = dy;
+	this.speed = speed; // Constant that determines the velocity the bullet travels at
+	this.damage = damage; // The damage the bullet does
+	this.color = color;
+
+	this.alive = true; // Used for determining damage and whether to draw
+	this.owner = owner; // Used to determine distance from owner for the fire weapon/flamethrower
+	this.playershot = playershot;// Used for weapons like flamethrower and rock cannon to add special attributes
+
+	this.rotation = 0;
+	this.penetratecount = 0; // Used for deciding whether or not to penetrate an enemy for the rock weapon
+	this.currentenemy = 0; // Used for deciding whether or not to penetrate an enemy for the rock weapon
+	this.penetrate = false; // Used for deciding whether or not to penetrate an enemy for the rock weapon
+
+	this.type = type; // Used to determine characteristics like damage
+	if ((this.type === "rock" || powerups.penetrate.toggle) && this.playershot) {
+		this.penetrate = true;
+		this.radius = 4;
+	}
+};
+
+Bullet.prototype.update = function(array) { // Update the bullet's position and whether or not to kill
+	if (this.alive) {
+		if ((this.x < 0 || this.x > winwidth || this.y < 0 || this.y > winheight) || ((this.type === "fire") && (distance(this.x,this.y,this.owner.x,this.owner.y) > 250) && (this.playershot)) || (this.penetratecount > 3)) { // If the bullet is out of the screens bounds, a flamethrower shot and too far away, or a rock shot and has penetrated enough, kill
+			this.kill(array);
+		} else { // Else update the position
+			this.x += this.speed * this.dx;
+			this.y += this.speed * this.dy;
+		}
+	} else {
+		this.kill(array);
+	}
+};
+
+Bullet.prototype.draw = function(ctx) { // Draw the bullet object
+	if (this.alive) { // Only draw if alive
+		ctx.save();
+		ctx.translate(this.x, this.y);
+		ctx.beginPath();
+		ctx.fillStyle = this.color;
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.fill();
+		ctx.restore();
+	}
+};
+
+Bullet.prototype.kill = function(array) { // Used to kill the bullet, saves lines of code
+	this.alive = false;
+	var index = array.indexOf(this);
+	array.splice(index, 1);
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Healthbar Class - Used for player, planet, and bosses
+//////////////////////////////////////////////////////
+
+Healthbar = function(x, y, owner, mini) {
+	this.x = x;
+	this.y = y;
+	this.owner = owner;
+	this.maxhealth = owner.health;
+	this.health = owner.health;
+	this.healthpercent = 1;
+	this.name = owner.name;
+	this.ismini = mini; // Used for minibosses, makes a smaller bar that floats over the enemy
+	this.alive = true;
+	if (owner.shield) { // If the owner has a shield, prepare the vars to draw shield bar
+		this.maxshield = owner.shield;
+		this.shield = owner.shield;
+		this.shieldpercent = 1;
+	}
+}
+
+Healthbar.prototype.update = function() { // Update the health and shield vars, and calculate the percent the shields are at, used for drawing
+	this.health = this.owner.health;
+	this.healthpercent = this.health / this.maxhealth;
+	this.alive = this.owner.alive;
+	if (this.shield !== false && this.owner.shield !== false) { // Use triple equality, b/c 0 == false, and updates will stop at 0 and not draw correctly
+		this.shield = this.owner.shield;
+		this.shieldpercent = this.shield / this.maxshield;
+	}
+	if (!this.alive) {
+		delete this;
+	}
+
+}
+
+Healthbar.prototype.draw = function(ctx) {
+	if (this.alive) {
+		ctx.beginPath()
+		ctx.fillStyle = "red";
+		if (this.ismini) {
+			ctx.fillRect(this.owner.x - 50, this.owner.y - 45, 100 * this.healthpercent, 5); // Draw mini bar
+		} else {
+			ctx.fillRect(this.x, this.y, 300 * this.healthpercent, 20); // Draw Normal bar
+		}
+		ctx.font = "12pt Arial";
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		if (!this.ismini) {
+			ctx.fillText(this.name, this.x + 150, this.y + 15); // Don't draw text on mini bars
+		}
+
+		if (this.shield > 0) {
+			ctx.fillStyle = "blue";
+			if (this.ismini) {
+				ctx.fillRect(this.owner.x - 50, this.owner.y - 35, 100 * this.shieldpercent, 5); // Draw mini bar
+			} else {
+				ctx.fillRect(this.x, this.y + 30, 300 * this.shieldpercent, 20); // Draw normal bar
+			}
+			ctx.font = "12pt Arial";
+			ctx.fillStyle = "white";
+			ctx.textAlign = "center";
+			if (!this.ismini) {
+				ctx.fillText("Shields", this.x + 150, this.y + 45); // Indicate shields are up, don't draw on mini bars
+			}
+		} else if (this.shield <= 0) {
+			ctx.fillStyle = "white";
+			ctx.font = "12pt Arial";
+			ctx.textAlign = "center";
+			if (!this.ismini) {
+				ctx.fillText("Shields down!", this.x + 150, this.y + 45); // Indicate shields are down, don't draw on mini bars
+			}
+		}
+		ctx.closePath();
+	}
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Star Class - The tiny dots in the background
+//////////////////////////////////////////////////////
+
+Star = function(x, y, color) { // Simple location and color
+	this.x = x;
+	this.y = y;
+	this.color = color;
+}
+
+Star.prototype.draw = function(ctx) { // Draw the star
+	ctx.beginPath();
+	ctx.arc(this.x, this.y, 1, 0, 2 * Math.PI, false);
+	ctx.fillStyle = this.color;
+	ctx.fill();
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Powerup Class - Creates all the powerups
+//////////////////////////////////////////////////////
+
+Powerup = function(x,y,type,array) {
+	this.x = x;
+	this.y = y;
+	this.type = type;
+	this.name = "powerup"; // Name is drawn above the actual powerups
+	this.color = "white";
+
+	// Powerups basically give you the other weapons powers, as well as invincibility and health refills
+	if (this.type === "air") {
+		this.name = "MULTISHOT";
+		this.color = "white";
+	} else if (this.type === "fire") {
+		this.name = "FASTSHOT";
+		this.color = "red";
+	} else if (this.type === "water") {
+		this.name = "SPLASHSHOT";
+		this.color = "blue";
+	} else if (this.type === "rock") {
+		this.name = "PENETRATE";
+		this.color = "brown";
+	} else if (this.type === "health") {
+		this.name = "HEALTH";
+		this.color = "maroon";
+	} else if (this.type === "invincibility") {
+		this.name = "INVINCIBILITY";
+		this.color = "gold";
+	}
+
+	this.radius = 5;
+	this.alive = true;
+	this.powerups = array;
+	this.timer = 500;
+	this.vx = Math.floor(Math.random() * 4) - 2; // Random direction
+	this.vy = Math.floor(Math.random() * 4) - 2; // Random direction
+};
+
+Powerup.prototype.update = function(gc) { // Update position
+	if (this.alive) {
+		this.x += this.vx; // Move
+		this.y += this.vy; // Move
+
+		if (this.vx === 0) {
+			this.vx = Math.floor(Math.random() * 4) - 2; // Recalculate velocity if its 0 to prevent still powerups
+		}
+		if (this.vy === 0) {
+			this.vy = Math.floor(Math.random() * 4) - 2; // Recalculate velocity if its 0 to prevent still powerups
+		}
+
+		if (this.x < 0 || this.x > gc.width) {
+			this.vx *= -1; // Bounce when it hits a screen edge
+		}
+		if (this.y < 0 || this.y > gc.height) {
+			this.vy *= -1; // Bounce when it hits a screen edge
+		}
+		if (this.timer > 0) { // When timer reaches 0, remove the powerup
+			this.timer--;
+		} else {
+			this.alive = false;
+			var index = this.powerups.indexOf(this);
+			this.powerups.splice(index, 1);
+		}
+	} else { // If not alive, remove powerup
+		var index = this.powerups.indexOf(this);
+		this.powerups.splice(index, 1);
+	}
+}
+
+Powerup.prototype.draw = function(ctx) { // Draw the powerup
+	if (this.alive) {
+		ctx.save();
+		ctx.translate(this.x, this.y);
+		ctx.beginPath();
+		ctx.fillStyle = this.color;
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI); // The powerup circlee
+		ctx.fill();
+		ctx.restore();
+		ctx.font = "12pt Arial";
+		ctx.textAlign = "center";
+		ctx.fillStyle = this.color;
+		ctx.fillText(this.name, this.x, this.y - 15); // The floating name above it
+		
+	}
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Draws the star background
+//////////////////////////////////////////////////////
+
+function initStars() { // Get the canvas, make the context, etc
+	var starcanvas = document.getElementById("stars");
+	var starctx = starcanvas.getContext("2d");
+	var clientWidth = document.documentElement.clientWidth;
+	var clientHeight = document.documentElement.clientHeight;
+	starcanvas.width = clientWidth;
+	starcanvas.height = clientHeight;
+	var stars = [];
+	var colors = ["blue", "white", "red", "yellow"]; // All possible colors
+
+	// Runs through the width and height twice, making stars
+	for (var y = 0; y < clientHeight; y += Math.round(Math.random() * 100) + 1) {
+		for (var x = 0; x < clientWidth; x += Math.round(Math.random() * 100) + 1) {
+			var color = colors[Math.round(Math.random() * 4)];
+			var star = new Star(x, y, color);
+			stars.push(star);
+		};
+	}
+	for (var x = 0; x < clientWidth; x += Math.round(Math.random() * 100) + 1) {
+		for (var y = 0; y < clientHeight; y += Math.round(Math.random() * 100) + 1) {
+			var color = colors[Math.round(Math.random() * 4)];
+			var star = new Star(x, y, color);
+			stars.push(star);
+		};
+	} 
+	render = function(){
+		stars.forEach(function(star){
+			star.draw(starctx)
+		});
+	};
+	render();
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Inits the main menu
+//////////////////////////////////////////////////////
+
+function initMainMenu() {
+	initStars(); // Draw the star background
+	// This block initiliazes the mainmenu canvas, sets the context, and sets its width and height to that of the user's screen
+	var canvas = document.getElementById('mainmenu');
+	currentcanvas = 'mm';
+	var ctx = canvas.getContext('2d');
+	winwidth = document.documentElement.clientWidth;
+	winheight = document.documentElement.clientHeight;
+	canvas.width = winwidth;
+	canvas.height = winheight;
+	renderops.main = true;
+
+	canvas.addEventListener("mousemove", function (e) { // Used for getting the position to draw the cursor
+		var rect = canvas.getBoundingClientRect(); // Get bounding rectangle
+		mouseX = e.clientX - rect.left;
+		mouseY = e.clientY - rect.top; // ClientX & Y are for whole window, left and top are offsets
+	}, false);
+
+	// Initialize Array of clickable elements, and then push in the parameters that would make a rectangle
+	var elements = [];
+	elements.push({
+		color: "red",
+		width: 200,
+		height: 75,
+		top: winheight / 2 + 50,
+		left: winwidth / 2 - 100
+	});
+
+	// Initialize click handler for start button. It checks every click on the canvas if it is in the bounds of any of the elements, in this case, the start button
+	canvas.addEventListener('click', function(event) {
+		var cLeft = canvas.offsetLeft;
+		var cTop = canvas.offsetTop;
+		var x = event.pageX - cLeft;
+		var y = event.pageY - cTop;
+
+		elements.forEach(function(element) {
+			if (y > element.top && y < element.top + element.height && x > element.left && x < element.left + element.width) {
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				renderops.main = false;
+				clearScreen();
+				initLevelSelect();
+				clicksound();
+			}
+		});
+	}, false);
+
+	var main = function(){ // Render the text and buttons
+		if (renderops.main) {
+			render();
+			requestAnimationFrame(main);
+		}
+	};
+
+	// Clears the screen
+	var clearScreen = function(){
+		ctx.clearRect(0,0,canvas.width, canvas.height);
+	};
+
+	// Clears the screen, and redraws the objects
+	var render = function(){
+		clearScreen();
+
+		// Render the Title
+		ctx.font = "30pt Arial";
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		ctx.fillText("Earth Invader", winwidth / 2, 50);
+
+		ctx.font = "20pt Arial";
+		ctx.fillText("WASD to move", winwidth / 2, winheight - 55);
+		ctx.fillText("Click and hold to shoot", winwidth / 2, winheight - 30);
+		ctx.fillText("P to pause", winwidth / 2, winheight - 5);
+		// Render each object in elements as per parameters
+		elements.forEach(function(element) {
+			ctx.fillStyle = element.color;
+			ctx.fillRect(element.left, element.top, element.width, element.height);
+		});
+
+		// Render text on the start button
+		ctx.fillStyle = "black";
+		ctx.fillText("Start", winwidth / 2, winheight / 2 + 100);
+
+		var cursorcolor = "#"; 
+		for (var i = 0; i < 3; i++) {
+			cursorcolor += (Math.floor(Math.random()*200)+55).toString(16); // Keeping individual RGB values between 100 and 200, just b/c
+		}
+		ctx.fillStyle = cursorcolor;
+		ctx.fillRect(mouseX + 1,mouseY + 4,2,8);
+		ctx.fillRect(mouseX + 4,mouseY + 1,8,2);
+		ctx.fillRect(mouseX + 1,mouseY - 8,2,8);
+		ctx.fillRect(mouseX - 8,mouseY + 1,8,2);
+	};
+
+	main();
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Inits the level select
+//////////////////////////////////////////////////////
+
+function initLevelSelect() {
+	// This block initiliazes the levelselect canvas, sets the context, and sets its width and height to that of the user's screen
+	var canvas = document.getElementById('levelselect');
+	currentcanvas = 'ls';
+	var ctx = canvas.getContext('2d');
+	winwidth = document.documentElement.clientWidth;
+	winheight = document.documentElement.clientHeight;
+	canvas.width = winwidth;
+	canvas.height = winheight;
+
+	score = 0;
+	time = 0;
+	enemiesKilled = 1;
+
+	var cleared = false;
+	var difftext = "Normal";
+	if (Options.resize) {
+		Options.resize = false;
+		resize();
+	}
+
+	renderops.levelselect = true; // To prevent the level select from appearing on replays
+	var infoBox = "";
+
+	canvas.addEventListener('click', function(event) { // Deals with clicking and setting variables
+		var cLeft = canvas.offsetLeft;
+		var cTop = canvas.offsetTop;
+		var x = event.pageX - cLeft;
+		var y = event.pageY - cTop;
+
+		if (y > canvas.height - 150 && y < canvas.height - 150 + 75 && x > canvas.width / 2 - 100 && x < canvas.width / 2 - 100 + 200) {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			renderops.levelselect = false;
+			clearScreen();
+			clicksound();
+			initGame();
+		}
+
+		if(y > 50 && y < 125 && x > (canvas.width/4)/2+100 && x < (canvas.width/4)/2+100+200){ // Difficulty select
+			if (Options.difficulty === 0) {
+				console.log("switching from normal")
+				Options.difficulty = 1;
+				difftext = "Hard";
+			} else if (Options.difficulty === 1) {
+				console.log("switching from hard")
+				Options.difficulty = 0;
+				difftext = "Normal";
+			}
+			clicksound();
+		} else if(y > 50 && y < 125 && x > ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) && x < ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) + 200){ // Rest highscore
+			highscore = 0;
+			cleared = true;
+			clicksound();
+		} else if(y > 200 && y < 275 && x > (canvas.width/4)/2+100 && x < (canvas.width/4)/2+100+200){
+			Options.planType = "fire";
+			clicksound();
+		} else if(y > 200 && y < 275 && x > (canvas.width/2)-250 && x < (canvas.width/2)-250+200){
+			Options.planType = "air";
+			clicksound();
+		} else if(y > 200 && y < 275 && x > (canvas.width/2)+50 && x < (canvas.width/2)+50 + 200){
+			Options.planType = "water";
+			clicksound();
+		} else if(y > 200 && y < 275 && x > ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) && x < ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) + 200){
+			Options.planType = "rock";
+			clicksound();
+		} else if(y > 400 && y < 475 && x > (canvas.width/4)/2+100 && x < (canvas.width/4)/2+100+200){
+			Options.wepType = "fire";
+			clicksound();
+		} else if(y > 400 && y < 475 && x > (canvas.width/2)-250 && x < (canvas.width/2)-250+200){
+			Options.wepType = "air";
+			clicksound();
+		} else if(y > 400 && y < 475 && x > (canvas.width/2)+50 && x < (canvas.width/2)+50 + 200){
+			Options.wepType = "water";
+			clicksound();
+		} else if(y > 400 && y < 475 && x > ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) && x < ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) + 200){
+			Options.wepType = "rock";
+			clicksound();
+		}
+	}, false);
+	canvas.addEventListener("mousemove", function (e) { // Deal with moving the mouse and setting the infobox
+		var rect = canvas.getBoundingClientRect(); //get bounding rectangle
+		x = e.clientX - rect.left;
+		y = e.clientY - rect.top; //clientX & Y are for whole window, left and top are offsets
+		mouseX = e.clientX - rect.left;
+		mouseY = e.clientY - rect.top; //clientX & Y are for whole window, left and top are offsets
+
+		if(y > 200 && y < 275 && x > (canvas.width/4)/2+100 && x < (canvas.width/4)/2+100+200){
+			infoBox = "Weak against Air, resistant to Water.";
+		} else if(y > 200 && y < 275 && x > (canvas.width/2)-250 && x < (canvas.width/2)-250+200){
+			infoBox = "Weak against Rock, resistant to Fire.";
+		} else if(y > 200 && y < 275 && x > (canvas.width/2)+50 && x < (canvas.width/2)+50 + 200){
+			infoBox = "Weak against Fire, resistant to Rock.";
+		} else if(y > 200 && y < 275 && x > ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) && x < ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) + 200){
+			infoBox = "Weak against Water, resistant to Air.";
+		} else if(y > 400 && y < 475 && x > (canvas.width/4)/2+100 && x < (canvas.width/4)/2+100+200){
+			infoBox = "Effective against Water, less effective against Air. High RoF, does burn damage over time.";
+		} else if(y > 400 && y < 475 && x > (canvas.width/2)-250 && x < (canvas.width/2)-250+200){
+			infoBox = "Effective against Fire, less effective against Rock. Fires in a spread, pushes enemies back.";
+		} else if(y > 400 && y < 475 && x > (canvas.width/2)+50 && x < (canvas.width/2)+50 + 200){
+			infoBox = "Effective against Rock, less effective against Fire. Slows down enemies, does splash damage.";
+		} else if(y > 400 && y < 475 && x > ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) && x < ((canvas.width/2) + 50) + ((canvas.width/2)-250)-((canvas.width/4)/2 + 100) + 200){
+			infoBox = "Effective against Air, less effective against Water. High damage per shot, penetrates through enemies.";
+		} else {
+			infoBox = "Planet type: " + Options.planType + ". Weapon type: " + Options.wepType + ". Difficulty: " + difftext + ".";
+		}
+	}); 
+
+	var main = function(){
+		if (renderops.levelselect) {
+			render();
+			requestAnimationFrame(main);
+		}
+	};
+
+	//clears the screen
+	var clearScreen = function(){
+		ctx.clearRect(0,0,canvas.width, canvas.height);
+	};
+
+	//clears the screen, and redraws the objects
+	var render = function(){
+		clearScreen();
+
+		ctx.font = "30pt Arial";
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		ctx.fillText("Level Select", winwidth / 2, 50);
+		ctx.fillStyle = "green";
+		ctx.fillRect(canvas.width / 2 - 100, canvas.height - 150, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Play", winwidth / 2, winheight - 100);
+
+		ctx.font = "20pt Arial";
+		if (Options.difficulty === 0) {
+			ctx.fillStyle = "green";
+		} else if (Options.difficulty === 1) {
+			ctx.fillStyle = "red";
+		}
+		ctx.fillRect((canvas.width / 4) / 2 + 100, 50, 200, 75);
+		ctx.fillStyle = "black";
+		if (Options.difficulty === 0) {
+			ctx.fillText("Normal", (canvas.width / 4) / 2 + 200, 100);
+		} else if (Options.difficulty === 1) {
+			ctx.fillText("Hard", (canvas.width / 4) / 2 + 200, 100);
+		}
+
+		ctx.fillStyle = "black";
+		ctx.fillRect(((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100), 50, 200, 75);
+		ctx.fillStyle = "white";
+		if (cleared) {
+			ctx.fillText("Reset!", ((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100) + 100, 100);
+		} else {
+			ctx.fillText("Reset Score", ((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100) + 100, 100);
+		}
+
+	//////////////////////////////////////////////////////////
+
+		ctx.font = "20pt Arial";
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		ctx.fillText("Select a Planet Type", winwidth / 2, 150);
+
+		ctx.fillStyle = "red";
+		ctx.fillRect((canvas.width / 4) / 2 + 100, 200, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Fire", (canvas.width / 4) / 2 + 200, 250);
+
+		ctx.fillStyle = "white";
+		ctx.fillRect((canvas.width / 2) - 250, 200, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Air", (canvas.width / 2) - 150, 250);
+
+		ctx.fillStyle = "blue";
+		ctx.fillRect((canvas.width / 2) + 50, 200, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Water", (canvas.width / 2) + 150, 250);
+
+		ctx.fillStyle = "brown";
+		ctx.fillRect(((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100), 200, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Rock", ((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100) + 100, 250);
+
+	/////////////////////////////////////////////////////////////
+
+		ctx.font = "20pt Arial";
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		ctx.fillText("Select a Weapon Type", winwidth / 2, 350);
+
+		ctx.fillStyle = "red";
+		ctx.fillRect((canvas.width / 4) / 2 + 100, 400, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Fire", (canvas.width / 4) / 2 + 200, 450);
+
+		ctx.fillStyle = "white";
+		ctx.fillRect((canvas.width / 2) - 250, 400, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Air", (canvas.width / 2) - 150, 450);
+
+		ctx.fillStyle = "blue";
+		ctx.fillRect((canvas.width / 2) + 50, 400, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Water", (canvas.width / 2) + 150, 450);
+
+		ctx.fillStyle = "brown";
+		ctx.fillRect(((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100), 400, 200, 75);
+		ctx.fillStyle = "black";
+		ctx.fillText("Rock", ((canvas.width / 2) + 50) + ((canvas.width / 2) - 250) - ((canvas.width / 4) / 2 + 100) + 100, 450);
+
+		ctx.font = "20pt Arial";
+		ctx.fillStyle = "white";
+		ctx.textAlign = "center";
+		ctx.fillText(infoBox, winwidth / 2, 525);
+
+		var cursorcolor = "#"; 
+		for (var i = 0; i < 3; i++) {
+			cursorcolor += (Math.floor(Math.random()*200)+55).toString(16); //keeping individual RGB values between 100 and 200, just b/c
+		}
+		ctx.fillStyle = cursorcolor;
+		ctx.fillRect(mouseX + 1,mouseY + 4,2,8);
+		ctx.fillRect(mouseX + 4,mouseY + 1,8,2);
+		ctx.fillRect(mouseX + 1,mouseY - 8,2,8);
+		ctx.fillRect(mouseX - 8,mouseY + 1,8,2);
+	};
+
+	main();
+}</script>
+	<script>//////////////////////////////////////////////////////
+///   Inits the game, the meat of Earth Invader
+//////////////////////////////////////////////////////
+
+function initGame() {
+	var igc = document.createElement('canvas'); // Create a new canvas element, add it to the DOM, and use it. This is done to prevent overlapping canvases
+	igc.id = 'game';
+	document.body.appendChild(igc);
+	// Initialize the game canvas, get its context, and set its width and height to that of the screen
+	var gamecanvas = document.getElementById("game");
+	var gamectx = gamecanvas.getContext("2d");
+	currentcanvas = 'gc'; // Set current canvas so the resize function knows which to resize
+	var clientWidth = document.documentElement.clientWidth;
+	var clientHeight = document.documentElement.clientHeight;
+	gamecanvas.width = clientWidth;
+	gamecanvas.height = clientHeight;
+	var halfwidth = gamecanvas.width / 2;
+	var halfheight = gamecanvas.height / 2;
+	var gameOver = false;
+	var winGame = false;
+
+	scoremult = mults[Options.wepType][Options.planType + "score"]; // Set the score multiplier based on the weapon and planet types
+
+	var mousedown = false; // Variable to track if mouse is held down
+	var firing = false; // To check if player is firing
+	var shootcount = 0; // How frequently to shoot
+	var pBullets = []; // Array to contain player bullets
+	var eBullets = []; // Array to contain enemy bullets
+	var enemies = []; // Array to contain the enemies
+	var defenders = []; // Array to contain the enemies that orbit the planet
+	var bossbars = []; // Array to contain the miniboss healthbars
+	var poweruparray = []; // Array to contain the powerups
+	var poweruptimer = Math.round(Math.random() * 30) + 30; // Random time between 30 and 60 seconds for when new powerups should spawn
+	var powerupamount = Math.round(Math.random() * 2) + 1; // Random number of powerups from 1 to 3
+	var poweruptypes = ["air", "fire", "water", "rock", "health", "invincibility"]; // Powerup types
+	var powerupnames = [["multishot", winheight - 5, "white"], ["fastshot", winheight - 30, "red"], ["splash", winheight - 55, "blue"], ["penetrate", winheight - 80, "brown"], ["invincibility", winheight - 105, "gold"]]; // Array containing information needed to render the powerup info
+	var removethis = poweruptypes.indexOf(Options.wepType); // Removes the powerup that mimics the players weapon, so no uselesss powerups
+	poweruptypes.splice(removethis, 1);
+
+	score = 0; // Reset score, time, and enemies killed to prevent issues
+	time = 0;
+	enemiesKilled = 1;
+
+	var planet = new Planet(halfwidth, halfheight, "Planet", planTraits[Options.planType].plancolor, planTraits[Options.planType].planstroke, pBullets); // Create the planet and its healthbar
+	var planethealth = new Healthbar(clientWidth - 310, 10, planet, false);
+
+	var player = new Turret(halfwidth, 45, [enemies,defenders], eBullets, poweruparray); // Create the player and its healthbar
+	var playerhealth = new Healthbar(10, 10, player, false);
+
+	var spawns = [[40, 40], [40, halfheight], [40, clientHeight], [halfwidth, 40], [halfwidth, clientHeight], [clientWidth - 40, 40], [clientWidth - 40, halfheight], [clientWidth - 40, clientHeight - 40]]; // The spawnpoints that enemies will come from
+	var enemytypes = ["fire", "air", "water", "rock"]; // All the enemy types. A random one is picked when making a wave
+	var enemycount = 1; // Used to spawn a new wave
+	var defendercount = 14; // Used to keep the number of defenders topped off
+
+	var makeEnemies = function(x,y, type) { // Makes enemies
+		var randOrbit = Math.round(Math.random()*20) + 60; // 30 to 80
+		var enemy = new Enemy(x, y, 10, 10, randOrbit, type, pBullets, eBullets, false);
+		enemy.assigntarget(player); // Assigns the player as the target to shoot at and follow
+		enemy.assignorbit(player);
+		enemies.push(enemy); // Push to enemy array
+		if (enemycount < 7) { // Keep repeating till there are enough enemies
+			setTimeout(function(){
+				makeEnemies(x, y, type);
+			}, 1000);
+			enemycount += 1;
+		}
+	};
+	var makeBoss = function(x,y, type) { // Same as above, but for minibosses
+		var randOrbit = Math.round(Math.random()*20) + 60; // 30 to 80
+		var boss = new Enemy(x, y, 30, 30, randOrbit, type, pBullets, eBullets, true);
+		boss.assigntarget(player);
+		boss.assignorbit(player);
+		var bosshealth = new Healthbar(x, y, boss, true); // Create its healthbar, push the healthbar and boss to their arrays
+		bossbars.push(bosshealth);
+		enemies.push(boss);
+	};
+	var makeDefenders = function(x,y, type) { // Sane as makeEnemy, but for defenders around the planet
+		var randOrbit = Math.round(Math.random()*20) + 80; // 40 to 90
+		var enemy = new Enemy(x, y, 10, 10, randOrbit, type, pBullets, eBullets, false);
+		enemy.assigntarget(player);
+		enemy.assignorbit(planet);
+		defenders.push(enemy);
+		if (defendercount > 0) {
+			setTimeout(function(){
+				makeDefenders(x, y, type);
+			}, 1000);
+			defendercount -= 1;
+		}
+	};
+	var makePowerups = function() { // Make a set of powerups
+		var powerupamount = Math.round(Math.random() * 2) + 1; // Random number of powerups from 1 - 2
+		for (var i = 0; i < powerupamount; i++) {
+			var int = Math.floor(Math.random() * 5); // Used to make random type powerup
+			var powerup = new Powerup(Math.floor(Math.random() * (winwidth) - 20)+10,Math.floor(Math.random() * (winheight) - 20)+10,poweruptypes[int],poweruparray);
+			poweruparray.push(powerup); // Push to powerup array
+		}
+		lastpowerup = Date.now(); // Used to determine next wave
+		var poweruptimer = Math.round(Math.random() * 30) + 30;
+	}
+
+////////////////////////////////////////
+/// Handlers
+////////////////////////////////////////
+
+	gamecanvas.addEventListener('mousedown', function (e) {
+		mousedown = true; // Starts the firing if statement
+	}, false);
+	gamecanvas.addEventListener('mouseup', function (e) {
+		mousedown = false;
+	}, false);
+	gamecanvas.addEventListener("mousemove", function (e) { // Used to calculate where to shoot and draw cursor
+		var rect = gamecanvas.getBoundingClientRect(); //get bounding rectangle
+		mouseX = e.clientX - rect.left;
+		mouseY = e.clientY - rect.top; //clientX & Y are for whole window, left and top are offsets
+	}, false);
+	window.addEventListener('keydown', function (e) { // Used for movement and pausing
+		keysDown[e.keyCode] = true;
+	}, false);
+	window.addEventListener('keyup', function(e) {
+		delete keysDown[e.keyCode];
+		if (e.keyCode === 80 && paused) {
+			paused = false;
+		} else if (e.keyCode === 80 && !paused) {
+			paused = true;
+		}
+		if (e.keyCode === 77 && muted) {
+			muted = false;
+		} else if (e.keyCode === 77 && !muted) {
+			muted = true;
+		}
+	}, false);
+
+/////////////////////////////////////////
+///   Countdown timer
+/////////////////////////////////////////
+
+	timer = 3;
+	setTimeout(function(){
+		timer = 2;
+		clicksound();
+		setTimeout(function(){
+			timer = 1;
+			clicksound();
+			setTimeout(function(){
+				starting = false;
+				clicksound();
+				makeEnemies(halfwidth, halfheight + 100, Options.planType);
+				makeDefenders(clientWidth / 2 - 40, clientHeight / 2 - 40, Options.planType);
+			}, 1000);
+		}, 1000);
+	}, 1000);
+
+	powerups.fastshot.nrof = wepTraits[Options.wepType].rof; // Prepare fastshot powerup so it can revert the rof when done
+
+	// Main game loop, updates and renders the game
+	var main = function(){
+		var now = Date.now();
+		var delta = now - then;
+
+		if (!gameOver) { // If game is still going, update and render
+			update(delta / 1000);
+			render();			
+		} else if (gameOver && winGame) { // If the player won, send true to show win
+			gameoverscreen(true);
+		} else if (gameOver && !winGame) { // Else send false to show lose
+			gameoverscreen(false);
+		}
+
+		then = now;
+
+		requestAnimationFrame(main); // Much better performance than setInterval
+	};
+
+	var update = function(delta){
+		if (!starting) { // Make sure the countdown timer isn't going
+			if (!paused) { // Make sure the game isn't paused
+				if (powerups.fastshot.toggle) { // Set the rof based on the powerup or lack thereof
+					wepTraits[Options.wepType].rof = powerups.fastshot.frof;
+				} else {
+					wepTraits[Options.wepType].rof = powerups.fastshot.nrof;
+				}
+
+				if (mousedown) { // If mousedown, start the shooting loop
+					shootcount++;
+		 			
+		 			if (shootcount % wepTraits[Options.wepType].rof == 1) { // Use rate of fire property as modulo, fire every <rof> frames
+		 				var dx = mouseX - player.x; // Use the global variables!
+						var dy = mouseY - player.y ;
+						var distanceToPlayer = Math.sqrt(Math.pow(dx,2) + Math.pow(dy,2));
+						var angle = Math.atan2(dy, dx);
+
+						if (Options.wepType === "air" || powerups.multishot.toggle) { // If air or multishot, do a multishot
+							for (var i = -2; i <= 2; i++) {
+								// Trig is scary
+								var bullet = new Bullet(player.x, player.y, 3, Math.cos(angle+(0.3*i)), Math.sin(angle+(0.3*i)), wepTraits[Options.wepType].speed, wepTraits[Options.wepType].damage, wepTraits[Options.wepType].color, Options.wepType, player, true);
+								if (i != 2) {
+									pBullets.push(bullet); // Push the bullet
+								}
+							}
+						} else { // Make just one
+							var bullet = new Bullet(player.x, player.y, 3, Math.cos(angle), Math.sin(angle), wepTraits[Options.wepType].speed, wepTraits[Options.wepType].damage, wepTraits[Options.wepType].color, Options.wepType, player, true);
+						}
+						pBullets.push(bullet); // Push the bullet
+
+		 			} 
+				}
+
+				// Update everything
+				enemies.forEach(function(enemy){
+					enemy.update(planet, enemies);
+				});
+				defenders.forEach(function(enemy){
+					enemy.update(planet, defenders);
+				});	
+				pBullets.forEach(function(bullet){
+					bullet.update(pBullets);
+				});
+				eBullets.forEach(function(bullet){
+					bullet.update(eBullets);
+				});
+				bossbars.forEach(function(bar){
+					bar.update();
+				});
+				poweruparray.forEach(function(powerup){
+					powerup.update(gamecanvas);
+				});
+
+				player.update(delta, gamecanvas);
+				playerhealth.update();
+				planethealth.update();
+				planet.update();
+
+				if (((Date.now() - wave) / 1000) > 15) { // Every 15 seconds, make a new wave
+					wave = Date.now();
+					if (enemies.length < 100) { // But only if we're under the enemy cap
+						enemycount = 1; // Set to 1 so the makeEnemies function loops
+						var randomint = Math.floor(Math.random() * 8); // Random spawn int
+						makeEnemies(spawns[randomint][0], spawns[randomint][1], enemytypes[Math.floor(Math.random() * 4)]);
+					}
+					if (defenders.length < 14) { // If the defenders need to be topped off, make a new one
+						defendercount = 14 - defenders.length; // 15 as 14 + 1, to make sure that it spawns in case there are 0 defenders
+						makeDefenders(clientWidth / 2 - 40, clientHeight / 2 - 40, Options.planType);
+					}
+				};
+				if (((Date.now() - boss) / 1000) > 60) { // Every 60 seconds, make a miniboss
+					boss = Date.now();
+					var randomint = Math.floor(Math.random() * 8); // Same idea as enemy
+					makeBoss(spawns[randomint][0], spawns[randomint][1], enemytypes[Math.floor(Math.random() * 4)]);
+				};
+				if ((Date.now() - lastpowerup) / 1000 > poweruptimer) { // If a set of powerups is due, make em
+					makePowerups();
+				}
+
+				if (planet.health <= 0) { // Planet's dead? You win!
+					gameOver = true;
+					winGame = true;
+				} else if (player.health <= 0) { // You dead? You su- Errrr, lose
+					player.alive = false;
+					gameOver = true;
+				};
+				if (!gameOver) { // Don't update time or score if the game is over
+					time = Math.floor((Date.now() - start) / 1000);
+					score = Math.round((((enemiesKilled * planet.totaldamage) / time) * 10) * scoremult); // Multiply kills by damage done, then divide that by time, and multiply by 10 and scoremult. The divide by time is to prevent enemy farming for points, the 10 is to prevent small numbers, and the scoremult is to reward or punish hard or easy combos
+				}
+				for (i = 0; i < powerupnames.length; i++) { // Condensed for loop to manage all the timers, toggles, and rendering of meters for powerups
+					if ((powerups[powerupnames[i][0]].timer > 0) && (powerups[powerupnames[i][0]].toggle)) {
+						powerups[powerupnames[i][0]].timer -= 1;
+					} else if ((powerups[powerupnames[i][0]].timer <= 0) && (powerups[powerupnames[i][0]].toggle)) {
+						powerups[powerupnames[i][0]].toggle = false;
+						powerups[powerupnames[i][0]].timer = 1000;
+					}
+				}
+			}
+		}
+	};
+
+	// Clears the screen
+	var clearScreen = function(){
+		gamectx.clearRect(0,0,gamecanvas.width, gamecanvas.height);
+	};
+
+	// Clears the screen, and redraws the objects
+	var render = function(){
+		clearScreen();
+
+		// Draw everything
+		planet.draw(gamectx);
+		enemies.forEach(function(enemy){
+			enemy.draw(gamectx, enemies);
+		});
+		defenders.forEach(function(enemy){
+			enemy.draw(gamectx, defenders);
+		});
+		bossbars.forEach(function(bar){
+			bar.draw(gamectx);
+		});
+		poweruparray.forEach(function(powerup){
+			powerup.draw(gamectx);
+		});
+		playerhealth.draw(gamectx);
+		planethealth.draw(gamectx);
+
+		// Draw the time
+		gamectx.font = "20pt Arial";
+		gamectx.fillStyle = "white";
+		gamectx.textAlign = "center";
+		gamectx.fillText(time, winwidth / 2, 30);
+
+		// Draw player and bullets
+		player.draw(gamectx);
+		pBullets.forEach(function(bullet){
+			bullet.draw(gamectx);
+		});
+		eBullets.forEach(function(bullet){
+			bullet.draw(gamectx);
+		});
+
+		// Draw cursor
+		var cursorcolor = "#"; 
+		for (var i = 0; i < 3; i++) {
+			cursorcolor += (Math.floor(Math.random()*200)+55).toString(16); //keeping individual RGB values between 100 and 200, just b/c
+		}
+		gamectx.fillStyle = cursorcolor;
+		gamectx.fillRect(mouseX + 1,mouseY + 4,2,8);
+		gamectx.fillRect(mouseX + 4,mouseY + 1,8,2);
+		gamectx.fillRect(mouseX + 1,mouseY - 10,2,8);
+		gamectx.fillRect(mouseX - 10,mouseY + 1,8,2);
+
+		// Draw paused if paused, draw starting timer if starting
+		gamectx.font = "100pt Impact";
+		if (paused) {
+			gamectx.fillStyle = "green";
+			gamectx.textAlign = "center";
+			gamectx.fillText("Paused", winwidth / 2, winheight / 2);
+		}
+		if (starting) {
+			gamectx.fillStyle = "white";
+			gamectx.textAlign = "center";
+			gamectx.fillText(timer, winwidth / 2, winheight / 2);
+		}
+
+		// Draw the meters for powerups
+		gamectx.font = "20pt Impact";
+		for (i = 0; i < powerupnames.length; i++) {
+			if (powerups[powerupnames[i][0]].toggle) {
+				gamectx.fillStyle = powerupnames[i][2];
+				gamectx.textAlign = "left";
+				gamectx.fillText(powerupnames[i][0].toUpperCase(),5,powerupnames[i][1]);
+				gamectx.fillRect(160, powerupnames[i][1] - 20, 200 * (powerups[powerupnames[i][0]].timer / 1000), 20);
+			}
+		};
+	};
+
+	// Gameover screen 
+	var gameoverscreen = function(didwin){
+		clearScreen();
+		if (score > highscore) { // Make sure highscore is correct
+			highscore = score;
+			localStorage.setItem("highscore", JSON.stringify(highscore));
+		}
+
+		gamectx.font = "100pt Impact";
+		if (didwin) { // If you won, show the win stuff, or show gameover if not
+			gamectx.fillStyle = "green";
+			gamectx.textAlign = "center";
+			gamectx.fillText("You Win!", winwidth / 2, winheight / 2);
+		} else if (!didwin) {
+			gamectx.fillStyle = "red";
+			gamectx.textAlign = "center";
+			gamectx.fillText("Game Over!", winwidth / 2, winheight / 2);
+		}
+
+		// Show stats like score, highscore, time, enemies killed
+		gamectx.font = "75pt Impact";
+		gamectx.fillText("Score: " + score, winwidth / 2, (winheight / 2) + 110);
+
+		gamectx.font = "30pt Impact";
+		gamectx.fillText("Highscore: " + highscore, winwidth / 2, (winheight / 2) + 150);
+		gamectx.fillText("Time: " + time + " seconds", winwidth / 2, (winheight / 2) + 185);
+		gamectx.fillText("Enemies Killed: " + (enemiesKilled - 1), winwidth / 2, (winheight / 2) + 220);
+
+		// Replay button
+		gamectx.font = "30pt Arial";
+		gamectx.fillStyle = "green";
+		gamectx.fillRect(gamecanvas.width / 2 - 100, gamecanvas.height - 150, 200, 75);
+		gamectx.fillStyle = "black";
+		gamectx.fillText("Replay", winwidth / 2, winheight - 100);
+
+		// Draw cursor
+		var cursorcolor = "#"; 
+		for (var i = 0; i < 3; i++) {
+			cursorcolor += (Math.floor(Math.random()*200)+55).toString(16); //keeping individual RGB values between 100 and 200, just b/c
+		}
+		gamectx.fillStyle = cursorcolor;
+		gamectx.fillRect(mouseX + 1,mouseY + 4,2,8);
+		gamectx.fillRect(mouseX + 4,mouseY + 1,8,2);
+		gamectx.fillRect(mouseX + 1,mouseY - 10,2,8);
+		gamectx.fillRect(mouseX - 10,mouseY + 1,8,2);
+
+	};
+
+	gamecanvas.addEventListener('click', function(event) { // Click handler to deal with replays
+		var cLeft = gamecanvas.offsetLeft;
+		var cTop = gamecanvas.offsetTop;
+		var x = event.pageX - cLeft;
+		var y = event.pageY - cTop;
+
+		if (y > gamecanvas.height - 150 && y < gamecanvas.height - 150 + 75 && x > gamecanvas.width / 2 - 100 && x < gamecanvas.width / 2 - 100 + 200 && gameOver) {
+			gamectx.clearRect(0, 0, gamecanvas.width, gamecanvas.height);
+			gameOver = false;
+			winGame = false;
+
+			// Remove all the stuff in arrays, kill player and planet just in case, reset the powerups and timers, init level select
+			for (x in enemies) {
+				var index = enemies.indexOf(x);
+				enemies.splice(index,1);
+			}
+			for (x in defenders) {
+				var index = defenders.indexOf(x);
+				enemies.splice(index,1);
+			}
+			for (x in pBullets) {
+				var index = pBullets.indexOf(x);
+				enemies.splice(index,1);
+			}
+			for (x in eBullets) {
+				var index = eBullets.indexOf(x);
+				enemies.splice(index,1);
+			}
+			for (x in bossbars) {
+				var index = bossbars.indexOf(x);
+				enemies.splice(index,1);
+			}
+			planet.alive = false;
+			player.alive = false;
+			renderops.game = false;
+			document.body.removeChild(igc);
+			starting = true;
+			time = 0;
+			powerups.multishot.toggle = false;
+			powerups.multishot.timer = 1000;
+			powerups.fastshot.toggle = false;
+			powerups.fastshot.timer = 1000;
+			powerups.penetrate.toggle = false;
+			powerups.penetrate.timer = 1000;
+			powerups.splash.toggle = false;
+			powerups.splash.timer = 1000;
+			powerups.invincibility.toggle = false;
+			powerups.invincibility.timer = 1000;
+			Options.resize = true;
+			initLevelSelect();
+		}
+	}, false);
+
+	var then = Date.now(); // For updating
+	var start = Date.now(); // For timer
+	var wave = Date.now(); // For waves
+	var boss = Date.now(); // For minibosses
+	var lastpowerup = Date.now(); // For powerups
+	main(); // Run the game loop
+}</script>
+	<style>
+		canvas {
+			position: absolute;
+			cursor: none;
+		}
+	</style>
+</head>
+<body onload="initMainMenu()" onresize="resize()" onorientationchange="resize()" style="margin: 0; padding: 0; background-color: black; overflow: hidden;">
+	<canvas id="stars"></canvas>
+	<canvas id="mainmenu"></canvas>
+	<canvas id="levelselect"></canvas>
+</body>
+</html>

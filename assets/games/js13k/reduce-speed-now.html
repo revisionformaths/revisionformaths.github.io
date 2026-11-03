@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+        </style>
+    </head>
+    <body>
+        <style>html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    background: #000;
+    height: 100vh;
+    width: 100%;
+}
+</style>
+        <canvas id="canvas"></canvas>
+        <script>const audioCtx = new (window.AudioContext)();
+
+let _notes = {
+    C: [16.35, 32.70, 65.41, 130.81, 261.63, 523.25, 1046.50, 2093.00, 4186.01, 8372.02],
+    CS: [17.32, 34.65, 69.30, 138.59, 277.18, 554.37, 1108.73, 2217.46, 4434.92, 8869.84],
+    D: [18.35, 36.71, 73.42, 146.83, 293.66, 587.33, 1174.66, 2349.32, 4698.63, 9397.27],
+    DS: [19.45, 38.89, 77.78, 155.56, 311.13, 622.25, 1244.51, 2489.02, 4978.03, 9956.06],
+    E: [20.60, 41.20, 82.41, 164.81, 329.63, 659.25, 1318.51, 2637.02, 5274.04, 10548.08],
+    F: [21.83, 43.65, 87.31, 174.61, 349.23, 698.46, 1396.91, 2793.83, 5587.65, 11175.30],
+    FS: [23.12, 46.25, 92.50, 185.00, 369.99, 739.99, 1479.98, 2959.96, 5919.91, 11839.82],
+    G: [24.50, 49.00, 98.00, 196.00, 392.00, 784.00, 1568.00, 3136.00, 6272.00, 12544.00],
+    GS: [25.96, 51.91, 103.83, 207.65, 415.30, 830.61, 1661.22, 3322.44, 6644.88, 13289.76],
+    A: [27.50, 55.00, 110.00, 220.00, 440.00, 880.00, 1760.00, 3520.00, 7040.00, 14080.00],
+    AS: [29.14, 58.28, 116.56, 233.13, 466.26, 932.51, 1865.02, 3729.95, 7459.90, 14919.80],
+    B: [30.87, 61.74, 123.47, 246.94, 493.88, 987.77, 1975.53, 3951.06, 7902.12, 15804.24]
+}
+
+let playHappySound = octave => {
+    _play("triangle", [
+        {target: 'frequency', ramp: 'set', value: _notes.DS[octave], time: 0},
+        {target: 'frequency', ramp: 'exponential', value: _notes.DS[octave + 1], time: 0.1},
+        {target: 'frequency', ramp: 'exponential', value: _notes.DS[octave + 2], time: 0.25},
+     ], 0.4);
+}
+
+let playNeutralSound = octave => {
+    _play("sine", [
+        {target: 'frequency', ramp: 'set', value: _notes.A[octave], time: 0},
+        {target: 'gain', ramp: 'set', value: 0, time: 0},
+        {target: 'gain', ramp: 'linear', value: 0.15, time: 0.02},
+        {target: 'gain', ramp: 'exponential', value: 0.001, time: 0.08},
+     ], 0.08);
+}
+
+let playSadSound = octave => {
+    _play("triangle", [
+        {target: 'frequency', ramp: 'set', value: _notes.DS[octave], time: 0},
+        {target: 'frequency', ramp: 'linear', value: _notes.DS[octave - 1], time: 0.3},
+        {target: 'frequency', ramp: 'exponential', value: _notes.DS[octave - 2], time: 0.6},
+        {target: 'gain', ramp: 'set', value: 0.2, time: 0},
+        {target: 'gain', ramp: 'exponential', value: 0.001, time: 0.6},
+     ], 0.6);
+}
+
+let _play = (wave, ops, len) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.type = wave; 
+    const now = audioCtx.currentTime;
+    ops.forEach(op => {
+        if (op.target == 'frequency') {
+            if (op.ramp === 'set') {
+                o.frequency.setValueAtTime(op.value, now + op.time);
+            } else if (op.ramp === 'linear') {
+                o.frequency.linearRampToValueAtTime(op.value, now + op.time);
+            } else {
+                o.frequency.exponentialRampToValueAtTime(op.value, now + op.time);
+            }
+        } else {
+            if (op.ramp === 'set') {
+                g.gain.setValueAtTime(op.value, now + op.time);
+            } else if (op.ramp === 'linear') {
+                g.gain.linearRampToValueAtTime(op.value, now + op.time);
+            } else {
+                g.gain.exponentialRampToValueAtTime(op.value, now + op.time);
+            }
+        }
+    });
+    g.gain.setValueAtTime(0.3, now);
+    g.gain.exponentialRampToValueAtTime(0.01, now + len);
+    o.start(now);
+    o.stop(now + len);
+}
+</script>
+        <script>let left = { keys: ["ArrowLeft", "KeyA"], pressed: false, released: false, down: false };
+let right = { keys: ["ArrowRight", "KeyD"], pressed: false, released: false, down: false };
+let up = { keys: ["ArrowUp", "KeyW"], pressed: false, released: false, down: false };
+let down = { keys: ["ArrowDown", "KeyS"], pressed: false, released: false, down: false };
+let space = { keys: ["Space"], pressed: false, released: false, down: false };
+
+let keys = [left, right, up, down, space];
+
+document.addEventListener('keydown', e => {
+    keys.forEach(key => {
+        let oldDown = key.down;
+        if (key.keys.includes(e.code)) {
+            key.down = true;
+            key.pressed = !oldDown;
+        }
+    });
+}, false);
+
+document.addEventListener('keyup', e => {
+    keys.forEach(key => {
+        let oldDown = key.down;
+        if (key.keys.includes(e.code)) {
+            key.down = false;
+            key.released = oldDown;
+        }
+    });
+}, false);</script>
+        <script>let _createCanvas = (w, h, fn) => {
+    var _canvas = document.createElement('canvas');
+    _canvas.width = w;
+    _canvas.height = h;
+    fn(_canvas.getContext("2d"));
+    return _canvas;
+}
+
+let _createCar = () => _createCanvas(280, 180, _ctx => {
+    _ctx.fillStyle = '#333';
+    _ctx.beginPath();
+    _ctx.roundRect(20, 130, 50, 50, 5);
+    _ctx.roundRect(210, 130, 50, 50, 5);
+    _ctx.fill();
+
+    _ctx.fillStyle = '#F17B85FF';
+    _ctx.beginPath();
+    _ctx.moveTo(40, 103);
+    _ctx.lineTo(240, 103);
+    _ctx.bezierCurveTo(260, 52, 260, 2, 140, 2);
+    _ctx.bezierCurveTo(20, 2, 20, 52, 40, 102);
+    _ctx.closePath();
+    _ctx.fill();
+    _ctx.strokeStyle = '#b02a37';
+    _ctx.lineWidth = 2;
+    _ctx.stroke();
+
+    _ctx.fillStyle = '#e63946';
+    _ctx.beginPath();
+    _ctx.moveTo(10, 150); 
+    _ctx.lineTo(270, 150); 
+    _ctx.bezierCurveTo(290, 100, 290, 50, 140, 50);
+    _ctx.bezierCurveTo(-10, 50, -10, 100, 10, 150);
+    _ctx.closePath();
+    _ctx.fill();
+    _ctx.strokeStyle = '#b02a37';
+    _ctx.lineWidth = 2;
+    _ctx.stroke();
+
+    _ctx.fillStyle = "#A59495FF";
+    _ctx.beginPath();
+    _ctx.roundRect(0, 140, 280, 20, 4);
+    _ctx.fill();
+
+    _ctx.fillStyle = '#ff6b6b';
+    _ctx.beginPath();
+    _ctx.arc(30, 110, 15, 0, Math.PI * 2);
+    _ctx.fill();
+    _ctx.beginPath();
+    _ctx.arc(250, 110, 15, 0, Math.PI * 2);
+    _ctx.fill();
+});
+
+let _createUnicornCoin = () => _createCanvas(500, 500, _ctx => {
+    _ctx.beginPath();
+    _ctx.arc(250, 250, 240, 0, 2 * Math.PI);
+    _ctx.clip();
+
+    _ctx.fillStyle = "#52b8f2";
+    _ctx.beginPath();
+    _ctx.arc(250, 250, 240, 0, 2 * Math.PI);
+    _ctx.fill();
+
+    // Horn
+    let hornGrad = _ctx.createLinearGradient(250, 50, 250, 200);
+    hornGrad.addColorStop(0, '#ffe066');
+    hornGrad.addColorStop(0.5, '#f783ac');
+    hornGrad.addColorStop(1, '#da77f2');
+    _ctx.beginPath();
+    _ctx.moveTo(250, 40);
+    _ctx.lineTo(220, 200);
+    _ctx.lineTo(280, 200);
+    _ctx.closePath();
+    _ctx.fillStyle = hornGrad;
+    _ctx.fill();
+    _ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    _ctx.lineWidth = 5;
+    for (let i = 70; i < 200; i += 30) {
+        _ctx.beginPath();
+        _ctx.moveTo(235 + (i*0.08), i);
+        _ctx.lineTo(265 - (i*0.08), i + 10);
+        _ctx.stroke();
+    }
+
+    // Left ear (outer)
+    _ctx.beginPath();
+    _ctx.ellipse(160, 180, 30, 60, -Math.PI / 6, 0, 2 * Math.PI);
+    _ctx.fillStyle = '#ffffff';
+    _ctx.fill();
+    _ctx.strokeStyle = '#e9ecef';
+    _ctx.lineWidth = 3;
+    _ctx.stroke();
+
+    // Left ear (inner)
+    _ctx.beginPath();
+    _ctx.ellipse(165, 185, 15, 40, -Math.PI / 6, 0, 2 * Math.PI);
+    _ctx.fillStyle = '#ffdeeb';
+    _ctx.fill();
+
+    // Right ear (outer)
+    _ctx.beginPath();
+    _ctx.ellipse(340, 180, 30, 60, Math.PI / 6, 0, 2 * Math.PI);
+    _ctx.fillStyle = '#ffffff';
+    _ctx.fill();
+    _ctx.stroke();
+
+    // Right ear (inner)
+    _ctx.beginPath();
+    _ctx.ellipse(335, 185, 15, 40, Math.PI / 6, 0, 2 * Math.PI);
+    _ctx.fillStyle = '#ffdeeb';
+    _ctx.fill();
+
+    // Head
+    _ctx.beginPath();
+    _ctx.arc(250, 280, 110, 0, 2 * Math.PI);
+    _ctx.fillStyle = '#ffffff';
+    _ctx.fill();
+    // Skugga/kontur för att framhäva huvudet mot vit bakgrund
+    _ctx.strokeStyle = '#e9ecef';
+    _ctx.lineWidth = 4;
+    _ctx.stroke();
+
+    // Hair
+    const colors = ['#ff8787', '#fcc419', '#4dadf7', '#da77f2'];
+    const manePositions = [
+        {x: 210, y: 190, r: 35},
+        {x: 250, y: 180, r: 40},
+        {x: 290, y: 190, r: 35},
+        {x: 180, y: 220, r: 25}
+    ];
+    manePositions.forEach((pos, index) => {
+        _ctx.beginPath();
+        _ctx.arc(pos.x, pos.y, pos.r, 0, 2 * Math.PI);
+        _ctx.fillStyle = colors[index % colors.length];
+        _ctx.fill();
+    });
+
+    // Eyes
+    function drawEye(x, y) {
+        _ctx.beginPath();
+        _ctx.arc(x, y, 24, 0, 2 * Math.PI);
+        _ctx.fillStyle = '#212529';
+        _ctx.fill();
+
+        _ctx.beginPath();
+        _ctx.arc(x - 8, y - 8, 8, 0, 2 * Math.PI);
+        _ctx.fillStyle = '#ffffff';
+        _ctx.fill();
+
+        _ctx.beginPath();
+        _ctx.arc(x + 8, y + 6, 4, 0, 2 * Math.PI);
+        _ctx.fillStyle = '#ffffff';
+        _ctx.fill();
+
+        _ctx.beginPath();
+        _ctx.arc(x - 4, y + 12, 2.5, 0, 2 * Math.PI);
+        _ctx.fillStyle = '#ffffff';
+        _ctx.fill();
+
+        _ctx.strokeStyle = '#212529';
+        _ctx.lineWidth = 3.5;
+        _ctx.lineCap = 'round';
+        
+        let direction = x < 250 ? -1 : 1;
+
+        _ctx.beginPath();
+        _ctx.moveTo(x + (18 * direction), y - 12);
+        _ctx.lineTo(x + (30 * direction), y - 18);
+        _ctx.moveTo(x + (22 * direction), y);
+        _ctx.lineTo(x + (34 * direction), y + 2);
+        _ctx.stroke();
+    }
+
+    drawEye(195, 270);
+    drawEye(305, 270);
+
+    // Cheeks
+    _ctx.fillStyle = 'rgba(255, 192, 203, 0.6)';
+    _ctx.beginPath();
+    _ctx.arc(165, 310, 18, 0, 2 * Math.PI);
+    _ctx.fill();
+    _ctx.beginPath();
+    _ctx.arc(335, 310, 18, 0, 2 * Math.PI);
+    _ctx.fill();
+
+    // Nose
+    _ctx.beginPath();
+    _ctx.ellipse(250, 345, 65, 35, 0, 0, 2 * Math.PI);
+    _ctx.fillStyle = '#fff0f6';
+    _ctx.fill();
+    _ctx.strokeStyle = '#fcc2d7';
+    _ctx.lineWidth = 2;
+    _ctx.stroke();
+    _ctx.fillStyle = '#ffb3c1';
+    _ctx.beginPath();
+    _ctx.arc(230, 345, 5, 0, 2 * Math.PI);
+    _ctx.arc(270, 345, 5, 0, 2 * Math.PI);
+    _ctx.fill();
+
+    // Mouth
+    _ctx.beginPath();
+    _ctx.arc(250, 350, 12, 0, Math.PI, false);
+    _ctx.strokeStyle = '#ffb3c1';
+    _ctx.lineWidth = 3;
+    _ctx.stroke();
+
+    _ctx.beginPath();
+    _ctx.lineWidth = 30;
+    _ctx.strokeStyle = "black";
+    _ctx.arc(250, 250, 240, 0, 2 * Math.PI);
+    _ctx.stroke();
+
+});
+
+let _createRainbowCoin = () => _createCanvas(310, 310, _ctx => {
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 150, 0, 2 * Math.PI);
+    _ctx.clip();
+    let colors = ['#ff4136', '#ff851b', '#ffdc00', '#2ecc40', '#2dcfff', '#0051e0', '#b10dc9'];
+    colors.forEach((color, index) => {
+        _ctx.fillStyle = color;
+        _ctx.fillRect(0, index * 43, 310, 43);
+    });
+    _ctx.lineWidth = 30;
+    _ctx.strokeStyle = "black";
+    _ctx.arc(155, 155, 150, 0, 2 * Math.PI);
+    _ctx.stroke();
+});
+
+let _createRainbow = (colors) => _createCanvas(540, 300, _ctx => {
+    const centerX = 270;
+    const centerY = 300;
+    const strokeWidth = 30;
+    const radii = [150, 170, 190, 210, 230, 250];
+    _ctx.lineWidth = strokeWidth;
+    _ctx.lineCap = 'round';
+    colors.forEach((color, index) => {
+        _ctx.beginPath();
+        _ctx.arc(centerX, centerY, radii[index], Math.PI, 0, false);
+        _ctx.strokeStyle = color;
+        _ctx.stroke();
+    });
+    return canvas;
+});
+
+let _createSpeedCoin = (higher) => _createCanvas(310, 310, _ctx => {
+    const gradient = _ctx.createConicGradient(0, 155, 155);
+    gradient.addColorStop(0, "red");
+    gradient.addColorStop(0.15, "red");
+    gradient.addColorStop(0.25, "green");
+    gradient.addColorStop(0.5, "yellow");
+    gradient.addColorStop(0.75, "orange");
+    gradient.addColorStop(1, "red");
+
+    _ctx.fillStyle = "black";
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 155, 0, 2 * Math.PI);
+    _ctx.fill();
+
+    _ctx.fillStyle = gradient;
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 147, 0.75 * Math.PI, 0.25 * Math.PI);
+    _ctx.lineTo(155, 155);
+    _ctx.fill();
+
+    _ctx.fillStyle = "black";
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 80, 0, 2 * Math.PI);
+    _ctx.fill();
+
+    _ctx.strokeStyle = "white";
+    _ctx.lineWidth = 5;
+    _ctx.beginPath();
+    _ctx.moveTo(155, 155);
+    _ctx.lineTo(higher ? 210 : 100, 200);
+    _ctx.stroke();
+});
+
+let _createSteeringCoin = bg => _createCanvas(310, 310, _ctx => {
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 150, 0, 2 * Math.PI);
+    _ctx.clip();
+    _ctx.fillStyle = bg;
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 150, 0, 2 * Math.PI);
+    _ctx.fill();
+    _ctx.strokeStyle = "black";
+    _ctx.lineWidth = 20;
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 110, 0, 2 * Math.PI);
+    _ctx.stroke();
+    _ctx.beginPath();
+    _ctx.moveTo(155, 155);
+    _ctx.lineTo(155, 275);
+    _ctx.stroke();
+    _ctx.moveTo(155, 155);
+    _ctx.lineTo(255, 95);
+    _ctx.stroke();
+    _ctx.moveTo(155, 155);
+    _ctx.lineTo(55, 95);
+    _ctx.stroke();
+    _ctx.fillStyle = "black";
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 50, 0, 2 * Math.PI);
+    _ctx.fill();
+    _ctx.lineWidth = 30;
+    _ctx.strokeStyle = "black";
+    _ctx.beginPath();
+    _ctx.arc(155, 155, 150, 0, 2 * Math.PI);
+    _ctx.stroke();
+});
+
+let carAsset = _createCar();
+let rainbowCoinAsset = _createRainbowCoin();
+let increaseSpeedCoinAsset = _createSpeedCoin(true);
+let decreaseSpeedCoinAsset = _createSpeedCoin(false);
+let unicornAsset = _createUnicornCoin();
+let increaseSteeringFactorCoinAsset = _createSteeringCoin("#2ecc40");
+let decreaseSteeringFactorCoinAsset = _createSteeringCoin("#ff4136");
+
+</script>
+        <script>const MENU = 1;
+const PLAYING = 2;
+const LEVELCLEARED = 3;
+const LEVELFAILED = 4;
+const WON = 5;
+
+const W = 160;
+const H = 100;
+
+let level = 0;
+let state = MENU;
+let wonObjects = [];
+
+let energy = 100;
+let distance = 0; // Distance car has travelled around track
+let curvature = 0; // Current track curvature, lerped between track sections
+let trackCurvature = 0; // Accumulation of track curvature
+let trackDistance = 0; // Total distance of track
+let car = { pos : 0 }; // Current car position
+let steeringFactor = 2; // Steering factor, can be modified by power-ups
+let playerCurvature = 0; // Accumulation of player curvature
+let speed = 0; // Current player speed
+let tracks = []; // Track sections, sharpness of bend, length of section
+let rainbowCoins = [];
+let increaseSpeedCoins = [];
+let decreaseSpeedCoins = [];
+let increaseSteeringFactorCoins = [];
+let decreaseSteeringFactorCoins = [];
+let unicorns = [];
+let onEdge = false;
+let delta = 0;
+
+let totalTime = 0;
+
+let visualCoordinates = {};
+let deadObjects = {};
+let debug = true;
+
+let infoFont;
+let infoTimer;
+
+let skyFrom = -1;
+let skyTransitionStart = -999999;
+
+let carTilt = 0;
+
+let levelFailedMenuItemSelected = 0;
+
+let nextLevel = () => {
+    level++;
+
+    let rp, isp, dsp, isfp, dsfp;
+    switch(level) {
+        case 1:
+            rp = 40, isp = 50, dsp = 70, isfp = 85, dsfp = 90;
+            break;
+        case 2:
+            rp = 35, isp = 50, dsp = 70, isfp = 85, dsfp = 90;
+            break;
+        case 3:
+            rp = 32, isp = 50, dsp = 70, isfp = 80, dsfp = 90;
+            break;
+        case 4:
+            rp = 32, isp = 53, dsp = 70, isfp = 80, dsfp = 90;
+            break;
+        case 5:
+            rp = 30, isp = 55, dsp = 70, isfp = 80, dsfp = 90;
+            break;
+    }
+
+    energy = 100;
+    distance = 0;
+    curvature = 0;
+    trackCurvature = 0;
+    trackDistance = 0;
+    car = { pos : 0 };
+    steeringFactor = 2;
+    playerCurvature = 0;
+    speed = 0;
+
+    tracks = [[0, 100]];
+    for (let i = 0; i < 20 + 3 * level; i++) {
+        let maxSharpness = 0.3 + 0.1 * level;
+        let sharpness = Math.random() * maxSharpness;
+        if (Math.random() < 0.5) {
+            sharpness = -sharpness;
+        }
+        let length = Math.random() * 100 + 50;
+        tracks.push([sharpness, length]);
+    }
+    trackDistance = 0;
+    for (let t of tracks) {
+        trackDistance += t[1];
+    }
+
+    rainbowCoins = [];
+    increaseSpeedCoins = [];
+    decreaseSpeedCoins = [];
+    increaseSteeringFactorCoins = [];
+    decreaseSteeringFactorCoins = [];
+    unicorns = [];
+    let d = 10 + Math.random() * 50;
+    while (d < trackDistance) {
+        let type = Math.floor(Math.random() * 100);
+        let x = Math.random() * 0.8 + 0.1;
+        if (type <= rp) {
+            rainbowCoins.push({ ahead: d, left: x, asset: rainbowCoinAsset });
+        } else if (type <= isp) {
+            increaseSpeedCoins.push({ ahead: d, left: x, asset: increaseSpeedCoinAsset });
+        } else if (type <= dsp) {
+            decreaseSpeedCoins.push({ ahead: d, left: x, asset: decreaseSpeedCoinAsset });
+        } else if (type < isfp) {
+            increaseSteeringFactorCoins.push({ ahead: d, left: x, asset: increaseSteeringFactorCoinAsset });
+        } else if (type < dsfp){
+            decreaseSteeringFactorCoins.push({ ahead: d, left: x, asset: decreaseSteeringFactorCoinAsset });
+        } else {
+            unicorns.push({ ahead: d, left: x, asset: unicornAsset });
+        }
+        d += 10 + Math.random() * 50;
+    }
+
+    visualCoordinates = {};
+    deadObjects = {};
+
+    infoFont = 10;
+    infoTimer = 0;
+}
+
+let increaseEnergy = by => {
+    energy += by;
+    if (energy > 100) {
+        energy = 100;
+    }
+}
+
+let decreaseEnergy = by => {
+    energy -= by;
+    if (energy < 0) {
+        energy = 0;
+    }
+}
+
+let increaseSpeed = by => {
+    speed += by;
+    if (speed > 5) {
+        speed = 5;
+    }
+}
+
+let decreaseSpeed = by => {
+    speed -= by;
+    if (speed < 0.5) {
+        speed = 0.5;
+    }
+}
+
+let increaseSteeringFactor = by => {
+    steeringFactor += by;
+    if (steeringFactor > 5) {
+        steeringFactor = 5;
+    }
+}
+
+let decreaseSteeringFactor = by => {
+    steeringFactor -= by;
+    if (steeringFactor < 1) {
+        steeringFactor = 1;
+    }
+}</script>
+        <script>let update = (dt) => {
+    totalTime += dt;
+    let et = dt / 1000;
+
+    if (state === MENU) {
+        if (space.released) {
+            space.released = false;
+            level = 0;
+            nextLevel();
+            state = PLAYING;
+        } else {
+            return;
+        }
+    }
+
+    if (state === WON) {
+        if (space.released) {
+            space.released = false;
+            wonObjects = [];
+            state = MENU;
+        } else {
+            wonObjects = wonObjects.filter(o => !o.dead);
+            if (Math.random() < 0.2) {
+                wonObjects.push({ 
+                    x: Math.random() * 100, 
+                    y: Math.random() * 100, 
+                    time: totalTime, 
+                    dead: false,
+                    asset: Math.random() < 0.3 ? rainbowCoinAsset : unicornAsset
+                });
+            }
+        }
+        return;
+    }
+
+    if (state == LEVELCLEARED) {
+        infoFont += 80 * et;
+        infoTimer += 80 * et;
+        infoFont = Math.min(infoFont, 144);
+        if (infoTimer > 300) {
+            skyFrom = level - 1;
+            skyTransitionStart = totalTime;
+            nextLevel();
+            state = PLAYING;
+        } else {
+            return;
+        }
+    }
+
+    if (state == LEVELFAILED) {
+        if (down.released) {
+            levelFailedMenuItemSelected = 1;
+            down.released = false;
+            return;
+        }
+        if (up.released) {
+            levelFailedMenuItemSelected = 0;
+            up.released = false;
+            return;
+        }
+        if (space.released) {
+            space.released = false;
+            if (levelFailedMenuItemSelected === 0) {
+                level--;
+                nextLevel();
+                state = PLAYING;
+            } else {
+                levelFailedMenuItemSelected = 0;
+                state = MENU;
+                return;
+            }
+        }
+    }
+
+    decreaseEnergy(5 * et);
+    if (energy <= 0) {
+        state = LEVELFAILED;
+        return;
+    }
+
+    increaseSpeed(0.2 * et);
+
+    // Car Curvature is accumulated left/right input, but inversely proportional to speed i.e. it is harder to turn at high speed
+    if (left.down && car.pos > -0.8) {
+        playerCurvature -= steeringFactor * speed * et * (1 - speed / 2);
+    }
+
+    if (right.down && car.pos < 0.8) {
+        playerCurvature += steeringFactor * speed * et * (1 - speed / 2);
+    }
+
+    onEdge = Math.abs(car.pos) > 0.79;
+    if (onEdge) {
+        decreaseSpeed(20.0 * et);
+        energy -= 10.0 * et;
+    }
+
+    // Move car along track according to car speed
+    distance += 70 * speed * et;
+
+    if (distance >= trackDistance) {
+        state = level == 5 ? WON : LEVELCLEARED;
+        return;
+    }
+
+    // Get Point on track
+    let offset = 0;
+    let trackSection = 0;
+
+    if (distance >= trackDistance)
+    {
+        distance -= trackDistance;
+    }
+               
+    // Find position on track (could optimise)
+    while (trackSection < tracks.length && offset <= distance)
+    {                      
+        offset += tracks[trackSection][1];
+        trackSection++;
+    }
+               
+    // Interpolate towards target track curvature
+    let targetCurvature = tracks[trackSection - 1][0];
+    let trackCurveDiff = (targetCurvature - curvature) * et * speed;
+
+    // Accumulate player curvature
+    curvature += trackCurveDiff;
+
+    // Accumulate track curvature
+    trackCurvature += curvature * et * speed;
+
+    // The car position on road is proportional to difference between current accumulated track curvature, and 
+    // current accumulated player curvature i.e. if they are similar, the car will be in the middle of the track
+    car.pos = playerCurvature - trackCurvature;
+
+    let targetTilt = (right.down ? 1 : 0) - (left.down ? 1 : 0);
+    carTilt += (targetTilt - carTilt) * Math.min(et * 5, 1);
+
+    _updateVisualCoordinates();
+    _checkForCollisions();
+    _updateDeadObjects(et);
+}
+
+let _updateVisualCoordinates = () => {
+
+    let _calculateRoadAndGrassPositions = () => {
+        visualCoordinates = { lefts: [], rights: [], grassIntervals: [] };
+        let grassTop = 0;
+        let previousGrassColor = undefined;
+        for (let y = 0; y <= H / 2; y++) {
+            let perspective = y / (H / 2);
+            let roadWidth = 0.1 + perspective * 0.8; // Min 10% Max 90%
+            let clipWidth = roadWidth * 0.15;
+            let halfRoadWidth = roadWidth / 2;
+            let middlePoint = 0.5 + curvature * Math.pow((1 - perspective), 3);
+            visualCoordinates.lefts.push([xx((middlePoint - halfRoadWidth - clipWidth) * W), yy(H / 2 + y)]);
+            visualCoordinates.rights.push([xx((middlePoint + halfRoadWidth + clipWidth) * W), yy(H / 2 + y)]);
+            
+            let grassColor = Math.sin(20 * Math.pow(1 - perspective, 3) + distance * 0.1) > 0 ? 0 : 1;
+            if (y == H / 2 - 1 || (previousGrassColor && previousGrassColor != grassColor)) {
+                visualCoordinates.grassIntervals.push([grassTop, y - grassTop + 1]);
+                grassTop = y;
+            }
+            previousGrassColor = grassColor;
+        }
+    }
+
+    let _getObjectX = (y, offset) => {
+        let l = visualCoordinates.lefts, r = visualCoordinates.rights;
+        if (y < l[0][1]) {
+            return;
+        }
+
+        let i = l.findIndex(e => e[1] >= y);
+        let leftTopY = l[i - 1][1];
+        let leftBotY = l[i][1];
+        let offsetY = (y - leftTopY) / (leftBotY - leftTopY);
+
+        let leftTopX = l[i - 1][0];
+        let leftBotX = l[i][0];
+        let rightTopX = r[i - 1][0];
+        let rightBotX = r[i][0];
+
+        let leftX = leftTopX + (leftBotX - leftTopX) * offsetY;
+        let rightX = rightTopX + (rightBotX - rightTopX) * offsetY;
+        
+        return leftX + offset * (rightX - leftX);
+    }
+
+    let _updateVisualObject = (o, i, name) => {
+        let key = `${name}${i}`;
+        visualCoordinates[key] = undefined;
+        let drawDistance = 170;
+        let nearClip = 10;  // Objects closer than this are past the car
+        let distAhead = (o.ahead - distance + trackDistance) % trackDistance;
+        if (distAhead <= nearClip || distAhead > drawDistance) {
+            return;
+        }
+        let perspective = nearClip / distAhead;
+        let y = yy(H / 2 + perspective * (H / 2));
+        let x = _getObjectX(y, o.left);
+        if (x) {
+            visualCoordinates[key] = { x : x, y : y, size: perspective, alpha: (drawDistance - distAhead) / drawDistance }
+        }
+    }
+
+    _calculateRoadAndGrassPositions();
+    rainbowCoins.forEach((r, i) => _updateVisualObject(r, i, "R"));
+    increaseSpeedCoins.forEach((r, i) => _updateVisualObject(r, i, "IS"));
+    decreaseSpeedCoins.forEach((r, i) => _updateVisualObject(r, i, "DS"));
+    increaseSteeringFactorCoins.forEach((r, i) => _updateVisualObject(r, i, "ISF"));
+    decreaseSteeringFactorCoins.forEach((r, i) => _updateVisualObject(r, i, "DSF"));
+    unicorns.forEach((r, i) => _updateVisualObject(r, i, "U"));
+    visualCoordinates.carX = xx(W / 2 + W * car.pos / 2);
+    visualCoordinates.carY = yy(0.9 * H);
+}
+
+let _checkForCollisions = () => {
+    let cx = visualCoordinates.carX;
+    let cy = visualCoordinates.carY;
+
+    let _checkForCollision = (o, i, name, fn) => {
+        let key = `${name}${i}`;
+        if (!visualCoordinates[key] || deadObjects[key]) {
+            return;
+        }
+        let ox = visualCoordinates[key].x;
+        let oy = visualCoordinates[key].y;
+        if (Math.abs(ox - cx) < ww(20) && Math.abs(oy - cy) < hh(14)) {
+            deadObjects[key] = { x: ox, y: oy, dx: Math.random() * 20 - 10, dy: -20, alpha: 1, asset: o.asset };
+            fn();
+        }
+    }
+
+    let octave = () => Math.trunc((energy - 1) / 20) + 2;
+
+    rainbowCoins.forEach((o, i) => _checkForCollision(o, i, "R", () => {
+        playHappySound(octave());
+        increaseEnergy(10);
+    }, 440));
+    increaseSpeedCoins.forEach((o, i) => _checkForCollision(o, i, "IS", () => {
+        playNeutralSound(octave());
+        increaseSpeed(1);
+    }, 261.63));
+    decreaseSpeedCoins.forEach((o, i) => _checkForCollision(o, i, "DS", () => {
+        playNeutralSound(octave());
+        decreaseSpeed(1);
+    }, 392));
+    increaseSteeringFactorCoins.forEach((o, i) => _checkForCollision(o, i, "ISF", () => {
+        playNeutralSound(octave());
+        increaseSteeringFactor(1);
+    }, 659.25));
+    decreaseSteeringFactorCoins.forEach((o, i) => _checkForCollision(o, i, "DSF", () => {
+        playNeutralSound(octave());
+        decreaseSteeringFactor(1);
+    }, 493.88));
+    unicorns.forEach((o, i) => _checkForCollision(o, i, "U", () => {
+        playSadSound(octave());
+        decreaseEnergy(10);
+    }, 440));
+}
+
+let _updateDeadObjects = (et) => {
+    for (let key in deadObjects) {
+        let o = deadObjects[key];
+        o.x += o.dx * et * 100;
+        o.y += o.dy * et * 100;
+        o.alpha -= et;
+        if (o.alpha <= 0) {
+            delete deadObjects[key];
+        }
+        o.dy += et * 60;
+    }
+};
+</script>
+        <script>let render = (w, h) => {
+
+    let large = `${Math.trunc(w / 25)}px Arial`;
+    let medium = `${Math.trunc(w / 50)}px Arial`;
+    let small = `${Math.trunc(w / 75)}px Arial`;
+
+    let text = (text, x, y, font, fillStyle = "gray", c = ctx) => {
+        c.fillStyle = fillStyle;
+        c.textAlign = "center";
+        c.font = font;
+        c.fillText(text, x, y);
+    }
+
+    delta = 0;
+    _setClipRect();
+
+    if (state === MENU) {
+        let side = ww(3 * (3 + Math.sin(totalTime / 200)));
+        _renderSky();
+        _renderGrass([[0, 5], [4, 9], [12, 13], [24, 26]]);
+        text("REDUCE SPEED NOW", xx(W / 2), yy(12), large, "white");
+        text("A JS13K GAME BY JOHAN AHLGREN", xx(W / 2), yy(18), small, "white");
+        text("Please don't run over the unicorns... they are both cute and fragile.", xx(0.5 * W), yy(27), small);
+        ctx.drawImage(unicornAsset, xx(0.5 * W - 47) - side / 2, yy(26) - side / 2, side, side);
+        ctx.drawImage(unicornAsset, xx(0.5 * W + 47) - side / 2, yy(26) - side / 2, side, side);
+
+        text("This coin helps you keep your speed down. That is good for the unicorns.", xx(0.4 * W), yy(37), small);
+        ctx.drawImage(decreaseSpeedCoinAsset, xx(0.4 * W - 49) - side / 2, yy(36) - side / 2, side, side);
+        ctx.drawImage(decreaseSpeedCoinAsset, xx(0.4 * W + 49) - side / 2, yy(36) - side / 2, side, side);
+
+        text("More speed. That is likely bad for both you and the unicorns.", xx(0.5 * W), yy(47), small);
+        ctx.drawImage(increaseSpeedCoinAsset, xx(0.5 * W - 45) - side / 2, yy(46) - side / 2, side, side);
+        ctx.drawImage(increaseSpeedCoinAsset, xx(0.5 * W + 45) - side / 2, yy(46) - side / 2, side, side);
+
+        text("Improved steering helps you avoid the unicorns...", xx(0.6 * W), yy(57), small);
+        ctx.drawImage(increaseSteeringFactorCoinAsset, xx(0.6 * W - 43) - side / 2, yy(56) - side / 2, side, side);
+        ctx.drawImage(increaseSteeringFactorCoinAsset, xx(0.6 * W + 43) - side / 2, yy(56) - side / 2, side, side);
+
+        text("...but this makes it harder to avoid them.", xx(0.5 * W), yy(67), small);
+        ctx.drawImage(decreaseSteeringFactorCoinAsset, xx(0.5 * W - 40) - side / 2, yy(66) - side / 2, side, side);
+        ctx.drawImage(decreaseSteeringFactorCoinAsset, xx(0.5 * W + 40) - side / 2, yy(66) - side / 2, side, side);
+
+        text("And finally, at the end of the rainbow is... a pot of energy?", xx(0.4 * W), yy(77), small);
+        ctx.drawImage(rainbowCoinAsset, xx(0.4 * W - 42) - side / 2, yy(76) - side / 2, side, side);
+        ctx.drawImage(rainbowCoinAsset, xx(0.4 * W + 42) - side / 2, yy(76) - side / 2, side, side);
+
+        text("PRESS SPACE TO PLAY", xx(W / 2), yy(90), medium, "white");
+        return;
+    } else if (state === LEVELFAILED) {
+        _renderSky(level - 1);
+        _renderGrass([[0, 5], [4, 9], [12, 13], [24, 26]]);
+        text("LEVEL FAILED", xx(W / 2), yy(24), large, "white");
+        if (levelFailedMenuItemSelected === 0) {
+            text("RESTART LEVEL", xx(W / 2), yy(38), medium, "white");
+            text("QUIT", xx(W / 2), yy(42), small);
+        } else {
+            text("RESTART LEVEL", xx(W / 2), yy(38), small);
+            text("QUIT", xx(W / 2), yy(42), medium, "white");
+        }
+        text("USE ARROWS UP/DOWN TO SELECT OPTION. USE SPACE TO ACTIVATE", xx(W / 2), yy(80), small);
+        return;
+    } else if (state === WON) {
+        _renderSky();
+        _renderGrass([[0, 5], [4, 9], [12, 13], [24, 26]]);
+        text("CONGRATULATIONS!", xx(W / 2), yy(24), large, "white");
+        text("You have made it out of the dangerous unicorn school zone, and both you and the unicorns breathe a sigh of relief.", xx(W / 2), yy(34), small, "white");
+        text("And the ones you hit? Oh, I am sure they are just fine.", xx(W / 2), yy(44), small, "white");
+        text("THANK YOU FOR PLAYING", xx(W / 2), yy(80), small);
+        wonObjects.forEach(o => {
+            let dt = totalTime - o.time;
+            let side = ww(10 * Math.sin(dt / 300));
+            ctx.drawImage(o.asset, xx(o.x / 100 * W) - side / 2, yy(o.y / 100 * H) - side / 2, side, side);
+            if (dt > 0.1 && Math.sin(dt / 300) < 0) {
+                o.dead = true;
+            }
+        })
+        return;
+    } else {
+        delta = onEdge ? Math.random() * 5 : 0;
+        let skyAge = totalTime - skyTransitionStart;
+        if (skyFrom >= 0 && skyAge < 1500) {
+            _renderSky(skyFrom);
+            ctx.globalAlpha = skyAge / 1500;
+            _renderSky(level - 1);
+            ctx.globalAlpha = 1;
+        } else {
+            _renderSky(level - 1);
+        }
+        _renderHills();
+        _renderGrass(visualCoordinates.grassIntervals);
+        _renderRoad();
+        rainbowCoins.forEach((o, i) => _renderObject(o, 40, `R${i}`));
+        increaseSpeedCoins.forEach((o, i) => _renderObject(o, 40, `IS${i}`));
+        decreaseSpeedCoins.forEach((o, i) => _renderObject(o, 40, `DS${i}`));
+        increaseSteeringFactorCoins.forEach((o, i) => _renderObject(o, 40, `ISF${i}`));
+        decreaseSteeringFactorCoins.forEach((o, i) => _renderObject(o, 40, `DSF${i}`));   
+        unicorns.forEach((o, i) => _renderObject(o, 40, `U${i}`));
+        for (d in deadObjects) { _renderDeadObject(deadObjects[d]);}
+        _renderCar();
+        _renderInformation(text, medium);
+
+        if (state === LEVELCLEARED) {
+            let msg = "LEVEL CLEARED";
+            let fontSize = Math.floor(infoFont);
+            ctx.textAlign = "center";
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = "white";
+            ctx.font = `${fontSize}px Arial`;
+            ctx.fillText(msg, xx(W / 2), yy(H / 2));
+            ctx.strokeText(msg, xx(W / 2), yy(H / 2));
+        }
+    }
+
+    _restoreClipRect();
+}
+
+let _setClipRect = () => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(xx(0), yy(0));
+    ctx.lineTo(xx(W), yy(0));
+    ctx.lineTo(xx(W), yy(H));
+    ctx.lineTo(xx(0), yy(H));
+    ctx.closePath();
+    ctx.clip();
+};
+
+let _restoreClipRect = () => {
+    ctx.restore();
+};
+
+let _renderSky = (timeOfDay = 2) => {
+    // 0=late night, 1=early morning, 2=late morning, 3=even lighter, 4=bright day
+    const skies = [
+        ['#050318', '#0f0a3d', '#1e1060', '#2a1458', '#18082e'], // late night
+        ['#120d4a', '#2b1a7a', '#7a3f96', '#d4607a', '#f09060'], // early morning
+        ['#3b2e91', '#6a4fbf', '#ff9ec4', '#ffb347', '#ffd194'], // late morning
+        ['#6b5cbc', '#9980d4', '#f4aac8', '#ffc87a', '#ffe8b0'], // even lighter
+        ['#b8a8e8', '#ccd8f4', '#f4cce4', '#fde8b0', '#fffaee'], // bright day
+    ];
+    const s = skies[timeOfDay];
+    const gradient = ctx.createLinearGradient(0, 0, 0, H / 2 * _cell);
+    gradient.addColorStop(0.00, s[0]);
+    gradient.addColorStop(0.30, s[1]);
+    gradient.addColorStop(0.55, s[2]);
+    gradient.addColorStop(0.75, s[3]);
+    gradient.addColorStop(1.00, s[4]);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(_x, _y, W * _cell + delta, H / 2 * _cell + delta);
+}
+
+let _renderHills = () => {
+    let gradient = ctx.createLinearGradient(0, yy(H / 2), 0, yy(H / 2 - 16));
+    gradient.addColorStop(0.0, '#4f5152');
+    gradient.addColorStop(0.4, '#727475');
+    gradient.addColorStop(0.7, '#bec1c2');
+    gradient.addColorStop(0.9, 'white');
+    gradient.addColorStop(1.0, 'white');
+    ctx.fillStyle = gradient;
+
+    let startX = undefined;
+    for (let x = -1; x <= W; x++) {
+        let y = Math.sin(x * 0.03 + trackCurvature) * 16;
+        if (startX && (y < 0 || x == W)) {
+            ctx.lineTo(xx(x), yy(H / 2 - y));
+            ctx.lineTo(xx(x), yy(H / 2));
+            ctx.lineTo(xx(startX), yy(H / 2));
+            ctx.fill();
+            startX = undefined;
+        } else if (y > 0) {
+            if (!startX) {
+                startX = x;
+                ctx.beginPath();
+                ctx.moveTo(xx(x), yy(H / 2));
+            }
+            ctx.lineTo(xx(x), yy(H / 2 - y));
+        } 
+    }
+}
+
+let _renderGrass = (coordinates) => {
+    for (let int of coordinates) {
+        let x = xx(0);
+        let y = yy(H / 2 + int[0]);
+        let w = ww(W);
+        let h = hh(int[1]);
+        let gradient = ctx.createLinearGradient(0, y, 0, y + h);
+        gradient.addColorStop(0.0, '#d4f4c7');
+        gradient.addColorStop(0.4, '#a8e6a1');
+        gradient.addColorStop(0.7, '#6fcf6a');
+        gradient.addColorStop(0.9, '#3b7a3a');
+        gradient.addColorStop(1.0, '#d4f4c7');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, y, w, h);
+    }
+}
+
+let _renderRoad = () => {
+    let polygon = visualCoordinates.lefts.concat(visualCoordinates.rights.toReversed());
+
+    ctx.beginPath();
+    ctx.moveTo(polygon[0][0], polygon[0][1]);
+    for (let i = 1; i < polygon.length; i++) {
+        ctx.lineTo(polygon[i][0], polygon[i][1]);
+    }
+    ctx.closePath();
+    const gradient = ctx.createLinearGradient(0, yy(H / 2), 0, yy(H));
+    gradient.addColorStop(0.0, '#f75ea6');
+    gradient.addColorStop(1.0, '#63dcf7');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+}
+
+let _renderCar = () => {
+    let w = ww(28);
+    let h = hh(21);
+    let cx = visualCoordinates.carX;
+    let cy = visualCoordinates.carY;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Horizontal shear: top of car leans in direction of turn
+    ctx.transform(1, 0, -carTilt * 0.18, 1, 0, 0);
+    ctx.drawImage(carAsset, -w / 2, -h / 2, w, h);
+    ctx.restore();
+}
+
+let _renderObject = (o, size, key) => {
+    let vo = visualCoordinates[key];
+    if (!vo || deadObjects[key]) {
+        return;
+    }
+
+    ctx.globalAlpha = vo.alpha;
+    let width = ww(size * vo.size);
+    let height = hh(size * vo.size);
+    ctx.drawImage(o.asset, vo.x - width / 2, vo.y - height / 2, width, height);
+    ctx.globalAlpha = 1;
+}
+
+let _renderDeadObject = (o) => {
+    ctx.globalAlpha = o.alpha;
+    let width = ww(18);
+    let height = hh(18);
+    ctx.drawImage(o.asset, o.x - width / 2, o.y - height / 2, width, height);
+    ctx.globalAlpha = 1;
+}
+
+let _renderInformation = (text, font) => {
+
+    let getPercentColor = p => { // p = 0 - 1
+        let r, g, b = 0;
+        if (p < 0.5) {
+            // 0% to 50%: Red stays at 255, Green ramps up
+            r = 255;
+            g = Math.round((p / 0.5) * 255);
+        } else {
+            // 50% to 100%: Green stays at 255, Red ramps down
+            r = Math.round((1 - (p - 0.5) / 0.5) * 255);
+            g = 255;
+        }
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    let s = x => x * _cell;
+
+    let infoCanvas = _createCanvas(s(53), s(20), _ctx => {
+
+        let renderGauge = (x, y, level, invertColor, caption) => {
+            let cx = x * _cell + delta;
+            let cy = y * _cell + delta;
+            let r = 10 * _cell;
+
+            _ctx.fillStyle = "#210413";
+            _ctx.beginPath();
+            _ctx.arc(s(x), s(y), s(10), 0, 2 * Math.PI);
+            _ctx.fill();
+
+            level = Math.min(Math.max(level, 0), 1); // Clamp level between 0 and 1
+            let angle = 0.75 + level * 1.5;
+            _ctx.fillStyle = getPercentColor(invertColor ? 1 - level : level);
+            _ctx.beginPath();
+            _ctx.arc(s(x), s(y), s(10), 0.75 * Math.PI, angle * Math.PI);
+            _ctx.lineTo(s(x), s(y));
+            _ctx.fill();
+
+            _ctx.fillStyle = "#0d0107";
+            _ctx.beginPath();
+            _ctx.arc(s(x), s(y), s(7), 0, 2 * Math.PI);
+            _ctx.fill();
+
+            _ctx.fillStyle = "white";
+            _ctx.beginPath();
+            _ctx.arc(s(x) - s(5), s(y) + s(5), s(0.5), 0, 2 * Math.PI);
+            _ctx.fill();
+            _ctx.beginPath();
+            _ctx.arc(s(x), s(y) - s(7), s(0.5), 0, 2 * Math.PI);
+            _ctx.fill();
+            _ctx.beginPath();
+            _ctx.arc(s(x) + s(5), s(y) + s(5), s(0.5), 0, 2 * Math.PI);
+            _ctx.fill();
+
+            text(caption, s(x), s(y+1), font, "white", _ctx);
+        }
+        renderGauge(10, 10, speed / 3, true, "SPEED");
+        renderGauge(42, 10, distance / trackDistance, false, "DIST");
+
+        _ctx.fillStyle = getPercentColor(energy / 100);
+        _ctx.strokeStyle = "black";
+        _ctx.lineWidth = 2;
+        let h = energy * 15 / 100;
+        _ctx.fillRect(s(22), s(15-h), s(8), s(h));
+        _ctx.strokeRect(s(22), 0, s(8), s(15));
+
+        text(`${level} / 5`, s(26), s(19), font, "white", _ctx);
+    });
+
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(infoCanvas, xx(W / 2 - 30), yy(10));
+    ctx.globalAlpha = 1;
+}
+
+let xx = x => _x + x * _cell + delta;
+let yy = y => _y + y * _cell + delta;
+let ww = w => w * _cell;
+let hh = h => h * _cell;
+
+let _w, _h, _x, _y, _cell;
+</script>
+        <script>const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+var lastTime = Date.now();
+let gameLoop = () => {
+    let now = Date.now();
+    let dt = (now - lastTime);
+    update(dt);
+    render(canvas.width, canvas.height);
+    requestAnimationFrame(gameLoop);
+    lastTime = now;
+}
+
+setTimeout(() => {
+    gameLoop();
+}, 100);
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    let w = canvas.width;
+    let h = canvas.height;
+    if (w / h > W / H) {
+        _h = h;
+        _w = _h * W / H;
+        _x = (w - _w) / 2;
+        _y = 0;
+    } else {
+        _w = w;
+        _h = w * H / W;
+        _x = 0;
+        _y = (h - _h) / 2;
+    }
+    _cell = Math.min(_w / W, _h / H);
+}
+
+window.addEventListener('resize', resizeCanvas, false);
+
+resizeCanvas();
+</script>
+    </body>
+</html>

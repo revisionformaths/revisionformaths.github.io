@@ -1,0 +1,1861 @@
+<!doctype html>
+<html lang=en>
+  <head>
+    <meta charset=utf-8>
+    <meta name=viewport content="width=device-width,initial-scale=1">
+    <title>Prism Stampede</title>
+    <style>* {
+  box-sizing: border-box;
+}
+
+body {
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  background: #101849;
+  font-family: monospace;
+  display: grid;
+  place-items: center;
+}
+
+
+canvas {
+  width: min(100vw, 62.5vh);
+  height: min(160vw, 100vh);
+  image-rendering: pixelated;
+  touch-action: none;
+}
+
+.buttons {
+  position: fixed;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 7px 8px;
+}
+
+button {
+  height: 44px;
+  padding: 7px 11px;
+  border: 2px solid #7184c3;
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 0 100%, 0 4px);
+  background: #263b83;
+  color: #fff;
+  font: 700 14px monospace;
+}
+
+.fire {
+  padding-inline: 20px;
+  background: #a33fc8;
+}
+
+.fast {
+  border-color: #8eefff;
+  background: #187e9f;
+}
+
+.retry {
+  border-color: #ffd08b;
+  background: #c76539;
+}
+
+.wait,
+:disabled {
+  border-color: #52639666;
+  background: #263b8366;
+  color: #fff6;
+}
+
+@media (hover: none) {
+  button:not(.fire) {
+    display: none;
+  }
+}
+</style>
+  </head>
+  <body>
+    <canvas id=c width=500 height=800 aria-label="Prism Stampede"></canvas>
+
+    <div class=buttons>
+      <button data-a=l>LEFT</button>
+      <button class=fire data-a=f>FIRE</button>
+      <button data-a=r>RIGHT</button>
+    </div>
+
+    <script>/**
+ * Prism Stampede
+ */
+const C = document.querySelector("#c"), g = C.getContext("2d"), W = 500, H = 800, LY = 662, 
+R = [ "red", "orange", "yellow", "green", "blue", "violet" ], 
+COL = [ "#ff5277", "#ff9d43", "#ffe45a", "#52e39c", "#55baff", "#ad6cff" ], 
+MN = Array.from({ length: 15 }, (_, i) => {
+  let row = Math.floor(i / 5), column = i % 5;
+  return [ 65 + (row % 2 ? 4 - column : column) * 92, 231 + row * 140 ];
+}), BTN = document.querySelectorAll("button"),
+LB = BTN[0], FB = BTN[1], RB = BTN[2], DB = document.querySelector(".buttons");
+
+const BG = g.createLinearGradient(0, 0, 0, H);
+BG.addColorStop(0, "#172766");
+BG.addColorStop(.58, "#27306f");
+BG.addColorStop(.78, "#414386");
+BG.addColorStop(1, "#182052");
+
+let S;
+
+class AudioSystem {
+  constructor() {
+    this.context = null;
+    this.musicGain = null;
+    this.sfxGain = null;
+    this.musicTimer = null;
+    this.musicStep = 0;
+  }
+
+  ensureContext() {
+    if (!this.context) {
+      this.context = new (window.AudioContext || webkitAudioContext);
+      this.musicGain = this.context.createGain();
+      this.sfxGain = this.context.createGain();
+      this.musicGain.connect(this.context.destination);
+      this.sfxGain.connect(this.context.destination);
+      this.setMuted("music", S?.musicMute);
+      this.setMuted("sfx", S?.sfxMute);
+    }
+    this.context.resume();
+    return this.context;
+  }
+
+  setMuted(channel, muted) {
+    const gain = channel === "music" ? this.musicGain : this.sfxGain;
+    if (gain) {
+      gain.gain.cancelScheduledValues(this.context.currentTime);
+      gain.gain.setValueAtTime(muted ? 0 : 1, this.context.currentTime);
+    }
+    if (!muted) this.context?.resume();
+  }
+
+  tone(frequency, duration = .08, volume = .055, channel = "sfx") {
+    if (channel === "music" ? S?.musicMute : S?.sfxMute) return;
+    try {
+      const context = this.ensureContext();
+      const oscillator = context.createOscillator();
+      const voice = context.createGain();
+      oscillator.type = "triangle";
+      oscillator.frequency.value = frequency;
+      voice.gain.setValueAtTime(volume, context.currentTime);
+      voice.gain.exponentialRampToValueAtTime(.001, context.currentTime + duration);
+      oscillator.connect(voice).connect(channel === "music" ? this.musicGain : this.sfxGain);
+      oscillator.start();
+      oscillator.stop(context.currentTime + duration);
+    } catch (error) {
+      // Audio is optional; gameplay continues if Web Audio is unavailable.
+    }
+  }
+
+  startMusic() {
+    try {
+      this.ensureContext();
+      if (this.musicTimer) return;
+      this.musicTimer = setInterval(() => {
+        if (S.musicMute || document.hidden) return;
+        let step = this.musicStep++, onMap = S.phase === "map", chapter = Math.min(2, S.level / 5 | 0),
+          themes = [ [ 0, 4, 7, 11, 7, 4, 2, null ], [ 0, 3, 7, null, 5, 8, 10, 3 ], [ 0, 3, 6, 10, 7, 3, -2, 6 ] ],
+          notes = themes[onMap ? 0 : chapter],
+          late = !onMap && S.row === LV[S.level].rows.length && S.blocks.length < 5;
+        if (onMap && step % 2) return;
+        let note = notes[(step >> onMap) % (onMap ? 6 : 8)], base = 247 - chapter * 26;
+        if (note == null && !late) return;
+        note = (note || 0) + (late ? [ 0, 2, 5, 7 ][step % 4] : 0);
+        this.tone(base * 2 ** (note / 12), onMap ? .2 : [ .15, .12, .1 ][chapter], .015, "music");
+        if (!onMap && step % 4 === 0) this.tone(base / (late ? 1 : 2), .24, .008, "music");
+        if (!onMap && S.blocks.some(b => b.y + b.h > S.danger - 100) && step % 2) this.tone(base * 1.5, .06, .009, "music");
+      }, 210);
+    } catch (error) {
+      
+    }
+  }
+}
+
+class SaveStore {
+  constructor(key = "prismStampedeV1") {
+    this.key = key;
+  }
+
+  load(levelCount) {
+    try {
+      const raw = JSON.parse(localStorage[this.key]);
+      const stars = Array(levelCount).fill(0);
+      const failures = Array(levelCount).fill(0);
+      (raw.stars || []).forEach((value, index) => stars[index] = value);
+      (raw.failures || []).forEach((value, index) => failures[index] = value);
+      const legacyMute = raw.mute || 0;
+      return {
+        unlock: Math.min(raw.unlock || 0, levelCount - 1),
+        stars,
+        failures,
+        musicMute: raw.musicMute ?? legacyMute,
+        sfxMute: raw.sfxMute ?? legacyMute,
+        rescueLearned: raw.rescueLearned || 0,
+        sealLearned: raw.sealLearned,
+      };
+    } catch (error) {
+      return { unlock: 0, stars: Array(levelCount).fill(0), failures: Array(levelCount).fill(0), musicMute: 0, sfxMute: 0, rescueLearned: 0 };
+    }
+  }
+
+  save(data) {
+    try {
+      localStorage[this.key] = JSON.stringify(data);
+    } catch (error) {
+      // Private browsing or storage restrictions should not stop gameplay.
+    }
+  }
+}
+
+const audio = new AudioSystem();
+const saves = new SaveStore();
+
+/**
+ * Data Fields
+ * - name: title shown in the HUD and route map.
+ * - par: target number of completed volleys for the second star.
+ * - ammo: number of Sparks in the opening volley.
+ * - danger: vertical position of the breach boundary; smaller values create more pressure.
+ * - a/startA: route construction angle and the player's initial aiming angle.
+ * - d: distances used to place numbered prisms along the authored route ray.
+ * - blocks/waves: opening formation and later reinforcements.
+ * - pick/picks and rescue: Lost Unicorn locations and whether every rescue is mandatory.
+ * - bombs: Starburst locations and colors.
+ * - boss/bossRule/bossAt: Guardian geometry, defense behavior, and optional delayed arrival.
+ */
+const LV = [ {
+  name: "FIRST PRISM",
+  goal: [ 0, 2, 4 ],
+  a: -1.27,
+  startA: -1.05,
+  d: [ 70, 205, 340 ],
+  par: 5,
+  ammo: 5,
+  drop: 1,
+  grace: 1,
+  danger: 650,
+  rows: [ [ [ 1, 3 ], [ 7, 3, 4 ] ] ],
+  blocks: [ [ 72, 170, 6 ], [ 223, 145, 7, 4 ], [ 323, 195, 6, 2 ], [ 420, 290, 5 ] ],
+  hint: "1→2→3 · BLOCKS -2"
+}, {
+  name: "MATCHING MAGIC",
+  goal: [ 0, 3, 4 ],
+  a: -.55,
+  startA: -.85,
+  d: [ 125, 330, 510 ],
+  par: 4,
+  ammo: 5,
+  drop: 1,
+  grace: 0,
+  danger: 600,
+  rows: [ [ [ 0, 3, 0 ], [ 4, 3 ], [ 8, 3, 4 ] ], [ [ 2, 3, 3 ], [ 6, 3, 0 ] ] ],
+  blocks: [ [ 55, 185, 10, 0 ], [ 135, 140, 9 ], [ 315, 205, 10, 3 ], [ 405, 140, 9, 4 ] ],
+  hint: "MATCH COLORS FOR ×3 · CLOUDS DESCEND"
+}, {
+  name: "RESCUE SIGNAL",
+  goal: [ 2, 4, 0 ],
+  a: -1.1,
+  startA: -1.45,
+  d: [ 120, 290, 455 ],
+  par: 5,
+  ammo: 4,
+  drop: 1,
+  grace: 0,
+  danger: 600,
+  rows: [ [ [ 1, 3, 2 ], [ 7, 3, 0 ] ], [ [ 3, 3 ], [ 5, 3, 4 ] ] ],
+  blocks: [ [ 75, 150, 8 ], [ 225, 200, 9, 4 ], [ 375, 200, 8, 0 ] ],
+  pick: [ 115, 350 ],
+  hint: "RESCUE FOAL · FREEZE DESCENT"
+}, {
+  name: "CLOUD WARDEN",
+  goal: [ 1, 3, 5 ],
+  a: -2.55,
+  startA: -2.1,
+  d: [ 150, 335, 515 ],
+  par: 4,
+  ammo: 4,
+  lower: 50,
+  drop: 1,
+  danger: 650,
+  rows: [ [ [ 0, 3 ], [ 4, 4, 1 ], [ 8, 3, 3 ] ], [ [ 2, 3, 5 ], [ 6, 3 ] ], [ [ 1, 3, 1 ], [ 7, 3, 3 ] ] ],
+  blocks: [ [ 54, 145, 8 ], [ 190, 205, 8, 1 ], [ 325, 155, 8 ], [ 405, 260, 8, 3 ] ],
+  boss: [ 200, 100, 12 ],
+  bossRule: "shield",
+  last: 2,
+  hint: "PRISM BURSTS · WARDEN"
+}, {
+  name: "STARLIGHT BURST",
+  goal: [ 3, 0, 4 ],
+  a: -.72,
+  startA: -1.25,
+  d: [ 145, 325, 505 ],
+  par: 6,
+  ammo: 4,
+  lower: 100,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 3, 3 ], [ 2, 3 ] ], [ [ 6, 3, 4 ], [ 8, 3 ] ], [ [ 3, 3, 3 ], [ 5, 3, 4 ] ], [ [ 1, 3, 3 ], [ 7, 3, 4 ] ] ],
+  blocks: [ [ 75, 200, 9, 3 ], [ 375, 200, 9, 4 ], [ 225, 150, 10, 0, 1 ] ],
+  bombs: [ [ 180, 300, 3 ], [ 430, 350, 4 ] ],
+  hint: "MATCH STARBURSTS · CLOUDS -2"
+}, {
+  name: "CROSSWIND BANK",
+  goal: [ 5, 3, 1 ],
+  a: -2.35,
+  startA: -1.85,
+  d: [ 135, 315, 475 ],
+  par: 6,
+  ammo: 5,
+  lower: 100,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 4 ], [ 8, 4 ] ], [ [ 1, 3, 2 ], [ 4, 3 ], [ 7, 3, 4 ] ], [ [ 3, 3, 5 ], [ 5, 3, 1 ] ], [ [ 2, 2, 5 ], [ 6, 2, 1 ] ] ],
+  blocks: [ [ 125, 150, 9, 5, 1 ], [ 275, 200, 9, 3 ], [ 425, 150, 9, 1, 1 ] ],
+  hint: "MATCH · SEALED BANKS"
+}, {
+  name: "TWIN FRONTS",
+  goal: [ 5, 2, 0 ],
+  a: -2.4,
+  startA: -1.8,
+  d: [ 135, 310, 490 ],
+  par: 8,
+  ammo: 4,
+  lower: 100,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 4, 5 ], [ 4, 4, 2 ], [ 8, 4, 0 ] ], [ [ 1, 4 ], [ 7, 4 ] ], [ [ 2, 3, 4 ], [ 4, 3, 2 ], [ 6, 3, 1 ] ], [ [ 3, 4, 2 ], [ 5, 4, 0 ] ], [ [ 0, 4, 5 ], [ 8, 4, 0 ] ] ],
+  blocks: [ [ 75, 150, 11, 5 ], [ 375, 150, 11, 0 ], [ 225, 250, 13, 2, 1 ] ],
+  bombs: [ [ 210, 315 ], [ 300, 315 ] ],
+  hint: "SHIFTING ROUTE · FRONTS"
+}, {
+  name: "RESCUE RUSH",
+  goal: [ 1, 4, 2 ],
+  a: -.58,
+  startA: -1.18,
+  d: [ 145, 315, 470 ],
+  par: 7,
+  ammo: 4,
+  lower: 100,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 4, 1 ], [ 2, 4, 2 ] ], [ [ 6, 4, 4 ], [ 8, 4, 1 ] ], [ [ 1, 4, 2 ], [ 4, 5 ], [ 7, 4, 1 ] ], [ [ 3, 4, 1 ], [ 5, 4, 2 ] ], [ [ 0, 4, 4 ], [ 8, 4, 2 ] ] ],
+  blocks: [ [ 75, 150, 10, 1 ], [ 375, 200, 11, 4 ], [ 225, 250, 10, 2 ] ],
+  picks: [ [ 70, 400 ], [ 430, 250 ] ],
+  rescue: 1,
+  hint: "RESCUE BOTH · ROUTE STAR"
+}, {
+  name: "COLOR SIEGE",
+  goal: [ 3, 4, 5 ],
+  a: -.48,
+  startA: -1.15,
+  d: [ 140, 320, 500 ],
+  par: 7,
+  ammo: 4,
+  lower: 100,
+  preview: 1,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 4, 3, 1 ], [ 3, 4, 4 ], [ 7, 4, 5 ] ], [ [ 1, 4, 5 ], [ 5, 4, 3 ], [ 8, 4, 4, 1 ] ], [ [ 4, 3 ] ], [ [ 0, 4, 3, 1 ], [ 7, 4, 5 ] ], [ [ 2, 4, 4 ], [ 6, 4, 3, 1 ] ] ],
+  blocks: [ [ 75, 200, 15, 3 ], [ 225, 150, 13, 4 ], [ 375, 250, 13, 5 ] ],
+  boss: [ 200, 100, 24 ],
+  bossRule: "burst",
+  last: 4
+}, {
+  name: "STORM GAUNTLET",
+  goal: [ 1, 4, 0 ],
+  a: -2.58,
+  startA: -1.85,
+  d: [ 130, 310, 475 ],
+  par: 9,
+  ammo: 3,
+  lower: 100,
+  drop: 1,
+  grace: 1,
+  danger: 550,
+  rows: [ [ [ 0, 4 ], [ 2, 4, 1 ] ], [ [ 6, 4, 4 ], [ 8, 4 ] ], [ [ 1, 3 ], [ 4, 3 ], [ 7, 3 ] ], [ [ 0, 2, 1 ], [ 8, 2, 0 ] ], [ [ 0, 3, 1 ], [ 3, 3, 0 ] ], [ [ 5, 3, 0 ], [ 8, 3, 1 ] ] ],
+  blocks: [ [ 25, 250, 12, 1 ], [ 225, 150, 16 ], [ 425, 250, 12, 0 ] ],
+  bombs: [ [ 150, 350, 1 ], [ 250, 390, 0 ] ],
+  hint: "6 WAVES · SAVE"
+}, {
+  name: "AURORA ARMOR",
+  goal: [ 4, 2, 0 ],
+  a: -.64,
+  startA: -1.5,
+  d: [ 145, 325, 495 ],
+  par: 7,
+  ammo: 4,
+  lower: 100,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 3, 4, 1 ], [ 8, 3, 0, 1 ] ], [ [ 2, 3, 2 ], [ 6, 3, 4 ] ], [ [ 1, 3, 4, 1 ], [ 7, 3, 0, 1 ] ], [ [ 3, 3, 0 ], [ 5, 3, 2 ] ], [ [ 4, 4, 2, 1 ] ] ],
+  blocks: [ [ 75, 150, 12, 4, 1 ], [ 225, 250, 12 ], [ 375, 150, 12, 0, 1 ] ],
+  hint: "SHIFTING ROUTE · ARMOR"
+}, {
+  name: "STAMPEDE CHARGE",
+  goal: [ 0, 1, 2, 3, 4, 5 ],
+  a: -2.2,
+  startA: -1.45,
+  d: [ 95, 205, 315, 430, 550, 656 ],
+  par: 8,
+  ammo: 3,
+  lower: 100,
+  drop: 1,
+  danger: 550,
+  rows: [ [ [ 0, 4, 0 ], [ 8, 4, 5 ] ], [ [ 2, 4, 1 ], [ 7, 4, 4 ] ], [ [ 1, 3 ], [ 2, 4, 2 ], [ 7, 3 ] ], [ [ 2, 3, 3 ], [ 7, 3, 5 ] ], [ [ 0, 4, 0 ], [ 8, 4, 5 ] ], [ [ 2, 4, 1 ], [ 7, 4, 4 ] ] ],
+  blocks: [ [ 75, 150, 13, 5 ], [ 375, 150, 13, 4 ], [ 225, 250, 14 ] ],
+  boss: [ 200, 100, 40 ],
+  bossRule: "stampede",
+  last: 5,
+  picks: [ [ 100, 360 ], [ 400, 360 ] ],
+  rescue: 1,
+  hint: "BUILD SIX SPARKS · RESCUES BUY TIME"
+}, {
+  name: "PRISM SHIELD",
+  goal: [ 0, 1, 2, 3, 4, 5 ],
+  a: -2.32,
+  startA: -1.4,
+  d: [ 90, 195, 305, 420, 545, 660 ],
+  par: 9,
+  ammo: 4,
+  lower: 100,
+  drop: 1,
+  danger: 500,
+  rows: [ [ [ 0, 5, 0 ], [ 8, 5, 5 ] ], [ [ 1, 5, 1 ], [ 7, 5, 4 ] ], [ [ 0, 4, 3 ], [ 2, 4 ], [ 8, 4 ] ], [ [ 1, 4, 0 ], [ 7, 4, 5 ] ], [ [ 2, 4, 3 ] ], [ [ 2, 4, 2 ], [ 7, 4, 4 ] ], [ [ 8, 5, 3 ] ] ],
+  blocks: [ [ 75, 150, 15, 0 ], [ 225, 250, 17 ], [ 375, 150, 15, 5 ] ],
+  boss: [ 200, 100, 35 ],
+  bossRule: "shield",
+  last: 6,
+  picks: [ [ 70, 375 ], [ 430, 375 ] ],
+  rescue: 1,
+  hint: "HIT -1 · 1→6 ROUTE -7"
+}, {
+  name: "RESCUE TEMPEST",
+  goal: [ 5, 3, 1, 4 ],
+  a: -2.44,
+  startA: -1.35,
+  d: [ 135, 285, 455, 620 ],
+  par: 10,
+  ammo: 4,
+  lower: 100,
+  drop: 1,
+  danger: 500,
+  rows: [ [ [ 0, 4, 5 ], [ 7, 4, 1 ] ], [ [ 3, 4, 3 ], [ 8, 4, 5 ] ], [ [ 1, 4 ], [ 6, 4, 1 ] ], [ [ 4, 4, 3 ], [ 8, 4 ] ], [ [ 0, 4, 5 ], [ 5, 4, 1 ] ], [ [ 2, 5, 3 ], [ 7, 5, 5 ] ], [ [ 1, 5, 1 ], [ 4, 5 ], [ 8, 5, 3 ] ] ],
+  blocks: [ [ 25, 150, 13, 5 ], [ 175, 200, 14 ], [ 325, 150, 13, 1 ], [ 425, 250, 12, 3 ] ],
+  picks: [ [ 85, 400 ], [ 415, 330 ] ],
+  rescue: 1,
+  hint: "BANK · RESCUE BOTH"
+}, {
+  name: "LAST LIGHT",
+  goal: [ 0, 1, 2, 3, 4, 5 ],
+  a: -.74,
+  startA: -1.7,
+  d: [ 90, 195, 305, 420, 545, 660 ],
+  par: 10,
+  ammo: 3,
+  lower: 100,
+  drop: 1,
+  danger: 500,
+  rows: [ [ [ 0, 5, 0 ], [ 8, 5, 5 ] ], [ [ 1, 5, 1 ], [ 7, 5, 4 ] ], [ [ 2, 4, 2, 1 ], [ 7, 4, 3, 1 ] ], [ [ 0, 4, 0, 1 ], [ 2, 5, 2 ], [ 8, 4, 5, 1 ] ], [ [ 1, 4, 0 ], [ 7, 4, 5 ] ], [ [ 2, 5, 3, 1 ], [ 7, 5, 4, 1 ] ], [ [ 2, 5, 1 ], [ 7, 5, 5 ] ], [ [ 8, 6, 2, 1 ] ] ],
+  blocks: [ [ 75, 150, 15, 0 ], [ 225, 250, 18 ], [ 375, 150, 15, 5 ] ],
+  boss: [ 200, 100, 28 ],
+  bossAt: 3,
+  bossRule: "shield",
+  picks: [ [ 100, 375 ], [ 430, 375 ] ],
+  rescue: 1,
+  hint: "RESCUE 2 · SHIELDED · 1→6 SAME SHOT"
+} ];
+
+function sound(f, d = .08, n = .055) {
+  audio.tone(f, d, n);
+}
+
+function music() {
+  audio.startMusic();
+}
+
+function block(x, y, hp, c = -1, armor = 0) {
+  x = 26 + Math.round((x - 25) / 50) * 50;
+  y = 101 + Math.round((y - 100) / 50) * 50;
+  return {
+    x: x,
+    y: y,
+    w: 48,
+    h: 48,
+    hp: hp,
+    c: c,
+    armor: armor
+  };
+}
+
+function saved() {
+  return saves.load(LV.length);
+}
+
+function store() {
+  saves.save(S.save);
+}
+
+function ray(a, ds) {
+  let x = 250, y = LY, vx = Math.cos(a), vy = Math.sin(a), out = [], d = 0, i = 0;
+  while (i < ds.length && d < 900) {
+    x += vx * 2;
+    y += vy * 2;
+    d += 2;
+    if (x < 30) {
+      x = 30;
+      vx = Math.abs(vx);
+    }
+    if (x > 470) {
+      x = 470;
+      vx = -Math.abs(vx);
+    }
+    if (y < 105) {
+      y = 105;
+      vy = Math.abs(vy);
+    }
+    if (d >= ds[i]) {
+      out.push([ x, y ]);
+      i++;
+    }
+  }
+  return out;
+}
+
+function setRoute() {
+  let l = LV[S.level], pts = ray(S.flip && (S.level - 3 >>> 0) < 8 ? -Math.PI - l.a : l.a, l.d);
+  S.goal = l.goal;
+  S.prisms = S.goal.map((c, i) => ({
+    x: Math.max(48, Math.min(452, pts[i][0])),
+    y: Math.max(123, Math.min(626, pts[i][1])),
+    c: c,
+    order: i,
+    r: 14,
+    on: 0,
+    beam: 0,
+    claimed: !!(S.prismClaim & 1 << i)
+  }));
+  S.seq = 0;
+  S.msg = S.assist ? "COMEBACK · +1 SPARK · LONG PREVIEW" : !S.level && !S.turn ? "ROUTE 1 → 2 → 3 · ALL BLOCKS -2" : l.hint || l.name;
+  S.msgT = 180;
+}
+
+function guardian(l) {
+  let b = block(l.boss[0], l.boss[1], l.boss[2], -1);
+  b.w = 98;
+  b.h = 48;
+  b.boss = 1;
+  return b;
+}
+
+function addWave(l) {
+  if (S.level < 4 && S.row === l.last) S.blocks.forEach(b => b.hp = Math.max(1, b.hp - 2));
+  l.rows[S.row++].forEach(q => S.blocks.push(waveBlock(q)));
+  if (l.bossAt === S.row) S.blocks.push(guardian(l));
+}
+
+function reset(level = S?.level || 0) {
+  let l = LV[level], sv = S?.save || saved(), lower = l.lower || 0,
+    assist = (sv.failures?.[level] || 0) >= 2,
+    bs = l.blocks.map(b => block(b[0], b[1] + lower, b[2], b[3], b[4]));
+  if (l.boss && !l.bossAt) bs.push(guardian(l));
+  S = {
+    save: sv,
+    level: level,
+    phase: "aim",
+    tick: 0,
+    ammo: (l.ammo || 10) + (assist ? 1 : 0),
+    assist,
+    prismClaim: 0,
+    growth: 0,
+    gain: 0,
+    bursts: 0,
+    freeze: 0,
+    angle: l.startA ?? l.a,
+    launchX: 250,
+    balls: [],
+    sent: 0,
+    seq: 0,
+    stamp: 0,
+    bits: [],
+    float: [],
+    msg: "",
+    msgT: 260,
+    blocks: bs,
+    bombs: (l.bombs || []).map(q => ({ x: q[0], y: q[1], c: q[2] ?? -1 })),
+    prisms: [],
+    pick: (l.picks || (l.pick ? [ l.pick ] : [])).map(q => ({
+      x: q[0],
+      y: q[1]
+    })),
+    danger: l.danger || 650,
+    turn: 0,
+    row: 0,
+    drop: 0,
+    over: "",
+    fast: 0,
+    rescued: 0,
+    flip: 0,
+    rescuedThisVolley: 0,
+    rescueFlash: 0,
+    breach: null,
+    help: 0,
+    w: level === 3 && !(sv.rescueLearned & 2),
+    toast: "",
+    toastT: 0,
+    musicMute: sv.musicMute,
+    sfxMute: sv.sfxMute
+  };
+  setRoute();
+}
+
+function menu(sel) {
+  let sv = S?.save || saved();
+  reset(0);
+  S.save = sv;
+  S.phase = "map";
+  S.sel = Math.min(sel ?? sv.unlock, sv.unlock);
+  S.msg = "CHOOSE ROUTE";
+  S.msgT = 999;
+}
+
+function aim(x, y) {
+  if (S.phase !== "aim") return;
+  let a = Math.atan2(y - LY, x - S.launchX);
+  S.angle = Math.max(-2.85, Math.min(-.29, a));
+}
+
+function fire() {
+  if (S.phase !== "aim") return;
+  S.phase = "volley";
+  S.sent = 0;
+  S.seq = 0;
+  S.turn++;
+  S.fast = 0;
+  S.prisms.forEach(p => {
+    p.on = 0;
+    p.beam = 0;
+  });
+  S.msg = "FOLLOW THE ROUTE";
+  S.msgT = 100;
+  sound(250);
+}
+
+function act(a) {
+  music();
+  if (a === "m" || a === "s") {
+    const key = a === "m" ? "musicMute" : "sfxMute";
+    const channel = a === "m" ? "music" : "sfx";
+    S[key] ^= 1;
+    S.save[key] = S[key];
+    audio.setMuted(channel, S[key]);
+    store();
+    S.toast = `${a === "m" ? "MUSIC" : "SOUND FX"} ${S[key] ? "OFF" : "ON"}`;
+    S.toastT = 75;
+    if (!S[key]) {
+      if (a === "m") audio.startMusic();
+      audio.tone(a === "m" ? 660 : 880, .08, .04, channel);
+    }
+    return;
+  }
+  if (a === "z") {
+    if (S.phase === "map") return;
+    reset();
+    return;
+  }
+  if (a === "h") {
+    S.help ^= 1;
+    return;
+  }
+  if (a === "v" && S.phase === "map") {
+    S.help ^= 1;
+    return;
+  }
+  if (S.w) {
+    if (a === "f") {
+      S.w = 0;
+      S.save.rescueLearned |= 2;
+      store();
+    }
+    return;
+  }
+  if (S.phase === "map") {
+    if (a === "l" || a === "r") {
+      S.sel = Math.max(0, Math.min(S.save.unlock, S.sel + (a === "r" ? 1 : -1)));
+    }
+    if (a === "f") reset(S.sel);
+    return;
+  }
+  if (a === "v") {
+    if (S.phase === "volley") {
+      S.fast ^= 1;
+      S.msg = S.fast ? "FAST ×3" : "NORMAL";
+      S.msgT = 50;
+    } else if (S.phase === "win") {
+      menu(S.level);
+    } else if (S.phase === "over") menu(S.level);
+    return;
+  }
+  if (a === "f" && S.phase === "volley") {
+    S.fast ^= 1;
+    S.msg = S.fast ? "FAST ×3" : "NORMAL";
+    S.msgT = 50;
+    return;
+  }
+  if (S.phase === "rescue" || S.phase === "seal") {
+    if (a === "f") endVolley();
+    return;
+  }
+  if (S.phase === "win") {
+    if (a === "l") reset();
+    if (a === "r") menu(S.level);
+    if (a === "f") S.level < LV.length - 1 ? reset(S.level + 1) : reset();
+    return;
+  }
+  if (S.phase === "over") {
+    if (a === "f") reset();
+    if (a === "l") menu(S.level);
+    return;
+  }
+  if (a === "l" && S.phase === "aim") S.angle = Math.max(-2.85, S.angle - .07);
+  if (a === "r" && S.phase === "aim") S.angle = Math.min(-.29, S.angle + .07);
+  if (a === "f") fire();
+}
+
+onkeydown = e => {
+  let k = e.key.toLowerCase();
+  if ([ "arrowleft", "a" ].includes(k)) act("l");
+  if ([ "arrowright", "d" ].includes(k)) act("r");
+  if (k === " " || k === "enter") {
+    e.preventDefault();
+    act("f");
+  }
+  if (k === "f") act("v");
+  if (k === "h" || k === "?") act("h");
+  if (k === "r") act("z");
+  if (k === "m") act("m");
+  if (k === "s") act("s");
+};
+
+document.querySelectorAll("button").forEach(b => b.onpointerdown = e => {
+  e.preventDefault();
+  act(b.dataset.a);
+});
+
+/** True only while a pointer gesture is actively controlling the aiming ray. */
+let drag = 0;
+
+C.onpointerdown = e => {
+  let q = pos(e);
+  music();
+  if (q.x > 348 && q.y < 35) {
+    act(q.x < 399 ? "h" : q.x < 449 ? "m" : "s");
+    return;
+  }
+  if (S.help) {
+    S.help = 0;
+    return;
+  }
+  if (S.phase === "map") {
+    let n = -1, d = 1600;
+    MN.forEach((p, j) => {
+      let z = (q.x - p[0]) ** 2 + (q.y - p[1]) ** 2;
+      if (z < d) {
+        d = z;
+        n = j;
+      }
+    });
+    if (n >= 0 && d < 1600 && n <= S.save.unlock) S.sel = n;
+    return;
+  }
+  if (S.phase === "win") {
+    if (q.x > 100 && q.x < 400 && q.y > 407 && q.y < 453) act("f");
+    else if (S.level === LV.length - 1) {
+      if (q.x > 180 && q.x < 320 && q.y > 467 && q.y < 505) act("r");
+    } else if (q.y > 459 && q.y < 500) {
+      if (q.x > 100 && q.x < 245) act("l");
+      if (q.x > 255 && q.x < 400) act("r");
+    }
+    return;
+  }
+  if (S.phase === "over") {
+    if (q.x > 100 && q.x < 400 && q.y > 407 && q.y < 453) act("f");
+    else if (q.x > 100 && q.x < 400 && q.y > 459 && q.y < 500) act("l");
+    return;
+  }
+  if (S.w) {
+    act("f");
+    return;
+  }
+  if (S.phase === "rescue" || S.phase === "seal") {
+    act("f");
+    return;
+  }
+  drag = 1;
+  aim(q.x, q.y);
+  C.setPointerCapture(e.pointerId);
+};
+
+C.onpointermove = e => {
+  if (drag) {
+    let q = pos(e);
+    aim(q.x, q.y);
+  }
+};
+
+C.onpointerup = e => {
+  let q = pos(e);
+  if (drag && S.phase === "aim") {
+    if (q.y > 690) {
+      S.msg = "AIM CANCELLED";
+      S.msgT = 60;
+    } else fire();
+  }
+  drag = 0;
+};
+
+function pos(e) {
+  let r = C.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * W / r.width,
+    y: (e.clientY - r.top) * H / r.height
+  };
+}
+
+function spawnBall() {
+  let sp = 8.3;
+  S.balls.push({
+    x: S.launchX,
+    y: LY,
+    vx: Math.cos(S.angle) * sp,
+    vy: Math.sin(S.angle) * sp,
+    c: -1,
+    seen: 0,
+    life: 650,
+    trail: [],
+    last: null,
+    cool: 0
+  });
+  S.sent++;
+}
+
+function sparkle(x, y, c, n = 8) {
+  for (let i = 0; i < n; i++) S.bits.push({
+    x: x,
+    y: y,
+    vx: (Math.random() - .5) * 6,
+    vy: (Math.random() - .5) * 6,
+    c: c,
+    life: 24 + Math.random() * 20
+  });
+}
+
+function prismHit(b, p) {
+  let bit = 1 << p.order;
+  if (b.seen & bit) return;
+  b.seen |= bit;
+  b.c = p.c;
+  let grew = !(S.prismClaim & bit) && S.growth < 3;
+  if (grew) {
+    S.prismClaim |= bit;
+    S.growth++;
+    S.gain++;
+    p.claimed = 1;
+    S.float.push({ x: p.x, y: p.y - 18, t: "NEXT +1 SPARK", c: p.c, life: 38 });
+  }
+  sparkle(p.x, p.y, p.c);
+  sound(350 + p.c * 70);
+  if (S.seq >= S.goal.length) return;
+  if (p.order === S.seq) {
+    p.on = 1;
+    p.beam = 22;
+    S.seq++;
+    S.msg = grew ? `NEXT VOLLEY +1 · PRISM ${S.seq + 1}` : `GOOD! NEXT: ${S.seq + 1}`;
+    S.msgT = 35;
+    if (S.seq === S.goal.length) routeComplete();
+  } else {
+    S.msg = `${grew ? "NEXT VOLLEY +1 · " : ""}HIT PRISM ${S.seq + 1} NEXT`;
+    S.msgT = 55;
+  }
+}
+
+function routeComplete() {
+  let full = S.goal.length === 6, dmg = S.bursts++ ? +(S.level < 3) : 2;
+  if ((S.level - 3 >>> 0) < 8) S.flip ^= 1;
+  S.stamp = full ? 80 : 42;
+  S.msg = `${full ? "STAMPEDE" : "PRISM BURST"} · ${dmg ? `CLOUDS -${dmg}` : "MATCH COLORS"}`;
+  S.msgT = 100;
+  S.blocks.forEach(b => {
+    if (b.hp <= 0) return;
+    let hit = dmg;
+    if (b.boss && LV[S.level].bossRule === "burst") hit = 4;
+    if (b.boss && LV[S.level].bossRule === "stampede" && full) hit = 8;
+    if (b.boss && LV[S.level].bossRule === "shield") hit = full ? 7 : 4;
+    if (S.level !== 5) b.armor = 0;
+    if (!hit) return;
+    b.hp -= hit;
+    b.hit = 12;
+    if (b.hp <= 0) b.doom = 45;
+    S.float.push({
+      x: b.x + b.w / 2,
+      y: b.y + b.h / 2,
+      t: `${full ? "STAMPEDE" : "BURST"} -${hit}`,
+      c: full ? 2 : -1,
+      life: 38
+    });
+  });
+  for (let i = 0; i < (full ? 50 : 24); i++) sparkle(60 + Math.random() * 380, 180 + Math.random() * 420, i % 6, 1);
+  sound(523, .2);
+  setTimeout(() => sound(659, .2), 100);
+  if (full) setTimeout(() => sound(784, .3), 200);
+}
+
+function waveBlock(q) {
+  let bonus = Math.max(0, Math.ceil((S.level - 2) / 3));
+  return block(25 + q[0] * 50, 100, q[1] + bonus, q[2], q[3]);
+}
+
+function hitBlock(o, b) {
+  return o.x + 5 > b.x && o.x - 5 < b.x + b.w && o.y + 5 > b.y && o.y - 5 < b.y + b.h;
+}
+
+/**
+ * Detonate a Starburst and damage nearby hostile blocks.
+ */
+function blast(q) {
+  q.on = 1;
+  S.blocks.forEach(b => {
+    if (b.hp > 0 && Math.abs(b.x + 24 - q.x) < 101 && Math.abs(b.y + 24 - q.y) < 101) {
+      b.hp -= 2;
+      b.hit = 8;
+    }
+  });
+  S.float.push({ x: q.x, y: q.y - 20, t: "STARBURST -2", c: 2, life: 38 });
+  sparkle(q.x, q.y, 2, 30);
+  sound(110, .3);
+  S.bombs.forEach(b => {
+    if (!b.on && (b.x - q.x) ** 2 + (b.y - q.y) ** 2 < 12100) blast(b);
+  });
+}
+
+function ballStep(o) {
+  o.life--;
+  if (o.cool) o.cool--;
+  o.trail.push([ o.x, o.y, o.c ]);
+  if (o.trail.length > 9) o.trail.shift();
+  o.x += o.vx;
+  o.y += o.vy;
+  if (o.x < 30) {
+    o.x = 30;
+    o.vx = Math.abs(o.vx);
+    sound(180);
+  }
+  if (o.x > 470) {
+    o.x = 470;
+    o.vx = -Math.abs(o.vx);
+    sound(180);
+  }
+  if (o.y < 105) {
+    o.y = 105;
+    o.vy = Math.abs(o.vy);
+    sound(180);
+  }
+  for (let p of S.prisms) if ((o.x - p.x) ** 2 + (o.y - p.y) ** 2 < (p.r + 5) ** 2) prismHit(o, p);
+  for (let q of S.pick) if (!q.got && (o.x - q.x) ** 2 + (o.y - q.y) ** 2 < 225) {
+    q.got = 1;
+    S.rescued++;
+    S.freeze++;
+    S.rescuedThisVolley = 1;
+    S.rescueFlash = 90;
+    S.float.push({ x: q.x, y: q.y - 18, t: "LOST UNICORN RESCUED!", c: 2, life: 90 });
+    sparkle(q.x, q.y, 2, 18);
+    S.bits.slice(-18).forEach(b => {
+      b.vx = (250 - b.x) / 30;
+      b.vy = (LY - b.y) / 30;
+    });
+    sound(900);
+  }
+  for (let q of S.bombs) if (!q.on && (q.c < 0 || o.c === q.c) && (o.x - q.x) ** 2 + (o.y - q.y) ** 2 < 289) blast(q);
+  for (let b of S.blocks) if (b.hp > 0 && hitBlock(o, b) && (o.last !== b || !o.cool)) {
+    let px = o.x - o.vx, py = o.y - o.vy, m = o.c >= 0 && o.c === b.c;
+    o.last = b;
+    o.cool = 5;
+    if (px < b.x || px > b.x + b.w) o.vx *= -1; else o.vy *= -1;
+    let damage = m ? 3 : 1, rule = LV[S.level].bossRule, guard = b.armor;
+    if ((b.armor || b.boss && rule === "shield") && !m) damage = 0;
+    if (b.boss && S.level === 12) damage = 1;
+    if (!damage) b.boss ? (S.msg = "SHIELDED · COMPLETE ROUTE", S.msgT = 90) : S.sealHit = 1;
+    if (guard && m) b.armor = 0;
+    b.hp -= damage;
+    if (b.hp <= 0) b.doom = 45;
+    b.hit = 6;
+    S.float.push({
+      x: b.x + b.w / 2,
+      y: b.y,
+      t: guard && m ? "SHELL BROKEN" : damage ? m ? `MATCH! -${damage}` : `-${damage}` : b.boss ? "SHIELDED" : "SEALED",
+      c: m ? o.c : -1,
+      life: 38
+    });
+    sparkle(o.x, o.y, guard && m ? 2 : o.c < 0 ? 2 : o.c, guard && m ? 20 : damage > 1 ? 14 : 7);
+    sound(damage ? m ? 760 : 260 : 120);
+    break;
+  }
+  if (o.y > 690) o.dead = 1;
+  if (o.life < 0) o.dead = 1;
+}
+
+function endVolley() {
+  let l = LV[S.level];
+  S.blocks = S.blocks.filter(b => b.hp > 0);
+  S.fast = 0;
+  S.ammo += S.gain;
+  S.gain = 0;
+  if (S.rescuedThisVolley && !(S.save.rescueLearned & 1)) {
+    S.rescuedThisVolley = 0;
+    S.sealHit = 0;
+    S.save.rescueLearned |= 1;
+    store();
+    S.phase = "rescue";
+    return;
+  }
+  S.rescuedThisVolley = 0;
+  if (S.sealHit && !S.save.sealLearned) {
+    S.sealHit = 0;
+    S.save.sealLearned = 1;
+    store();
+    S.phase = "seal";
+    return;
+  }
+  S.sealHit = 0;
+  let more = l.rows && S.row < l.rows.length && (!l.last || S.row < l.last || !S.blocks.some(b => b.boss) && S.bombs.every(b => b.on)), all = S.pick.every(q => q.got);
+  if (!S.blocks.length && !more && (!l.last || S.row === l.rows.length) && (!l.rescue || all)) {
+    S.phase = "win";
+    S.stars = 1 + (S.turn <= l.par) + (S.pick.length && !l.rescue ? all : S.bursts > 0);
+    if (S.save.failures) S.save.failures[S.level] = 0;
+    S.save.stars[S.level] = Math.max(S.save.stars[S.level], S.stars);
+    S.save.unlock = Math.max(S.save.unlock, Math.min(LV.length - 1, S.level + 1));
+    store();
+    S.msg = "CLOUD ROUTE CLEARED!";
+    S.msgT = 999;
+    sound(620, .2);
+    setTimeout(() => sound(820, .3), 120);
+  } else if (l.drop && S.freeze) {
+    if (more) addWave(l);
+    S.freeze--;
+    S.phase = "aim";
+    setRoute();
+    S.msg = "RESCUE SHIELD · DESCENT FROZEN";
+    S.msgT = 100;
+    sound(720, .18);
+  } else if (l.drop && S.turn > (l.grace || 0)) {
+    S.blocks.forEach(b => b.ty = b.y + 50);
+    if (more) addWave(l);
+    S.phase = "drop";
+    S.drop = 8;
+    S.msg = S.turn === (l.grace || 0) + 1 && l.grace ? "GRACE ENDED · DESCEND" : "DESCEND EACH TURN";
+    S.msgT = 999;
+    sound(130, .15);
+  } else {
+    S.phase = "aim";
+    setRoute();
+  }
+}
+
+function update() {
+  let l = LV[S.level];
+  S.tick++;
+  if (S.msgT > 0) S.msgT--;
+  if (S.toastT > 0) S.toastT--;
+  if (S.rescueFlash > 0) S.rescueFlash--;
+  if (S.stamp) S.stamp--;
+  S.prisms.forEach(p => {
+    if (p.beam) p.beam--;
+  });
+  S.blocks.forEach(b => {
+    if (b.hit) b.hit--;
+    if (b.doom && (!S.fast || S.tick % 3 === 0)) b.doom--;
+  });
+  if (S.phase === "drop") {
+    S.blocks.forEach(b => {
+      if (b.ty) b.y = Math.min(b.ty, b.y + 7);
+    });
+    if (! --S.drop) {
+      S.blocks.forEach(b => {
+        if (b.ty) b.y = b.ty;
+      });
+      let breached = S.blocks.find(b => b.y + b.h > S.danger);
+      if (breached) {
+        S.phase = "over";
+        breached.breach = 1;
+        S.breach = { hp: breached.hp, color: breached.c, remaining: S.blocks.length };
+        S.save.failures ||= Array(LV.length).fill(0);
+        S.save.failures[S.level]++;
+        store();
+        S.over = "CLOUD ROUTE BREACHED";
+        S.msg = `STORM REACHED YOUR ROUTE`;
+        S.msgT = 999;
+        sound(75, .5);
+      } else {
+        S.phase = "aim";
+        setRoute();
+        S.msg = "NEW ROW · PLAN THE NEXT SHOT";
+        S.msgT = 90;
+      }
+    }
+  }
+  if (S.phase === "volley") {
+    if (S.sent < S.ammo && S.tick % 5 === 0) spawnBall();
+    S.balls.forEach(ballStep);
+    S.balls = S.balls.filter(b => !b.dead);
+    if (!S.fast && S.sent === S.ammo && S.balls.length && S.balls.every(o => o.y > 380 && o.vy > 0)) {
+      S.fast = 1;
+      S.msg = "RETURN ×3";
+      S.msgT = 50;
+    }
+    if (S.sent === S.ammo && !S.balls.length) endVolley();
+  }
+  S.bits.forEach(b => {
+    b.x += b.vx;
+    b.y += b.vy;
+    b.vy += .06;
+    b.life--;
+  });
+  S.bits = S.bits.filter(b => b.life > 0);
+  S.float.forEach(f => {
+    f.y -= .5;
+    f.life--;
+  });
+  S.float = S.float.filter(f => f.life > 0);
+}
+
+/**
+ * Draw pixel-styled text.
+ */
+function text(t, x, y, n = 16, a = "center", c = "#fff") {
+  g.textAlign = a;
+  g.font = `bold ${n}px monospace`;
+  g.fillStyle = "#101746";
+  g.fillText(t, x + 2, y + 3);
+  g.fillStyle = c;
+  g.fillText(t, x, y);
+}
+
+/** Draw panel. */
+function modal(x, y, w, h) {
+  g.fillStyle = "#05082ccc";
+  g.fillRect(24, 99, 452, 551);
+  g.fillStyle = "#070b2d";
+  g.fillRect(x - 6, y - 6, w + 12, h + 12);
+  g.fillStyle = "#ffe45a";
+  g.fillRect(x - 2, y - 2, w + 4, h + 4);
+  g.fillStyle = "#17235c";
+  g.fillRect(x, y, w, h);
+  g.fillStyle = "#40539a";
+  g.fillRect(x + 7, y + 7, w - 14, 4);
+}
+
+function resultButton(x, y, w, h, label, primary = 0) {
+  g.fillStyle = "#070b2d";
+  g.fillRect(x - 3, y + 3, w + 6, h + 4);
+  g.fillStyle = primary ? "#fff" : "#40539a";
+  g.fillRect(x - 2, y - 2, w + 4, h + 4);
+  g.fillStyle = primary ? "#b844dc" : "#202b70";
+  g.fillRect(x, y, w, h);
+  text(label, x + w / 2, y + h / 2 + 6, primary ? label.length > 18 ? 12 : 15 : 13);
+}
+
+/** Translate a danger-line. */
+function pressureLabel(l) {
+  if (!l.drop) return "SAFE";
+  if (l.danger >= 650) return "LOW PRESSURE";
+  if (l.danger >= 600) return "RISING PRESSURE";
+  if (l.danger >= 550) return "HIGH PRESSURE";
+  return "PEAK PRESSURE";
+}
+
+function routeTraits(l) {
+  let traits = [], rescues = l.picks ? l.picks.length : l.pick ? 1 : 0;
+  if (l.boss) traits.push("STORM GUARDIAN");
+  if (l.blocks.some(b => b[4])) traits.push("AURORA ARMOR");
+  if (l.goal.length === 6) traits.push("SIX-PRISM ROUTE");
+  if (l.bombs) traits.push("STARBURST");
+  if (rescues) traits.push(`RESCUE ×${rescues}`);
+  if (!traits.length) traits.push(l.goal.length > 3 ? "LONG COLOR ROUTE" : "COLOR ROUTE");
+  return traits.join(" · ");
+}
+
+/** Draw three compact star glyphs, coloring only the number earned for this level. */
+function pixelStars(n, x, y, size = 12) {
+  for (let i = 0; i < 3; i++) text("★", x + (i - 1) * (size + 3), y + 4, size, "center", i < n ? "#ffe45a" : "#526396");
+}
+
+/**
+ * Draw shape code for a prism or colored object.
+ */
+function drawColorGlyph(c, x, y) {
+  if (c < 0) return;
+  g.fillStyle = "#101746";
+  if (c === 0 || c === 4) g.fillRect(x - 3, y - 1, 6, 2);
+  if (c === 1 || c === 5) g.fillRect(x - 1, y - 3, 2, 6);
+  if (c === 2) {
+    g.fillRect(x - 3, y - 1, 6, 2);
+    g.fillRect(x - 1, y - 3, 2, 6);
+  }
+  if (c > 2) {
+    g.fillRect(x - 3, y - 3, 2, 2);
+    g.fillRect(x + 1, y + 1, 2, 2);
+  }
+}
+
+/**
+ * Render one Cloudling or Guardian from back to front.
+ */
+function drawBlock(b) {
+  if (b.doom) {
+    let x = b.x + b.w / 2, y = b.y + b.h / 2 - (45 - b.doom) / 5;
+    g.globalAlpha = Math.min(1, b.doom / 12);
+    g.fillStyle = "#fff";
+    g.fillRect(x - 17, y - 6, 34, 14);
+    g.fillRect(x - 13, y - 11, 10, 6);
+    g.fillRect(x - 5, y - 15, 10, 10);
+    g.fillRect(x + 4, y - 11, 10, 6);
+    g.fillStyle = "#bce9f6";
+    g.fillRect(x - 12, y + 7, 24, 4);
+    g.fillStyle = "#142050";
+    g.fillRect(x - 7, y - 2, 3, 3);
+    g.fillRect(x + 4, y - 2, 3, 3);
+    g.fillRect(x - 5, y + 3, 3, 2);
+    g.fillRect(x + 2, y + 3, 3, 2);
+    g.fillRect(x - 2, y + 5, 4, 2);
+    if (S.level < 3) text("FREED!", x, y - 22, 7, "center", "#52e39c");
+    g.globalAlpha = 1;
+    return;
+  }
+  let dx = b.hit ? (Math.random() - .5) * 5 : 0, x = b.x + dx, y = b.y, cx = x + b.w / 2;
+  g.fillStyle = b.boss ? "#4c347f" : b.c >= 0 ? COL[b.c] : "#8b73d0";
+  g.fillRect(x, y, b.w, b.h);
+  if (b.boss) {
+    g.strokeStyle = "#ffe45a";
+    g.lineWidth = 4;
+    g.strokeRect(x + 2, y + 2, b.w - 4, b.h - 4);
+    let rule = LV[S.level].bossRule === "burst" ? "BURST +4" : LV[S.level].bossRule === "stampede" ? "FULL +8" : "6 PRISMS -7";
+    g.fillStyle = "#101746dd";
+    g.fillRect(x + b.w - 58, y + 4, 54, 13);
+    text(rule, x + b.w - 31, y + 14, 6, "center", "#ffe45a");
+    if (LV[S.level].bossRule === "shield") for (let i = 0; i < 6; i++)
+      text("■", x + 24 + i * 10, y + b.h - 6, 6, "center", i < S.seq ? COL[i] : "#236");
+  }
+  g.fillStyle = "#fff4";
+  g.fillRect(x + 5, y + 5, b.w - 10, 4);
+  g.fillStyle = "#10174655";
+  g.fillRect(x, y + b.h - 6, b.w, 6);
+  let bw = b.hp > 99 ? 30 : 23;
+  g.fillStyle = "#101746cc";
+  g.fillRect(x + 4, y + 4, bw, 14);
+  text(Math.max(0, b.hp), x + 4 + bw / 2, y + 15, 10);
+  drawColorGlyph(b.c, x + b.w - 9, y + 14);
+  if (b.armor) {
+    g.fillStyle = "#10174633";
+    g.fillRect(x + 2, y + 2, b.w - 4, b.h - 4);
+    g.fillStyle = S.tick % 30 < 15 ? "#bce9f6" : "#fff";
+    for (let [X, Y, A, B] of [ [ 2, 2, 1, 1 ], [ b.w - 5, 2, -1, 1 ], [ 2, b.h - 5, 1, -1 ], [ b.w - 5, b.h - 5, -1, -1 ] ]) {
+      g.fillRect(x + X - 6 * (A < 0), y + Y, 9, 3);
+      g.fillRect(x + X, y + Y - 6 * (B < 0), 3, 9);
+    }
+  }
+  if (b.breach) {
+    g.strokeStyle = S.tick % 12 < 6 ? "#fff" : "#ff5378";
+    g.lineWidth = 5;
+    g.strokeRect(x - 3, y - 3, b.w + 6, b.h + 6);
+  }
+  g.fillStyle = "#142050";
+  g.fillRect(cx - 10, y + b.h - 18, 4, 5);
+  g.fillRect(cx + 7, y + b.h - 18, 4, 5);
+  g.fillRect(cx - 4, y + b.h - 10, 8, 2);
+  g.globalAlpha = 1;
+}
+
+/** Draw the dotted aiming preview and predicted reflection path while the player can aim. */
+function guide() {
+  let x = S.launchX, y = LY, vx = Math.cos(S.angle) * 10, vy = Math.sin(S.angle) * 10, end = S.level === 0 ? 70 : 60, bounce = -1;
+  for (let i = 0; i < end; i++) {
+    x += vx;
+    y += vy;
+    let hit = 0;
+    if (x < 30) {
+      x = 30;
+      vx = Math.abs(vx);
+      hit = 1;
+    }
+    if (x > 470) {
+      x = 470;
+      vx = -Math.abs(vx);
+      hit = 1;
+    }
+    if (y < 105) {
+      y = 105;
+      vy = Math.abs(vy);
+      hit = 1;
+    }
+    if (hit && bounce < 0) bounce = i;
+    if (S.level && bounce >= 0 && i > bounce + (LV[S.level].preview || S.assist ? 28 : 8)) break;
+    if (i % 3 === 0) {
+      g.fillStyle = "#fff9";
+      g.fillRect(x - 2, y - 2, 4, 4);
+    }
+  }
+}
+
+/** Select hint after repeated failures without exposing a complete solution. */
+function failureTip(l) {
+  if (l.bossRule === "shield") return "TIP · 1→6 BREAKS THE SHIELD";
+  if (l.bossRule) return "TIP · ROUTES DEAL GUARDIAN DAMAGE";
+  if (l.blocks.some(b => b[4])) return "TIP · MATCH OR PRISM-BURST ARMOR";
+  if (l.bombs) return "TIP · BURST BESIDE TIGHT CLUSTERS";
+  if (l.pick || l.picks) return "TIP · RESCUE FREEZES ONE DESCENT";
+  if (l.drop) return "TIP · CLEAR LOW CLOUDS FIRST";
+  return "TIP · BANK SHOTS HIT MORE CLOUDS";
+}
+
+/**
+ * Draw the unicorn.
+ * Eye direction follows the aiming angle
+ */
+function unicorn() {
+  let x = S.launchX, f = S.phase === "volley", bob = Math.round(Math.sin(S.tick / 18) * 2) + (f && S.tick % 5 < 2 ? 2 : 0), y = 667 + bob, ink = "#35205f", cream = "#fff1d9", next = S.goal[Math.min(S.seq, S.goal.length - 1)], look = f ? 0 : Math.cos(S.angle) > 0 ? 2 : -2;
+  g.fillStyle = ink;
+  g.fillRect(x - 25, y - 30, 10, 19);
+  g.fillRect(x + 15, y - 30, 10, 19);
+  g.fillRect(x - 22, y - 37, 6, 8);
+  g.fillRect(x + 16, y - 37, 6, 8);
+  g.fillStyle = "#ffd77d";
+  g.fillRect(x - 21, y - 29, 4, 14);
+  g.fillRect(x + 17, y - 29, 4, 14);
+  g.fillStyle = ink;
+  g.fillRect(x - 4, y - 61, 8, 50);
+  g.fillStyle = COL[next];
+  g.fillRect(x - 2, y - 59, 4, 10);
+  g.fillStyle = "#ffe45a";
+  g.fillRect(x - 2, y - 49, 4, 10);
+  g.fillStyle = "#fff";
+  g.fillRect(x - 2, y - 39, 4, 10);
+  g.fillStyle = COL[next];
+  g.fillRect(x - 2, y - 29, 4, 16);
+  g.fillStyle = ink;
+  g.fillRect(x + 23, y - 13, 14, 14);
+  g.fillRect(x + 27, y, 15, 15);
+  g.fillRect(x + 25, y + 14, 16, 15);
+  g.fillRect(x + 21, y + 28, 14, 15);
+  g.fillStyle = "#ad6cff";
+  g.fillRect(x + 26, y - 10, 8, 9);
+  g.fillStyle = "#55baff";
+  g.fillRect(x + 30, y + 3, 9, 9);
+  g.fillStyle = "#ff5277";
+  g.fillRect(x + 28, y + 17, 10, 9);
+  g.fillStyle = "#ff9d43";
+  g.fillRect(x + 24, y + 31, 8, 9);
+  // Hind legs
+  g.fillStyle = ink;
+  g.fillRect(x - 10, y + 40, 8, 16);
+  g.fillRect(x + 2, y + 40, 8, 16);
+  g.fillStyle = cream;
+  g.fillRect(x - 8, y + 43, 4, 8);
+  g.fillRect(x + 4, y + 43, 4, 8);
+  g.fillStyle = "#c887e8";
+  g.fillRect(x - 8, y + 51, 4, 4);
+  g.fillRect(x + 4, y + 51, 4, 4);
+  // Front legs
+  g.fillStyle = ink;
+  g.fillRect(x - 24, y + 40, 10, 24);
+  g.fillRect(x + 14, y + 40, 10, 24);
+  g.fillStyle = cream;
+  g.fillRect(x - 22, y + 43, 6, 14);
+  g.fillRect(x + 16, y + 43, 6, 14);
+  g.fillStyle = "#c887e8";
+  g.fillRect(x - 22, y + 57, 6, 4);
+  g.fillRect(x + 16, y + 57, 6, 4);
+  g.fillStyle = ink;
+  g.fillRect(x - 30, y - 12, 60, 60);
+  g.fillStyle = cream;
+  g.fillRect(x - 25, y - 7, 50, 50);
+  g.fillStyle = "#f0dac7";
+  g.fillRect(x + 20, y - 7, 5, 50);
+  g.fillRect(x - 25, y + 38, 50, 5);
+  g.fillStyle = "#3b245f";
+  g.fillRect(x - 15 + look, y + 13, 6, 8);
+  g.fillRect(x + 9 + look, y + 13, 6, 8);
+  g.fillStyle = "#ff9bb5";
+  g.fillRect(x - 22, y + 25, 7, 5);
+  g.fillRect(x + 15, y + 25, 7, 5);
+  g.fillStyle = "#70426e";
+  g.fillRect(x - 5, y + 29, 10, 3);
+}
+
+/** Pixel cloud that travels with the launcher and supports the unicorn. */
+function launcherCloud() {
+  let x = S.launchX, y = 720 + Math.round(Math.sin(S.tick / 24));
+  g.fillStyle = "#15205288";
+  g.fillRect(x - 46, y + 15, 29, 3);
+  g.fillRect(x - 14, y + 19, 37, 3);
+  g.fillRect(x + 26, y + 14, 23, 3);
+  g.fillStyle = "#9edcf2";
+  g.fillRect(x - 43, y + 8, 86, 8);
+  g.fillRect(x - 31, y + 16, 60, 4);
+  g.fillStyle = "#dcf7ff";
+  g.fillRect(x - 47, y + 1, 29, 11);
+  g.fillRect(x - 36, y - 5, 34, 17);
+  g.fillRect(x - 14, y - 10, 36, 22);
+  g.fillRect(x + 17, y - 3, 29, 15);
+  g.fillStyle = "#fff";
+  g.fillRect(x - 30, y - 4, 25, 3);
+  g.fillRect(x - 8, y - 9, 27, 3);
+  if (S.phase === "volley" && S.tick % 18 < 7) {
+    g.fillStyle = COL[S.tick % 6];
+    g.fillRect(x - 2, y + 22, 4, 2);
+  }
+}
+
+/** Draw cloud */
+function launcherCloudFront() {
+  let x = S.launchX, y = 720 + Math.round(Math.sin(S.tick / 24));
+  g.fillStyle = "#f5fdff";
+  g.fillRect(x - 14, y + 8, 28, 4);
+  g.fillRect(x - 7, y + 5, 14, 4);
+  g.fillStyle = "#bce9f6";
+  g.fillRect(x - 10, y + 12, 20, 2);
+}
+
+/**
+ * Render frame 
+ */
+function draw() {
+  let l = LV[S.level], map = S.phase === "map", dangerRows = l.drop && S.blocks.length ? Math.max(0, Math.ceil((S.danger - Math.max(...S.blocks.map(b => b.y + b.h))) / 50)) : 0;
+  g.fillStyle = BG;
+  g.fillRect(0, 0, W, H);
+  text("PRISM STAMPEDE", 250, 21, 15);
+  if (!map) {
+    text(`L${S.level + 1} · ${l.name}`, 24, 54, 10, "left", "#ffe45a");
+    text(`TURN ${S.turn + (S.phase === "aim")}/${l.par}`, 396, 54, 9, "right");
+    text(`SPARKS ${S.ammo}`, 476, 54, 9, "right", "#52e39c");
+  }
+  g.fillStyle = "#101746cc";
+  g.fillRect(350, 5, 48, 26);
+  g.fillRect(400, 5, 48, 26);
+  g.fillRect(450, 5, 48, 26);
+  g.strokeStyle = "#40539a";
+  g.lineWidth = 2;
+  g.strokeRect(351, 6, 46, 24);
+  g.strokeRect(401, 6, 46, 24);
+  g.strokeRect(451, 6, 46, 24);
+  text("?", 374, 23, 13, "center", S.help ? "#ffe45a" : "#fff");
+  g.globalAlpha = S.musicMute ? .35 : 1;
+  text("♪", 424, 24, 14);
+  g.globalAlpha = S.sfxMute ? .35 : 1;
+  text("FX", 474, 22, 9);
+  g.globalAlpha = 1;
+  g.strokeStyle = "#ff5277";
+  g.lineWidth = 2;
+  if (S.musicMute || S.sfxMute) {
+    g.beginPath();
+    if (S.musicMute) {
+      g.moveTo(407, 9);
+      g.lineTo(441, 28);
+    }
+    if (S.sfxMute) {
+      g.moveTo(457, 9);
+      g.lineTo(491, 28);
+    }
+    g.stroke();
+  }
+
+  g.fillStyle = "#202a68";
+  g.fillRect(15, 92, 470, 566);
+  g.fillStyle = "#40539a";
+  g.fillRect(20, 97, 460, 556);
+  g.fillStyle = "#0d1647";
+  g.fillRect(24, 99, 452, 551);
+  if (l.drop) {
+    g.globalAlpha = dangerRows < 3 ? .14 + Math.sin(S.tick / 8) * .04 : .08;
+    g.fillStyle = "#ff5378";
+    g.fillRect(24, Math.max(99, S.danger), 452, Math.max(0, 650 - S.danger));
+    g.globalAlpha = 1;
+  }
+  g.strokeStyle = "#ffffff14";
+  for (let x = 25; x <= 475; x += 50) {
+    g.beginPath();
+    g.moveTo(x, 100);
+    g.lineTo(x, 650);
+    g.stroke();
+  }
+  for (let y = 100; y <= 650; y += 50) {
+    g.beginPath();
+    g.moveTo(25, y);
+    g.lineTo(475, y);
+    g.stroke();
+  }
+  g.strokeStyle = "#ff5378aa";
+  g.setLineDash([ 7, 7 ]);
+  g.beginPath();
+  g.moveTo(25, S.danger);
+  g.lineTo(475, S.danger);
+  g.stroke();
+  g.setLineDash([]);
+  S.blocks.filter(b => b.hp > 0 || b.doom).forEach(drawBlock);
+  S.bombs.forEach(q => {
+    if (q.on) return;
+    let p = 2 + Math.sin(S.tick * .15) * 2;
+    g.fillStyle = COL[q.c] || "#ff9d43";
+    g.fillRect(q.x - 13 - p, q.y - 4, 26 + p * 2, 8);
+    g.fillRect(q.x - 4, q.y - 13 - p, 8, 26 + p * 2);
+    g.fillStyle = "#ffe45a";
+    g.fillRect(q.x - 9, q.y - 9, 18, 18);
+    g.fillStyle = "#fff";
+    g.fillRect(q.x - 4, q.y - 4, 8, 8);
+  });
+  S.pick.forEach(q => {
+    if (q.got) return;
+    let pulse = 1 + Math.sin(S.tick * .14) * 2;
+    g.strokeStyle = "#52e39c";
+    g.lineWidth = 2;
+    g.strokeRect(q.x - 17 - pulse, q.y - 17 - pulse, 34 + pulse * 2, 34 + pulse * 2);
+    text("LOST", q.x, q.y - 21, 6, "center", "#52e39c");
+    g.fillStyle = "#fff";
+    g.fillRect(q.x - 14, q.y - 14, 28, 28);
+    g.fillStyle = "#55baff";
+    g.fillRect(q.x - 11, q.y - 11, 22, 22);
+    g.fillStyle = "#0d1647";
+    g.fillRect(q.x - 14, q.y - 14, 4, 4);
+    g.fillRect(q.x + 10, q.y - 14, 4, 4);
+    g.fillRect(q.x - 14, q.y + 10, 4, 4);
+    g.fillRect(q.x + 10, q.y + 10, 4, 4);
+    g.fillStyle = "#52e39c";
+    g.fillRect(q.x - 10, q.y - 13, 2, 26);
+    g.fillRect(q.x + 8, q.y - 13, 2, 26);
+    g.fillStyle = "#fff1d9";
+    g.fillRect(q.x - 7, q.y - 4, 14, 11);
+    g.fillStyle = "#ffe45a";
+    g.fillRect(q.x - 1, q.y - 11, 3, 7);
+    g.fillStyle = "#35205f";
+    g.fillRect(q.x - 4, q.y, 2, 2);
+    g.fillRect(q.x + 2, q.y, 2, 2);
+  });
+  S.prisms.forEach((p, i) => {
+    let active = i === S.seq && !p.on, pulse = active ? 4 + Math.sin(S.tick * .18) * 4 : 0;
+    if (p.beam) {
+      let prev = i ? S.prisms[i - 1] : {
+        x: S.launchX,
+        y: LY
+      };
+      g.globalAlpha = p.beam / 22;
+      g.strokeStyle = COL[p.c];
+      g.lineWidth = 7;
+      g.beginPath();
+      g.moveTo(prev.x, prev.y);
+      g.lineTo(p.x, p.y);
+      g.stroke();
+      g.globalAlpha = 1;
+    }
+    g.globalAlpha = p.on ? .22 : 1;
+    g.fillStyle = COL[p.c] + "55";
+    g.beginPath();
+    g.moveTo(p.x, p.y - p.r - pulse);
+    g.lineTo(p.x + p.r + pulse, p.y);
+    g.lineTo(p.x, p.y + p.r + pulse);
+    g.lineTo(p.x - p.r - pulse, p.y);
+    g.closePath();
+    g.strokeStyle = "#101746";
+    g.lineWidth = 7;
+    g.stroke();
+    g.strokeStyle = active ? "#fff" : COL[p.c];
+    g.lineWidth = active ? 4 : 3;
+    g.fill();
+    g.stroke();
+    text(i + 1, p.x, p.y + 2, 10);
+    drawColorGlyph(p.c, p.x, p.y + 9);
+    if (p.claimed) {
+      g.fillStyle = "#fff";
+      g.fillRect(p.x - 4, p.y - p.r - 9, 8, 3);
+    }
+    g.globalAlpha = 1;
+  });
+  if (S.phase === "aim") guide();
+  S.balls.forEach(o => {
+    o.trail.forEach((t, i) => {
+      g.globalAlpha = i / o.trail.length * .55;
+      g.fillStyle = t[2] < 0 ? "#fff" : COL[t[2]];
+      g.fillRect(t[0] - 2, t[1] - 2, 4, 4);
+    });
+    g.globalAlpha = 1;
+    g.fillStyle = o.c < 0 ? "#fff" : COL[o.c];
+    g.beginPath();
+    g.arc(o.x, o.y, 5, 0, 7);
+    g.fill();
+    drawColorGlyph(o.c, o.x, o.y);
+  });
+  S.bits.forEach(b => {
+    g.globalAlpha = b.life / 44;
+    g.fillStyle = COL[b.c];
+    g.fillRect(b.x, b.y, 4, 4);
+  });
+  g.globalAlpha = 1;
+  S.float.forEach(f => {
+    g.globalAlpha = Math.min(1, f.life / 38);
+    text(f.t, f.x, f.y, 11, "center", f.c < 0 ? "#fff" : COL[f.c]);
+  });
+  g.globalAlpha = 1;
+  if (S.rescueFlash && S.phase === "volley") {
+    g.globalAlpha = Math.min(1, S.rescueFlash / 24);
+    g.fillStyle = "#163c68ee";
+    g.fillRect(92, 555, 316, 55);
+    g.strokeStyle = "#52e39c";
+    g.lineWidth = 3;
+    g.strokeRect(94, 557, 312, 51);
+    text("LOST UNICORN RESCUED!", 250, 578, 13, "center", "#52e39c");
+    text("CLOUDS WILL NOT DESCEND THIS TURN", 250, 597, 9);
+    g.globalAlpha = 1;
+  }
+  g.fillStyle = "#101746dd";
+  g.fillRect(30, 64, 440, 27);
+  text(S.phase === "win" ? "" : `${S.pick.length ? `RESCUE ${S.rescued}/${S.pick.length} · ` : ""}${S.msg}`, 42, 82, 9, "left");
+  g.globalAlpha = 1;
+  if (S.toastT) {
+    g.fillStyle = "#070b2df2";
+    g.fillRect(350, 38, 146, 24);
+    g.strokeStyle = "#ffe45a";
+    g.lineWidth = 2;
+    g.strokeRect(351, 39, 144, 22);
+    text(S.toast, 423, 54, 8, "center", "#ffe45a");
+  }
+  if (S.freeze) text(`RESCUE SHIELD ×${S.freeze}`, 466, 632, 8, "right", "#52e39c");
+  if (l.drop && S.blocks.length) {
+    let labelY = Math.min(642, S.danger - 7), label = `DANGER · ${dangerRows} ROW${dangerRows === 1 ? "" : "S"}`;
+    g.fillStyle = "#0d1647dd";
+    g.fillRect(373, labelY - 10, 98, 14);
+    text(label, 466, labelY, 8, "right", dangerRows < 3 ? "#ff5378" : "#ffffffaa");
+  }
+  if (S.stamp) {
+    g.globalAlpha = S.stamp / 80;
+    for (let i = 0; i < 6; i++) {
+      g.strokeStyle = COL[i];
+      g.lineWidth = 5;
+      g.beginPath();
+      g.moveTo(25, 350 + i * 7);
+      g.quadraticCurveTo(250, 250 - S.stamp, 475, 350 + i * 7);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+  }
+  launcherCloud();
+  unicorn();
+  launcherCloudFront();
+  let lc = COL[S.goal[Math.min(S.seq, S.goal.length - 1)]];
+  g.fillStyle = lc;
+  g.fillRect(S.launchX - 7, LY - 3, 14, 6);
+  g.fillRect(S.launchX - 3, LY - 7, 6, 14);
+  g.fillStyle = "#fff";
+  g.fillRect(S.launchX - 4, LY - 2, 8, 4);
+  g.fillRect(S.launchX - 2, LY - 4, 4, 8);
+  if ((S.phase === "win" || S.phase === "over") && !S.help) {
+    modal(55, 225, 390, 300);
+    g.fillStyle = "#17235c";
+    g.fillRect(62, 232, 376, 4);
+    for (let i = 0; i < 6; i++) {
+      g.fillStyle = COL[i];
+      g.fillRect(220 + i * 10, 232, 10, 4);
+    }
+    if (S.phase === "win") {
+      let l = LV[S.level], par = S.turn <= l.par, total = S.save.stars.reduce((a, b) => a + b, 0);
+      const finale = S.level === LV.length - 1, maxStars = LV.length * 3;
+      let hasRescues = l.pick || l.picks;
+      text(finale ? "STAMPEDE COMPLETE!" : `LEVEL ${S.level + 1} CLEARED!`, 250, 262, 20);
+      if (finale) text("ALL 15 CLOUD ROUTES", 250, 287, 10, "center", "#52e39c");
+      if (finale) {
+        text(`TOTAL STARS  ${total}/${maxStars}`, 250, 317, 15, "center", "#ffe45a");
+        text(total >= maxStars - 2 ? "CLOUD ROUTE LEGEND" : total >= maxStars - 7 ? "PRISM CHAMPION" : "RAINBOW RIDER", 250, 345, 12, "center", "#52e39c");
+        text("✓ FINAL CLOUD ROUTE CLEARED", 250, 377, 11, "center", "#52e39c");
+      } else {
+        text("★".repeat(S.stars) + "☆".repeat(3 - S.stars), 250, 304, 24, "center", "#ffe45a");
+        text("✓ LEVEL CLEARED", 250, 334, 11, "center", "#52e39c");
+        text(`${par ? "✓" : "×"} ${S.turn} TURN${S.turn === 1 ? "" : "S"} · TARGET ${l.par}`, 250, 358, 11, "center", par ? "#52e39c" : "#ff9d43");
+        let rescued = S.pick.length && !l.rescue ? S.pick.every(q => q.got) : S.bursts > 0;
+        text(`${rescued ? "✓" : "×"} ${hasRescues && !l.rescue ? `LOST UNICORNS RESCUED ${S.rescued}/${S.pick.length}` : "PRISM ROUTE COMPLETED"}`, 250, 382, 10, "center", rescued ? "#52e39c" : "#ff9d43");
+      }
+      resultButton(100, finale ? 407 : 411, 300, 42, finale ? "PLAY AGAIN" : "NEXT LEVEL", 1);
+      if (finale) resultButton(180, 467, 140, 38, "LEVEL MAP");
+      else {
+        resultButton(100, 462, 145, 38, "REPLAY");
+        resultButton(255, 462, 145, 38, "LEVEL MAP");
+      }
+    } else {
+      text(S.over, 250, 262, 20);
+      let b = S.breach || { hp: "?", remaining: S.blocks.length };
+      text(`STORM REACHED YOUR ROUTE · HP ${b.hp}`, 250, 315, 12, "center", "#ff9d43");
+      text(`${b.remaining} CLOUDLING${b.remaining === 1 ? "" : "S"} TRAPPED`, 250, 345, 13);
+      if ((S.save.failures?.[S.level] || 0) > 1) text(failureTip(LV[S.level]), 250, 380, 9, "center", "#52e39c");
+      resultButton(100, 411, 300, 42, "RETRY", 1);
+      resultButton(100, 462, 300, 38, "LEVEL MAP");
+    }
+  }
+  if (map) {
+    let ss = S.save.stars, cur = S.sel, chapters = [ "LEARN", "PRESSURE", "STAMPEDE" ];
+    g.fillStyle = "#202b70";
+    g.fillRect(0, 62, 500, 738);
+    g.fillStyle = "#101746";
+    g.fillRect(25, 75, 450, 620);
+    g.strokeStyle = "#40539a";
+    g.lineWidth = 3;
+    g.strokeRect(25, 75, 450, 620);
+    for (let c = 0; c < 6; c++) {
+      g.fillStyle = COL[c];
+      g.fillRect(214 + c * 12, 75, 12, 4);
+    }
+    text("CLOUD ROUTE MAP", 250, 120, 17);
+    text("LIGHT THE ROUTE · OUTRUN THE STORM", 250, 145, 8, "center", "#52e39c");
+    text(`${ss.filter(x => x).length}/${LV.length} CLEARED · ${ss.reduce((a, b) => a + b, 0)}/${LV.length * 3} STARS`, 250, 165, 9);
+    for (let row = 0; row < 3; row++) text(`${chapters[row]} · ${row * 5 + 1}–${row * 5 + 5}`, 40, 191 + row * 140, 8, "left", COL[3 - row]);
+    for (let j = 0; j < LV.length - 1; j++) {
+      let a = MN[j], b = MN[j + 1], dx = b[0] - a[0];
+      g.beginPath();
+      g.moveTo(a[0], a[1]);
+      if (dx) g.lineTo(b[0], b[1]);
+      else {
+        let edge = a[0] < 250 ? 34 : 466;
+        g.lineTo(edge, a[1]);
+        g.lineTo(edge, b[1]);
+        g.lineTo(b[0], b[1]);
+      }
+      g.globalAlpha = 1;
+      g.strokeStyle = "#263b83";
+      g.lineWidth = 5;
+      g.stroke();
+      g.globalAlpha = j === cur - 1 ? 1 : ss[j] ? .8 : j < S.save.unlock ? .35 : .12;
+      g.strokeStyle = j === cur - 1 ? COL[2] : ss[j] ? COL[4 + j % 2] : "#40539a";
+      g.lineWidth = 2;
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+    for (let j = 0; j < LV.length; j++) {
+      let i = j, p = MN[j], open = i <= S.save.unlock, sel = i === cur, stars = ss[i], accent = COL[3 - Math.floor(i / 5)];
+      if (sel) {
+        g.globalAlpha = .16 + Math.sin(S.tick * .1) * .05;
+        g.fillStyle = "#ffe45a";
+        g.fillRect(p[0] - 30, p[1] - 30, 60, 60);
+        g.globalAlpha = 1;
+      }
+      g.fillStyle = "#101746";
+      g.fillRect(p[0] - 25, p[1] - 25, 50, 50);
+      g.fillStyle = sel ? "#7653a8" : stars ? "#35509d" : "#263b83";
+      g.fillRect(p[0] - 21, p[1] - 21, 42, 42);
+      g.fillStyle = accent;
+      g.fillRect(p[0] - 17, p[1] - 17, 34, 4);
+      g.strokeStyle = sel ? "#ffe45a" : "#ffffff44";
+      g.lineWidth = sel ? 4 : 2;
+      g.strokeRect(p[0] - 23, p[1] - 23, 46, 46);
+      if (open) {
+        text(i + 1, p[0], p[1] + 6, 14);
+        pixelStars(stars, p[0], p[1] + 37);
+      } else {
+        text(i + 1, p[0], p[1] - 3, 10, "center", "#ffffff55");
+        text("LOCK", p[0], p[1] + 12, 7, "center", "#ffffff55");
+      }
+    }
+    g.fillStyle = "#17235c";
+    g.fillRect(75, 560, 350, 68);
+    g.strokeStyle = "#40539a";
+    g.lineWidth = 2;
+    g.strokeRect(75, 560, 350, 68);
+    text(`${cur + 1} · ${LV[cur].name} ${"★".repeat(ss[cur])}${"☆".repeat(3 - ss[cur])}`, 250, 579, 11, "center", COL[2]);
+    text(routeTraits(LV[cur]), 250, 601, 8, "center", "#52e39c");
+    text(`${pressureLabel(LV[cur])} · TARGET ${LV[cur].par}`, 250, 621, 8);
+    g.save();
+    g.translate(150, 394);
+    g.scale(.4, .4);
+    launcherCloud();
+    unicorn();
+    launcherCloudFront();
+    g.restore();
+  }
+  if (S.help) {
+    modal(45, 215, 410, 315);
+    text("HOW TO PLAY", 250, 254, 20);
+    text("AIM: LEFT / RIGHT OR DRAG", 250, 292, 11);
+    text("SPARKS TAKE PRISM COLORS", 250, 322, 11);
+    text("FIRST 3 PRISMS: +1 NEXT VOLLEY", 250, 352, 10);
+    text(S.level < 3 ? "FIRST ROUTE -2 · REPEATS -1" : "FIRST ROUTE -2 · REPEATS -0", 250, 382, 10);
+    text("SEALED: MATCH COLOR TO BREAK", 250, 412, 10);
+    text("RESCUE: FREEZE ONE DESCENT", 250, 442, 10);
+    text("STARBURST: SHELLS -2 · CLOUDS DROP", 250, 472, 9);
+    text(l.rescue ? "RESCUE ALL · CLEAR CLOUDLINGS" : "CLEAR ALL CLOUDLINGS TO WIN", 250, 510, 10, "center", "#ffe45a");
+  }
+  if (S.w || S.phase === "rescue" || S.phase === "seal") {
+    modal(65, 270, 370, 210);
+    if (S.w) {
+      text(l.name, 250, 315, 18, "center", "#ffe45a");
+      text("SHIELDED · ROUTE 1→2→3", 250, 382, 11);
+    } else if (S.phase === "seal") {
+      text("SEALED CLOUDLING", 250, 315, 18, "center", "#bce9f6");
+      text("UNMATCHED SPARKS CANNOT BREAK IT", 250, 362, 10);
+      text("MATCH COLOR TO BREAK THE SHELL", 250, 400, 10, "center", "#ffe45a");
+    } else {
+      text("LOST UNICORN RESCUED!", 250, 315, 18, "center", "#52e39c");
+      text("RESCUE SHIELD ACTIVATED", 250, 354, 12, "center", "#ffe45a");
+      text("CLOUDS WILL NOT DESCEND", 250, 388, 11);
+      text("AFTER THIS TURN", 250, 410, 11);
+    }
+    text("FIRE / TAP TO CONTINUE", 250, 453, 10, "center", "#ffe45a");
+  }
+  let win = S.phase === "win", finale = win && S.level === LV.length - 1,
+    fl = map ? "PLAY" : win ? finale ? "REPLAY" : "NEXT" : S.phase === "over" ? "RETRY" : S.w || S.phase === "rescue" || S.phase === "seal" ? "CONTINUE" : S.phase === "drop" ? "WAIT" : S.phase === "volley" ? "FAST" : "FIRE",
+    ll = win ? "REPLAY" : map ? "PREV" : "LEFT", rl = win ? "MAP" : map ? "NEXT" : "RIGHT";
+  if (LB.textContent !== ll) LB.textContent = ll;
+  if (RB.textContent !== rl) RB.textContent = rl;
+  LB.ariaLabel = win ? "Replay level" : map ? "Previous route" : "Aim left";
+  RB.ariaLabel = win ? "Journey map" : map ? "Next route" : "Aim right";
+  LB.disabled = map ? S.sel <= 0 : S.w || !(S.phase === "aim" || S.phase === "over");
+  RB.disabled = map ? S.sel >= S.save.unlock : S.w || S.phase !== "aim";
+  LB.style.display = finale || map ? "none" : "";
+  RB.style.display = map ? "none" : "";
+  if (FB.textContent !== fl) FB.textContent = fl;
+  FB.className = `fire${S.phase === "volley" ? " fast" : S.phase === "over" ? " retry" : S.phase === "drop" ? " wait" : ""}`;
+  FB.disabled = S.phase === "drop";
+  FB.ariaLabel = map ? "Play selected route" : fl;
+  FB.style.width = map ? "140px" : "";
+  DB.style.display = win || S.phase === "over" ? "none" : "";
+  DB.style.bottom = map ? "27px" : "";
+}
+
+let frame = 0, lag = 0;
+
+/**
+ * Frame-independent main loop
+ */
+function loop(now) {
+  requestAnimationFrame(loop);
+  lag = Math.min(36, lag + now - (frame || now));
+  frame = now;
+  if (lag < 11) return;
+  for (; lag >= 11; lag -= 11) if (!S.help && !S.w) for (let i = 0; i < (S.fast ? 3 : 1); i++) update();
+  draw();
+}
+
+/**
+ * Start Game
+ */
+class PrismStampedeGame {
+  start() {
+    menu();
+    draw();
+    requestAnimationFrame(loop);
+  }
+}
+
+const game = new PrismStampedeGame();
+game.start();
+</script>
+  </body>
+</html>

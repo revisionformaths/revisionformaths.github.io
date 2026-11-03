@@ -1,0 +1,843 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SUGARWIND — one wing, one board</title><style>
+:root{--s:Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;
+--g:linear-gradient(160deg,#ffd0e8,#ff6fb2 42%,#a03bd6);--b:1px solid rgba(255,170,220,.3)}
+html,body{margin:0;height:100%;background:#2a1b33;overflow:hidden;touch-action:none;
+font-family:var(--s);-webkit-user-select:none;user-select:none}
+canvas{position:fixed;inset:0;width:100vw;height:100vh}
+#ui{position:fixed;inset:0;pointer-events:none;color:#fff}
+.pill{border-radius:999px}
+.pill,#m,#nz{background:rgba(52,18,48,.66);backdrop-filter:blur(8px);
+-webkit-backdrop-filter:blur(8px);border:var(--b)}
+#lv,#tm,#mu{position:absolute;top:max(10px,env(safe-area-inset-top));color:#fff0fa;
+font-style:italic;font-variant-numeric:tabular-nums}
+#lv{left:12px;font-size:13px;letter-spacing:1.5px;padding:7px 14px}
+#tm{left:50%;transform:translateX(-50%);font-size:31px;padding:3px 22px;min-width:74px;
+text-align:center;color:#fff}
+#tm.low{color:#ffd06e;border-color:rgba(255,140,60,.6)}
+#mu{right:12px;font-size:17px;padding:5px 14px;pointer-events:auto;cursor:pointer;font-style:normal}
+#nz{position:absolute;left:12px;bottom:max(20px,env(safe-area-inset-bottom));border-radius:999px;
+padding:9px 16px;font-size:14px;letter-spacing:1.5px;font-style:italic;color:#fff6fb;
+background:linear-gradient(160deg,rgba(255,190,110,.5),rgba(190,60,10,.55));
+border-color:rgba(255,220,150,.55);display:none}
+#nz i{font-size:11.5px;opacity:.8}
+#nz.live{border-color:#fff2c9;box-shadow:0 0 22px rgba(255,190,90,.8);animation:bl .5s ease-in-out infinite}
+#pb{position:absolute;top:max(56px,calc(env(safe-area-inset-top) + 48px));left:10%;width:80%;
+height:4px;background:rgba(52,18,48,.5);border-radius:3px}
+#pf{height:100%;width:0;border-radius:3px;
+background:linear-gradient(90deg,#ff5f9e,#ffd166,#8ef2c4,#7ec8ff,#c79bff)}
+#m{position:absolute;left:50%;transform:translateX(-50%);border-radius:18px;
+text-align:center;box-shadow:0 20px 60px rgba(40,0,30,.5);pointer-events:auto}
+#m{top:30%;width:min(88vw,420px);padding:24px 20px 20px}
+#m h1,#card p,#p,#hn,#cx{font-style:italic;color:#ffe3f5;
+text-shadow:0 0 20px rgba(255,110,190,.7),0 2px 4px rgba(40,0,30,.8)}
+#m h1{font-size:34px;letter-spacing:1px;margin:0;font-style:normal;font-weight:600}
+#m .k{font-size:12px;letter-spacing:.3em;opacity:.55;margin:0 0 2px;font-style:normal;font-weight:700}
+#m .cred{font-size:12px;opacity:.62;letter-spacing:.5px;margin:4px 0 6px;font-style:normal}
+#m .ghost{opacity:.6;background:transparent;box-shadow:none}
+#m h1.bad{color:#ffe08a;text-shadow:0 0 20px rgba(255,150,60,.75)}
+#m p{font-size:15px;letter-spacing:1.5px;color:#ffeef8;margin:12px 0 0;line-height:1.85}
+#m .shop{margin-top:16px;padding-top:12px;border-top:var(--b)}
+#m .row{display:flex;justify-content:space-between;align-items:center;
+font-size:13px;letter-spacing:1px;color:#f0cbe4}
+#m .row{gap:10px;margin-top:10px;text-align:left}
+#m .row b{color:#fff;font-size:15px;font-style:italic;
+font-variant-numeric:tabular-nums}
+#m .row button{font:inherit;font-style:italic;cursor:pointer;border-radius:999px;
+border:1px solid rgba(255,170,220,.5);background:rgba(255,110,190,.2);color:#ffe3f5}
+#m .row button{font-size:12.5px;letter-spacing:1.5px;padding:8px 14px;white-space:nowrap}
+#m button.mb{display:block;width:100%;margin-top:14px;padding:13px;font:inherit;
+font-size:15px;font-style:italic;letter-spacing:2.5px;cursor:pointer;border-radius:999px;
+background:transparent;color:#fff6fb;font-style:normal;font-weight:700;
+border:2px solid #fff6fb;pointer-events:auto}
+#m button.mb:hover{background:rgba(255,255,255,.12)}
+.dis{opacity:.3;filter:grayscale(.7);box-shadow:none}
+#card{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+padding:0 12vw;opacity:0;transition:opacity .9s;pointer-events:none;
+background:radial-gradient(ellipse at center,rgba(30,6,28,.62),rgba(30,6,28,.88))}
+#card p{font-size:19px;line-height:1.75;letter-spacing:1px;color:#ffeaf7;margin:0;max-width:520px;
+text-align:center}
+#cx{position:absolute;right:max(20px,env(safe-area-inset-right));
+bottom:max(24px,env(safe-area-inset-bottom));font-size:14px;letter-spacing:2px;
+animation:bl 1.9s ease-in-out infinite}
+@keyframes bl{0%,100%{opacity:.35}50%{opacity:.95}}
+#hn{position:absolute;bottom:14%;left:50%;transform:translateX(-50%);white-space:nowrap;
+font-size:16px;letter-spacing:1.5px;padding:8px 18px;background:rgba(52,18,48,.66);
+border-radius:999px;border:var(--b);opacity:0;transition:opacity .4s}
+#p{position:absolute;top:24%;width:100%;text-align:center;font-size:24px;letter-spacing:3px;
+opacity:0;transition:opacity .15s}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="ui"><div id="lv" class="pill"></div><div id="mu" class="pill">♪</div>
+<div id="tm" class="pill"></div><div id="pb"><div id="pf"></div></div>
+<div id="p"></div><div id="hn"></div><div id="nz"></div>
+<div id="card"><p></p><div id="cx">tap to continue &nbsp;›</div></div>
+<div id="m"></div></div>
+<script>
+"use strict";
+
+// ============================ CONFIG ============================
+// Every tunable lives here. No magic numbers in the systems below.
+const CFG={
+ // run shape
+ LEVELS:12, TIME:60, TRACK:15500, TRACK_GROWTH:1.02,
+ // physics
+ GRAV:900, BREAK:780, VMAX:1600, VMIN:-550,
+ GUST_MAX:2600, GUST_KEY:1800, DRAG_GROUND:.34, DRAG_AIR:.04,
+ // hull
+ HULL:2, IFRAME:1,
+ // gumdrops
+ GUM_BASE:5, GUM_PER_LV:.4, GUM_CAP:20,
+ // economy
+ NITRO_COST:3, BOARD_COST:12, BOARD_HULL:1,
+ NITRO_SPEED:1500, NITRO_HOLD:5,
+ // the blade: only bites at speed, only on the nose
+ BLADE_SPEED:520, BLADE_REACH:30, KILL_TIME:1,
+ // when each threat enters
+ ANT_LV:2, WASP_LV:8, ANT_STREAM_LV:6, SYRUP_LV:10,
+ DBL_TAP:340,
+ // threat density
+ ANT_CAP:6, WASP_CAP:3, SYRUP_CAP:3,
+ ANT_SPAWN_MIN:850, ANT_SPAWN_MAX:1500, ANT_DESPAWN:500,
+ WASP_SPEED:105, WASP_ALT:150, WASP_BOB:42, WASP_GAP_MIN:1700, WASP_GAP_MAX:3100,
+ SYRUP_DRAG:2.6, SYRUP_STUCK_V:90, SYRUP_STUCK_T:1.5, SYRUP_W:170,
+ // presentation
+ LEGEND_LV:12
+};
+
+// ======================= INTERLUDE CARDS ========================
+// One per level, shown on a fade before the round. Edit freely.
+const CARDS=[,
+"The other unicorns can fly. But don't feel sorry for Athena. With her board, she learned to make her one wing a sail.",
+"Something moved in the sugar this morning.",
+"Ants.<br><br>Nobody in Sugarworld had a word for them yet.",
+"Flying unicorns can't see the ants from so far away. Athena does.",
+"The gumdrop fields east of the ridge were half eaten.",
+"They came over the ridge in a line, and the line did not end. Athena stopped counting.",
+"The elders of the Unicorn Pegasi Assembly didn't know what to make of Athena's stories.",
+"Wasps now. The sky had been the one place she felt safe.",
+"Now the Assembly knew something was wrong. No one can ignore wasps.",
+"Syrup pools open where the hives have been, slowing her down.",
+"A message came from the elders. <i>Come home, it isn't safe out there.</i>",
+"The hives thin out toward the canyon.",
+"Then the ridge gave way.<br><br>Into the windless darkness Athena falls. <i>Continued in Unicorn Sugarworld: Looking Up.</i>"];
+const BLADE_CARD="The elders advised caution. Someone else will take care of this problem. Blade fixed, Athena decided she's the someone.";
+
+const cv=document.getElementById("c"),gl=cv.getContext("webgl",{antialias:false});
+const UI={lv:document.getElementById("lv"),tm:document.getElementById("tm"),
+ pf:document.getElementById("pf"),m:document.getElementById("m"),p:document.getElementById("p"),
+ nz:document.getElementById("nz"),card:document.getElementById("card"),
+ cardP:document.querySelector("#card p")};
+
+// ===================== audio · candy kernels =====================
+const AU=(()=>{
+const TAU=Math.PI*2;let C=null,M,cmp,dIn=null,cache={},loopT=0,on=true,booted=false,lastSw=0,worry=0;
+const hzm=m=>440*Math.pow(2,(m-69)/12),kof=(c,sr)=>Math.min(.95,TAU*c/sr);
+function fd(a,sr,s){const n=Math.min(a.length,sr*s|0);for(let i=0;i<n;i++)a[a.length-1-i]*=i/n;return a}
+function mar(f,dur,sr){
+ const len=Math.round(sr*(dur+.55)),o=new Float32Array(len);
+ for(let i=0;i<len;i++){const t=i/sr;
+  o[i]=(Math.sin(TAU*f*t)*Math.exp(-t*6.5)
+      +Math.sin(TAU*f*4*t)*Math.exp(-t*15)*.34
+      +Math.sin(TAU*f*10*t)*Math.exp(-t*42)*.13)*.62*Math.min(1,t/.004)}
+ return fd(o,sr,.06)}
+function bell(f,dur,sr){
+ const len=Math.round(sr*(dur+1.3)),o=new Float32Array(len),
+ P=[[1,1,2.3],[2,.5,3.1],[2.76,.34,4.1],[5.4,.17,6.4],[8.9,.07,9.2]];
+ for(let i=0;i<len;i++){const t=i/sr;let v=0;
+  for(let k=0;k<5;k++)v+=Math.sin(TAU*f*P[k][0]*t)*P[k][1]*Math.exp(-t*P[k][2]);
+  o[i]=v*.30*Math.min(1,t/.003)}
+ return fd(o,sr,.12)}
+function bird(dur,sr){
+ const len=sr*dur|0,o=new Float32Array(len);
+ let t=sr*Math.random()*1.5|0;
+ while(t<len-sr*.9){
+  const n=2+(Math.random()*4|0),f0=1700+Math.random()*1500,amp=.06+Math.random()*.07,up=Math.random()<.6;
+  for(let p=0;p<n;p++){const s0=t+(p*sr*.105|0),pl=sr*.07|0;let ph=0;
+   for(let i=0;i<pl&&s0+i<len;i++){const u=i/pl,w=Math.sin(Math.PI*u);
+    ph+=f0*(1+(up?.55:-.35)*u)/sr;
+    o[s0+i]+=Math.sin(TAU*ph)*w*w*amp}}
+  t+=sr*(1.1+Math.random()*3.4)|0}
+ return fd(o,sr,.5)}
+function flap(sr){
+ const dur=.5,len=sr*dur|0,o=new Float32Array(len);let l1=0,l2=0;
+ for(let i=0;i<len;i++){const t=i/sr,w=Math.random()*2-1;
+  const c=300+1500*Math.pow(Math.sin(Math.PI*Math.min(t/.4,1)),1.5);
+  l1+=(w-l1)*kof(c,sr);l2+=(l1-l2)*kof(c*.5,sr);
+  o[i]=(l1-l2)*4.4*Math.min(t/.04,1)*Math.exp(-Math.max(0,t-.13)*8)
+     +Math.sin(TAU*(95+70*Math.exp(-t*14))*t)*Math.exp(-t*13)*.2}
+ return fd(o,sr,.06)}
+function boing(sr){
+ const len=sr*.34|0,o=new Float32Array(len);let ph=0;
+ for(let i=0;i<len;i++){const t=i/sr;
+  ph+=265*(1+.85*Math.sin(TAU*11.5*t)*Math.exp(-t*4))/sr;
+  o[i]=Math.sin(TAU*ph)*Math.exp(-t*9)*.4}
+ return fd(o,sr,.06)}
+const VOICES={
+ mar:{mk:(f,d,sr)=>mar(f,d,sr),send:.3},
+ bel:{mk:(f,d,sr)=>bell(f,d,sr),send:.5},
+ bd1:{mk:(f,d,sr)=>bird(d,sr),send:.15},
+ flp:{mk:(f,d,sr)=>flap(sr),send:.15},
+ bg0:{mk:(f,d,sr)=>boing(sr),send:.2}
+};
+let bedG=null,bedF=null,base=0,nextT=0;
+function makeBed(){                       // a wind bed that rises with her speed
+ const sr=C.sampleRate,len=sr*2|0,b=C.createBuffer(1,len,sr),d=b.getChannelData(0);
+ let l=0;for(let i=0;i<len;i++){l+=((Math.random()*2-1)-l)*.25;d[i]=l*2.4}
+ const n=sr*.05|0;for(let i=0;i<n;i++){const k=i/n;d[i]=d[i]*k+d[len-n+i]*(1-k)}
+ const src=C.createBufferSource();src.buffer=b;src.loop=true;
+ bedF=C.createBiquadFilter();bedF.type='bandpass';bedF.frequency.value=400;bedF.Q.value=.75;
+ bedG=C.createGain();bedG.gain.value=0;
+ src.connect(bedF);bedF.connect(bedG);bedG.connect(M);src.start()}
+function ensure(){if(C)return;
+ C=new (window.AudioContext||window.webkitAudioContext)();
+ cmp=C.createDynamicsCompressor();cmp.threshold.value=-15;cmp.ratio.value=3.2;
+ M=C.createGain();M.gain.value=.6;M.connect(cmp);cmp.connect(C.destination);
+ dIn=C.createGain();const dl=C.createDelay(2);dl.delayTime.value=.38;
+ const fb=C.createGain();fb.gain.value=.34;const wet=C.createGain();wet.gain.value=.32;
+ const f=C.createBiquadFilter();f.type='lowpass';f.frequency.value=3200;
+ dIn.connect(dl);dl.connect(f);f.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(M);
+ makeBed()}
+function buf(inst,midi,dur){const k=inst+'|'+midi+'|'+dur.toFixed(2);
+ if(cache[k])return cache[k];
+ const a=VOICES[inst].mk(hzm(midi),dur,C.sampleRate);
+ const b=C.createBuffer(1,a.length,C.sampleRate);b.copyToChannel(a,0);
+ return cache[k]=b}
+function play(inst,midi,dur,g,pan,when=0,rate=1){if(!C||!on)return;
+ const src=C.createBufferSource();src.buffer=buf(inst,midi,dur);src.playbackRate.value=rate;
+ const gn=C.createGain();gn.gain.value=g;src.connect(gn);
+ const p=C.createStereoPanner?C.createStereoPanner():null;
+ if(p){p.pan.value=Math.max(-1,Math.min(1,pan));gn.connect(p);p.connect(M)}else gn.connect(M);
+ const sd=VOICES[inst].send;
+ if(sd&&dIn){const sg=C.createGain();sg.gain.value=g*sd;src.connect(sg);sg.connect(dIn)}
+ src.start((base||C.currentTime)+when)}
+const MEL=[
+ [0,0,76,.5],[0,.5,81,.5],[0,1,85,1],[0,2,83,.5],[0,2.5,81,.5],[0,3,78,1],
+ [1,0,80,1],[1,1,83,.5],[1,1.5,80,.5],[1,2,76,2],
+ [2,0,73,.5],[2,.5,76,.5],[2,1,81,1],[2,2,80,.5],[2,2.5,78,.5],[2,3,76,1],
+ [3,0,74,1],[3,1,78,1],[3,2,81,2],
+ [4,0,81,.5],[4,.5,85,.5],[4,1,88,1],[4,2,85,.5],[4,2.5,83,.5],[4,3,81,1],
+ [5,0,83,1],[5,1,80,.5],[5,1.5,83,.5],[5,2,88,2],
+ [6,0,85,.5],[6,.5,83,.5],[6,1,81,1],[6,2,78,.5],[6,2.5,76,.5],[6,3,73,1],
+ [7,0,74,1],[7,1,76,1],[7,2,81,2]];
+function music(){if(!C||!on)return;
+ const BEAT=60/110,BAR=4*BEAT,LOOP=16*BAR;
+ if(nextT<C.currentTime+.06)nextT=C.currentTime+.06;
+ base=nextT;                              // absolute scheduling: no setTimeout drift
+ const N=(i,b,bt,m,dB,g,p)=>play(i,m,dB*BEAT,g,p,b*BAR+bt*BEAT);
+ play('bd1',0,18,.5,-.6,0);play('bd1',0,18,.5,-.6,17.4);
+ play('bd1',1,18,.45,.6,1.1);play('bd1',1,18,.45,.6,18.5);
+ const ROOT=[45,52,worry>0?41:42,50];
+ for(let b=0;b<16;b++){const r=ROOT[b%4];
+  N('mar',b,0,r,1,.26,-.34);N('mar',b,1,r+7,1,.15,-.28);
+  N('mar',b,2,r+12,1,.18,-.34);N('mar',b,3,r+7,1,.13,-.28)}
+ MEL.forEach(([b,bt,m,d])=>{N('mar',b,bt,m,d,.28,.12);N('mar',b+8,bt,m,d,.25,.12)});
+ [[4,0,88],[6,2,85],[12,0,93],[14,2,88],[15,0,81]].forEach(([b,bt,m])=>N('bel',b,bt,m,2,.13,.26));
+ if(worry>0){N('bel',8,0,45,6,.09*worry,0);N('bel',12,0,41,6,.09*worry,0)}
+ base=0;nextT+=LOOP;
+ loopT=setTimeout(music,Math.max(60,(nextT-C.currentTime-.7)*1000))}
+return{
+ boot(){ensure();if(!on)return;C.resume();if(!booted){booted=true;music()}},
+ setWorry(v){worry=v},
+ speed(v,lit){if(!bedG)return;const k=Math.min(Math.max(v,0)/1600,1);
+  bedG.gain.setTargetAtTime(k*k*(lit?.4:.3),C.currentTime,.09);
+  bedF.frequency.setTargetAtTime(260+1600*k,C.currentTime,.12)},
+ flap(p){if(!C||!on)return;const n=performance.now();if(n-lastSw<130)return;lastSw=n;
+  play('flp',0,.5,.08+.40*p,(Math.random()-.5)*.4,0,.9+Math.random()*.25)},
+ bump(sev){play('bg0',0,.4,sev,(Math.random()-.5)*.3)},
+ kill(){play('bg0',0,.4,.5,(Math.random()-.5)*.3,0,2.4);play('mar',88,.4,.14,.2)},
+ nitro(){play('flp',0,.5,.5,0,0,.5);play('mar',81,.8,.2,0)},
+ buy(){play('bel',88,1.4,.2,0);play('bel',95,1.4,.12,.2,.05)},
+ wipeout(){play('bg0',0,1,.9,0,0,.32);play('bg0',0,1,.5,-.2,.12,.5);play('mar',45,1,.3,0,.05)},
+ pickup(){play('bel',93,1.3,.2,.2)},
+ win(){[[0,81],[.13,85],[.27,88],[.42,93]].forEach(([t,m])=>play('mar',m,1,.26,.1,t));
+  play('bel',93,2.4,.2,.15,.5)},
+ toggle(){on=!on;if(!on){clearTimeout(loopT);if(C)C.suspend()}
+  else if(C){C.resume();nextT=0;music()}else if(booted){ensure();music()}
+  return on}};
+})();
+
+// ---------- seeded procedural terrain ----------
+function mul32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+ let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+ return((t^t>>>14)>>>0)/4294967296}}
+let TA=[120,55,200],TF=[.008,.021,.0013],TP=[0,2,1],X0=0,GOAL=0;
+function amp(x){return .35+.65*Math.min(Math.max(x-X0,0)/5000,1)}
+function H(x){const a=amp(x);
+ return a*(TA[0]*Math.sin(x*TF[0]+TP[0])+TA[1]*Math.sin(x*TF[1]+TP[1]))+TA[2]*Math.sin(x*TF[2]+TP[2])}
+function Hp(x){const a=amp(x);
+ return a*(TA[0]*TF[0]*Math.cos(x*TF[0]+TP[0])+TA[1]*TF[1]*Math.cos(x*TF[1]+TP[1]))+TA[2]*TF[2]*Math.cos(x*TF[2]+TP[2])}
+
+// ---------- state ----------
+let level=1,px=0,py=0,vx=0,vy=0,gnd=true,run=false,over=false,won=false,
+clock=CFG.TIME,camX=0,camY=0,tr=[],trT=0,shake=0,popT=0,
+wind=0,brake=0,hull=CFG.HULL,maxHull=CFG.HULL,ifr=0,lastPX=0,lastPT=0,gustV=0,
+crashX=0,crashY=0,crashT=9,winT=9,nitroT=0,syrupT=0,
+gds=[],ants=[],wasps=[],syrup=[],antSeed=null,nextAntX=0,nextWaspX=0,killsRun=0,
+gdRun=0,bank=0,gdLife=0,kills=0,nitros=0,blade=false,
+mode='menu',seenCards={},bladeCard=false,paused=false,legend=false,legendDone=false;
+
+const ST={k:'sugarwind_save',mem:null,
+ load(){try{const v=localStorage.getItem(this.k);return v?JSON.parse(v):this.mem}catch(e){return this.mem}},
+ save(d){this.mem=d;try{localStorage.setItem(this.k,JSON.stringify(d))}catch(e){}},
+ clear(){this.mem=null;try{localStorage.removeItem(this.k)}catch(e){}}};
+function saveGame(){ST.save({lvl:level,gd:gdLife,cash:bank,nit:nitros,bld:blade,k:kills,
+ legend:legendDone,seen:seenCards})}
+
+// ---------- level generation ----------
+function genLevel(lv){
+ const r=mul32(lv*2654435761+88);
+ const jf=()=>.78+.35*r(), jp=()=>r()*6.2832;
+ TF=[.008*jf(),.021*jf(),.0013*jf()];
+ TA=[120*(.75+.35*r()),55*(.75+.35*r()),200*(.75+.35*r())];
+ TP=[jp(),jp(),jp()];
+ const S=TA[0]*TF[0]+TA[1]*TF[1]+TA[2]*TF[2],k=1.32/S;
+ TA=[TA[0]*k,TA[1]*k,TA[2]*k];
+ X0=0;for(let x=100;x<4000;x+=5){if(Hp(x)<-.35&&Hp(x+80)<-.2){X0=x;break}}
+ GOAL=X0+CFG.TRACK*Math.pow(CFG.TRACK_GROWTH,lv-1);
+ const r2=mul32(lv*7919+13),span=GOAL-X0-760;
+ // gumdrops
+ const nb=Math.min(CFG.GUM_CAP,CFG.GUM_BASE+Math.round(lv*CFG.GUM_PER_LV));
+ gds=[];for(let i=0;i<nb;i++){
+  const fx=X0+420+span*(i+.2+.6*r2())/nb;
+  gds.push({x:fx,y:H(fx)+26,g:0});r2();r2()}
+ // ants — placed scouts early, an endless column later
+ ants=[];antSeed=mul32(lv*104729+7);
+ if(lv>=CFG.ANT_LV&&lv<CFG.ANT_STREAM_LV){
+  const ns=Math.min(3,lv-CFG.ANT_LV+1);
+  for(let i=0;i<ns;i++){const hx=X0+(GOAL-X0)*(.3+.3*i+.15*r2());
+   ants.push({hx,x:hx,y:0,t:0,ph:r2()*6,cd:0,lg:0,lvx:0,dir:1,roam:1})}}
+ nextAntX=X0+CFG.ANT_SPAWN_MIN;nextWaspX=X0+CFG.WASP_GAP_MIN;
+ // wasps
+ wasps=[];
+ // syrup pools
+ syrup=[];
+ if(lv>=CFG.SYRUP_LV){
+  const np=Math.min(CFG.SYRUP_CAP,1+(lv-CFG.SYRUP_LV));
+  for(let i=0;i<np;i++)syrup.push({x:X0+(GOAL-X0)*(.25+.28*i+.12*r2()),w:CFG.SYRUP_W});}
+ AU.setWorry(Math.min(Math.max(lv-CFG.ANT_LV,0)/8,1));
+}
+function antDensity(){
+ if(level<CFG.ANT_STREAM_LV)return 0;
+ return Math.min(CFG.ANT_CAP,2+Math.floor((level-CFG.ANT_STREAM_LV)/2));
+}
+function waspDensity(){
+ if(level<CFG.WASP_LV)return 0;
+ return Math.min(CFG.WASP_CAP,1+Math.floor((level-CFG.WASP_LV)/3));
+}
+
+// ---------- hud ----------
+function hudLv(){UI.lv.textContent="LV "+level+" · 🍬 "+gdRun+"/"+gds.length+(killsRun?" · ✕"+killsRun:"")}
+function hudNitro(){
+ UI.nz.style.display=(mode==='play'&&!over&&nitros>0)?"block":"none";
+ UI.nz.innerHTML="NITRO ×"+nitros+" &nbsp;<i>double-tap</i>";
+ UI.nz.className=nitroT>0?"live":""}
+// the HUD only exists while she's actually riding
+function chrome(v){const d=v?"":"none";
+ for(const id of ["lv","tm","mu","pb"]){const e=document.getElementById(id);if(e)e.style.display=d}
+ if(!v)UI.nz.style.display="none"}
+let hintT=0,stillT=0,seen={};const HN0=()=>document.getElementById("hn");
+function hintF(t,d){const h=HN0();h.textContent=t;h.style.opacity=1;hintT=d}
+function hint(k,t,d){if(seen[k])return;seen[k]=1;hintF(t,d)}
+function pop(s,c){UI.p.textContent=s;UI.p.style.color=c||"#ffd9f0";UI.p.style.opacity=1;popT=.9}
+function pct(){return Math.max(0,((px-X0)/(GOAL-X0)*100))|0}
+
+// ---------- menus, shop, cards ----------
+document.getElementById("mu").addEventListener("pointerdown",e=>{
+ e.stopPropagation();e.preventDefault();AU.boot();
+ document.getElementById("mu").textContent=AU.toggle()?"♪":"♪̸"});
+let btnLock=0;   // one tap, one purchase — some touch stacks fire pointerdown twice
+function btn(id,fn){const b=document.getElementById(id);if(!b)return;
+ b.addEventListener("pointerdown",e=>{e.stopPropagation();e.preventDefault();
+  const t=performance.now();if(t-btnLock<320)return;btnLock=t;fn()})}
+function showMenu(){mode='menu';run=false;over=false;legend=false;chrome(false);
+ UI.p.style.opacity=0;HN0().style.opacity=0;
+ const sv=ST.load();
+ UI.m.innerHTML='<p class="k">UNICORN SUGARWORLD</p><h1>Sugarwind</h1><p class="cred">Made by Jesse Rogers for JS13kGames</p>'+
+  '<button class="mb" id="bnew">Begin</button>'+
+  (sv?'<button class="mb ghost" id="bload">Resume · level '+sv.lvl+'</button>':'<button class="mb dis" id="bload" style="display:none"></button>');
+ UI.m.style.display="";hudNitro();
+ btn("bnew",()=>{ST.clear();seen={};seenCards={};level=1;gdLife=0;bank=0;nitros=0;blade=false;
+  kills=0;legendDone=false;beginLevel()});
+ btn("bload",()=>{const v=ST.load();if(!v)return;
+  level=v.lvl;gdLife=v.gd||0;bank=v.cash||0;nitros=v.nit||0;blade=!!v.bld;kills=v.k||0;
+  legendDone=!!v.legend;seenCards=v.seen||{};beginLevel()});
+}
+function beginLevel(){AU.boot();
+ const txt=bladeCard?BLADE_CARD:(seenCards[level]?0:CARDS[level]);
+ if(txt){
+  if(bladeCard)bladeCard=false;else seenCards[level]=1;
+  mode='card';run=false;over=false;
+  chrome(false);UI.m.style.display="none";UI.card.style.opacity=1;UI.cardP.innerHTML=txt;
+  return}
+ startPlay()}
+function startPlay(){UI.card.style.opacity=0;mode='play';run=true;chrome(true);reset()}
+function showEnding(){mode='end';run=false;over=true;legend=true;chrome(false);
+ UI.m.style.display="none";UI.cardP.innerHTML=CARDS[CFG.LEGEND_LV+1];UI.card.style.opacity=1;
+ saveGame()}
+function shopRows(){
+ const canN=bank>=CFG.NITRO_COST,canB=!blade&&bank>=CFG.BOARD_COST;
+ let h='<div class="shop"><div class="row"><span>🍬 '+bank+' in the pack</span></div>'+
+  '<div class="row"><span>NITRO BURN<br><i style="opacity:.6">'+CFG.NITRO_COST+' gumdrops · double-tap to burn</i></span>'+
+  '<button id="bn" class="'+(canN?'':'dis')+'">BUY ×1</button></div>';
+ h+= blade
+  ? '<div class="row"><span>BLADE BOARD<br><i style="opacity:.6">fitted</i></span><b>✔</b></div>'
+  : '<div class="row"><span>BLADE BOARD<br><i style="opacity:.6">'+CFG.BOARD_COST+' gumdrops</i></span>'+
+    '<button id="bb" class="'+(canB?'':'dis')+'">FIT IT</button></div>';
+ return h+'</div>'}
+function wireShop(){
+ btn("bn",()=>{if(bank<CFG.NITRO_COST)return;bank-=CFG.NITRO_COST;nitros++;AU.buy();saveGame();
+  refreshCard();seen.n=0});
+ btn("bb",()=>{if(blade||bank<CFG.BOARD_COST)return;bank-=CFG.BOARD_COST;blade=true;maxHull=CFG.HULL+CFG.BOARD_HULL;
+  bladeCard=true;AU.buy();saveGame();refreshCard()});
+ btn("bgo",()=>{level++;saveGame();beginLevel()})}
+let cardTitle="",cardSub="",cardBad=false,cardShop=false;
+function refreshCard(){
+ UI.m.innerHTML="<h1 class='"+(cardBad?"bad":"")+"'>"+cardTitle+"</h1><p>"+cardSub+"</p>"+
+  (cardShop?shopRows()+'<button class="mb" id="bgo">RIDE ON</button>'
+           :"<p>— tap to retry —</p>");
+ UI.m.style.display="";if(cardShop)wireShop()}
+function endRun(title,sub,bad,shop){over=true;run=false;
+ cardTitle=title;cardSub=sub;cardBad=bad;cardShop=!!shop;refreshCard();hudNitro();saveGame()}
+
+// ---------- round setup ----------
+function reset(){
+ genLevel(level);
+ if(nitros>0&&!seen.n){seen.n=1;setTimeout(nitroTip,700)}
+ px=X0;py=H(px);vx=0;vy=0;gnd=true;clock=CFG.TIME;
+ over=false;won=false;wind=0;brake=0;
+ maxHull=CFG.HULL+(blade?CFG.BOARD_HULL:0);hull=maxHull;ifr=0;
+ nitroT=0;syrupT=0;gdRun=0;killsRun=0;
+ tr=[];for(let i=0;i<18;i++)tr.push(px,py);
+ crashT=9;winT=9;shake=0;run=true;
+ hudLv();hudNitro();UI.m.style.display="none"}
+
+// ---------- input ----------
+function fireNitro(){
+ if(mode!=='play'||over||paused||nitros<=0||nitroT>0)return;
+ nitros--;nitroT=CFG.NITRO_HOLD;wind=Math.max(wind,CFG.NITRO_SPEED);gustV=1;
+ AU.nitro();pop("NITRO — NOTHING TOUCHES HER","#ffcf7a");hudNitro();saveGame()}
+function nitroTip(){hintF('double-tap to burn a nitro',5)}
+let tapT=0,tapX=0;
+function down(e){e.preventDefault();if(paused)return;
+ if(mode==='menu')return;
+ const nt=performance.now();
+ if(mode==='play'&&!over&&nt-tapT<CFG.DBL_TAP&&Math.abs(e.clientX-tapX)<50){tapT=0;fireNitro();return}
+ tapT=nt;tapX=e.clientX;
+ // always re-anchor the swipe tracker: a stale lastPT makes the next
+ // pointermove compute a huge dt, which reads as no gust at all
+ lastPX=e.clientX;lastPT=performance.now();
+ if(mode==='card'){AU.boot();startPlay();return}
+ AU.boot();
+ if(over){
+  if(legend){legend=false;showMenu();return}
+  if(!cardShop)reset()}}
+function move(e){if(!run||over||paused)return;
+ const t=performance.now(),dt=(t-lastPT)/1000;
+ if(dt<=0)return;
+ const fv=(e.clientX-lastPX)/innerWidth/dt;
+ lastPX=e.clientX;lastPT=t;
+ if(fv>0){const w=Math.min(fv*1050,CFG.GUST_MAX);
+  wind=Math.max(wind,w);gustV=Math.min(1,w/1400);AU.flap(w/CFG.GUST_MAX)}
+ else if(fv<-.4){brake=Math.min(1,-fv*.55);gustV=-brake*.8}}
+let kR=false,kL=false;
+addEventListener("keydown",e=>{
+ if(e.key==="ArrowRight"||e.key==="d")kR=true;
+ else if(e.key==="ArrowLeft"||e.key==="a")kL=true;
+ else if(e.key==="Shift"&&!e.repeat)fireNitro();
+ else if((e.key===" "||e.key==="Enter")&&!e.repeat&&!paused){
+  AU.boot();
+  if(mode==='card'){startPlay();return}
+  if(mode==='play'&&over){
+   if(legend){legend=false;showMenu();return}
+   if(cardShop){level++;saveGame();beginLevel()}else reset()}}
+ if(!e.repeat&&(kR||kL))AU.boot()});
+addEventListener("keyup",e=>{
+ if(e.key==="ArrowRight"||e.key==="d")kR=false;
+ else if(e.key==="ArrowLeft"||e.key==="a")kL=false});
+addEventListener("pointerdown",down);
+addEventListener("pointermove",move);
+
+// ---------- damage ----------
+function hullHit(what){
+ if(ifr>0)return;
+ hull--;ifr=CFG.IFRAME;shake=12;
+ if(hull<=0){
+  AU.wipeout();crashX=px;crashY=py;crashT=0;shake=16;
+  endRun("WIPEOUT",what+" at "+pct()+"%",true,false);return}
+ AU.bump(.8);pop("OUCH — one more and you're jam","#ffb27a");
+ }
+
+// ---------- physics ----------
+function step(dt){
+ if(!run||over)return;
+ clock-=dt;
+ if(level===1&&vx<150)hint('s','spread your wing',5);
+ if(wind<40&&!kR){stillT+=dt;if(stillT>2){stillT=-9;hintF('swipe right or D to gust',3)}}else stillT=0;
+ if(clock<=0){clock=0;endRun("OUT OF TIME","the minute melted at "+pct()+"%",true,false);return}
+ if(kR){wind=Math.max(wind,CFG.GUST_KEY);gustV=Math.max(gustV,.55)}
+ if(kL)brake=Math.max(brake,.75);
+ if(wind>0&&wind>vx){vx+=(wind-vx)*3*dt}
+ if(brake>0){vx-=vx*3.2*brake*dt;if(!gnd&&vy<0)vy+=Math.min(-vy,520)*brake*dt}
+ if(nitroT>0){wind=Math.max(wind,CFG.NITRO_SPEED);gustV=Math.max(gustV,.85)}
+ wind*=Math.exp(-2.2*dt);brake*=Math.exp(-4*dt);gustV*=Math.exp(-3*dt);
+ ifr-=dt;
+ if(nitroT>0){nitroT-=dt;if(nitroT<=0){nitroT=0;pop("burned out","#ffd9f0");hudNitro()}}
+ if(gnd){
+  const s1=Hp(px);
+  px+=vx*dt;
+  const s2=Hp(px);
+  vx+=-s2*CFG.GRAV/(1+s2*s2)*dt;vx-=vx*CFG.DRAG_GROUND*dt;
+  // syrup: the thing that takes your speed, and with it your blade
+  let inSyrup=false;
+  if(nitroT<=0)for(const s of syrup)if(Math.abs(px-s.x)<s.w)inSyrup=true;
+  if(inSyrup){
+   vx-=vx*CFG.SYRUP_DRAG*dt;
+   hint('y','gun it or you sink',4);
+   if(vx<CFG.SYRUP_STUCK_V){syrupT+=dt;
+    if(syrupT>CFG.SYRUP_STUCK_T){AU.wipeout();crashX=px;crashY=py;crashT=0;shake=14;
+     endRun("STUCK","the syrup got her at "+pct()+"%",true,false);return}}
+   else syrupT=0;
+  }else syrupT=0;
+  vx=Math.max(CFG.VMIN,Math.min(CFG.VMAX,vx));
+  py=H(px);vy=vx*s2;
+  if(vx>0&&(s2-s1)*vx/dt<-CFG.GRAV)gnd=false;
+ }else{
+  hint('a','land along the slope',4);
+  vy=Math.max(vy-CFG.GRAV*dt,-680);vx-=vx*CFG.DRAG_AIR*dt;px+=vx*dt;py+=vy*dt;
+  const g=H(px);
+  if(py<=g){
+   const s=Hp(px),L=Math.hypot(1,s),tx=1/L,ty=s/L,nx=-s/L,ny=1/L;
+   const vn=vx*nx+vy*ny;
+   const sp0=Math.hypot(vx,vy),q0=(vx*tx+vy*ty)/sp0;
+   const sev=-vn*(1.05-Math.max(q0,0));
+   if(sev>CFG.BREAK&&ifr<=0&&nitroT<=0){
+    const dead=hull<=1;
+    hullHit("she came down hard");
+    if(dead)return;
+    vx*=.35;vy=0;py=g;gnd=true;trT=0;
+   }else if(sev>CFG.BREAK*.65&&ifr<=0){AU.bump(.3);pop("OOF","#ffd98a");shake=8}
+   const sp=Math.max(Math.hypot(vx,vy),1e-4),q=(vx*tx+vy*ty)/sp;
+   let ns=(vx*tx+vy*ty)*(.55+.45*Math.max(q,0));
+   if(q>.985&&vy<-60){ns*=1.12;pop("SWEET!","#9ff2d8");shake=3}
+   vx=Math.max(CFG.VMIN,Math.min(CFG.VMAX,tx*ns));vy=vx*s;py=g;gnd=true}
+ }
+ // gumdrops
+ for(const b of gds)if(!b.g&&Math.abs(px-b.x)<30&&Math.abs(py-b.y)<36){
+  b.g=1;gdRun++;AU.pickup();hudLv()}   // banked only if she finishes the round
+ // ants: spawn the endless column ahead, retire the ones behind
+ const dens=antDensity();
+ if(dens>0){
+  while(ants.length<dens&&nextAntX<px+CFG.ANT_SPAWN_MAX*1.6){
+   const hx=Math.max(nextAntX,px+CFG.ANT_SPAWN_MIN);
+   ants.push({hx,x:hx,y:0,t:0,ph:antSeed()*6,cd:0,lg:0,lvx:0,dir:1,roam:0});
+   nextAntX=hx+CFG.ANT_SPAWN_MIN+antSeed()*(CFG.ANT_SPAWN_MAX-CFG.ANT_SPAWN_MIN)}}
+ for(let i=ants.length-1;i>=0;i--){
+  const c=ants[i];
+  if(c.x<px-CFG.ANT_DESPAWN){ants.splice(i,1);continue}
+  if(px>c.x-900&&px<c.x)hint('c','hit ants fast or not at all',4);
+  c.t+=dt;
+  if(c.lg>0){c.lg-=dt;c.x+=c.lvx*dt}
+  else{
+   if(c.roam)c.x=c.hx+85*Math.sin(c.t*.5+c.ph);
+   else c.x-=28*dt;                       // the column marches toward Sugarworld
+   if(c.cd>0)c.cd-=dt;
+   else if(Math.abs(px-c.x)<165&&py-H(c.x)<135){c.lg=.45;c.cd=1.9;c.lvx=(px>c.x?1:-1)*520;AU.bump(.25)}}
+  c.y=H(c.x)+10;c.dir=px>=c.x?1:-1;
+  if(Math.abs(px-c.x)<28&&Math.abs(py-c.y)<26){
+   const fast=vx>CFG.BLADE_SPEED, nose=c.x>px-8&&c.x<px+CFG.BLADE_REACH;
+   if(nitroT>0||(blade&&fast&&nose)){
+    ants.splice(i,1);kills++;killsRun++;clock+=CFG.KILL_TIME;AU.kill();
+    pop("+"+CFG.KILL_TIME+"s","#9ff2d8");shake=4;hudLv()}
+   else{hullHit(!blade?"an ant caught her":(fast?"an ant clipped her from the side":"an ant caught her slow"));if(over)return}}}
+ // wasps: they own the sky she can't reach
+ const wd=waspDensity();
+ while(wasps.length<wd&&nextWaspX<px+CFG.WASP_GAP_MAX){
+  const wx=Math.max(nextWaspX,px+CFG.WASP_GAP_MIN);
+  wasps.push({x:wx,y:H(wx)+CFG.WASP_ALT,ph:antSeed()*6});
+  nextWaspX=wx+CFG.WASP_GAP_MIN+antSeed()*(CFG.WASP_GAP_MAX-CFG.WASP_GAP_MIN)}
+ for(let i=wasps.length-1;i>=0;i--){
+  const s=wasps[i];
+  if(s.x<px-CFG.ANT_DESPAWN){wasps.splice(i,1);continue}
+  s.x-=CFG.WASP_SPEED*dt;s.ph+=dt;
+  s.y=H(s.x)+CFG.WASP_ALT+Math.sin(s.ph*2.1)*CFG.WASP_BOB;
+  if(Math.abs(px-s.x)<22&&Math.abs(py-s.y)<20){
+   wasps.splice(i,1);
+   if(nitroT>0){kills++;killsRun++;clock+=CFG.KILL_TIME;AU.kill();pop("+"+CFG.KILL_TIME+"s","#9ff2d8");hudLv()}
+   else{hullHit("a wasp got her");if(over)return}}}
+ // the beacon
+ if(px>=GOAL){won=true;winT=0;AU.win();
+  bank+=gdRun;gdLife+=gdRun;                       // she keeps what she carried home
+  if(level>=CFG.LEGEND_LV){legendDone=true;showEnding();return}
+  endRun("LEVEL "+level+" CLEAR",clock.toFixed(1)+"s left · 🍬 "+gdRun+"/"+gds.length+" banked"+
+   (killsRun?" · ✕ "+killsRun:""),false,true);
+  return}
+ // trail & hud
+ trT+=dt;if(trT>.028){trT=0;tr.push(px,py);if(tr.length>36)tr.splice(0,2)}
+ if(popT>0){popT-=dt;if(popT<=0)UI.p.style.opacity=0}
+ UI.tm.textContent=clock<10?clock.toFixed(1):Math.ceil(clock);
+ UI.tm.className=(clock<10?"low ":"")+"pill";
+ UI.pf.style.width=Math.max(0,Math.min((px-X0)/(GOAL-X0)*100,100))+"%";
+}
+
+// ---------- shader ----------
+const VS="attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+const FS=`precision highp float;
+uniform vec2 R;uniform float T,DAY,GUST,URG,DEAD,WIN,HUL,BUG,BLD,NIT;
+uniform vec3 CAM;uniform vec2 P,V,CR;uniform float GX;
+uniform vec2 TR[18];uniform vec3 TAu,TFu,TPu;uniform float XO;
+uniform vec2 GD[20];uniform float GDN;
+uniform vec4 AN[6];uniform float ANN;
+uniform vec3 WS[3];uniform float WSN;
+uniform vec2 SY[3];uniform float SYN;
+float amp(float x){return .35+.65*min(max(x-XO,0.)/5000.,1.);}
+float H(float x){float a=amp(x);
+ return a*(TAu.x*sin(x*TFu.x+TPu.x)+TAu.y*sin(x*TFu.y+TPu.y))+TAu.z*sin(x*TFu.z+TPu.z);}
+float hs(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+float no(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+ return mix(mix(hs(i),hs(i+vec2(1,0)),f.x),mix(hs(i+vec2(0,1)),hs(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*no(p);p*=2.03;a*=.5;}return v;}
+float seg(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;
+ float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-4),0.,1.);return length(pa-ba*h);}
+vec3 pal(float t){return .5+.5*cos(6.2832*(t+vec3(0.,.33,.67)));}
+void main(){
+ vec2 uv=(gl_FragCoord.xy-.5*R)/R.y;
+ vec2 w=vec2(CAM.x,CAM.y)+uv*CAM.z;
+ float d2=DAY*6.2832;
+ float dusk=max(-cos(d2),0.),nite=max(-sin(d2),0.);
+ vec3 skT=vec3(.50,.60,.90)+dusk*vec3(-.14,-.36,-.36)+nite*vec3(-.38,-.52,-.64);
+ vec3 skB=vec3(1.,.90,.82)+dusk*vec3(0.,-.24,-.06)+nite*vec3(-.60,-.64,-.34);
+ float sy=clamp(uv.y+.5,0.,1.);
+ vec3 col=mix(skB,skT,sy);
+ vec2 mp=uv-vec2(.34-CAM.x*4e-6,.30);
+ float mr=length(mp);
+ float moon=smoothstep(.34,.335,mr);
+ col=mix(col,vec3(.99,.95,.90),moon*.88*(1.-nite*.25));
+ // parallax sugar dunes
+ for(int i=1;i<=3;i++){
+  float f=float(i),p=1./(f*1.6);
+  float ry=.18-.13*f, fog=.34-.09*f;
+  float ridge=smoothstep(.004,-.004,uv.y-(ry+H(w.x*p*1.7)*p*.0011));
+  vec3 dune=mix(vec3(1.,.74,.87),vec3(1.,.90,.80),.45-.12*f);
+  col=mix(col,mix(dune,skB,fog),ridge*.92);
+ }
+ // foreground dune
+ float g=H(w.x);
+ float sd=w.y-g;
+ float ground=smoothstep(1.5,-1.5,sd);
+ float depth=clamp(-sd/(CAM.z*.9),0.,1.);
+ vec3 tc=mix(vec3(1.,.66,.84),vec3(.42,.13,.34),depth);
+ tc+=smoothstep(6.,0.,abs(sd))*vec3(1.,.97,.99)*.55;
+ tc+=step(.9972,hs(floor(w*.55)+floor(T*7.)))*(1.-depth)*1.1;
+ col=mix(col,tc,ground);
+ // syrup pools
+ for(int i=0;i<3;i++){if(float(i)>=SYN)break;
+  float e=smoothstep(SY[i].y,SY[i].y*.7,abs(w.x-SY[i].x));
+  float top=g+6.*e;
+  col=mix(col,vec3(.78,.38,.10),smoothstep(1.5,-1.5,w.y-top)*step(g-16.,w.y)*e*.88);
+  }
+ // finish rainbow
+ float bd=abs(w.x-GX);
+ float beam=exp(-bd*bd*4e-4)*(.55+.25*sin(T*3.+w.y*.02));
+ col+=pal(w.y*.0016+T*.15)*beam*step(g-40.,w.y);
+ // gumdrops
+ for(int i=0;i<20;i++){if(float(i)>=GDN)break;
+  if(abs(w.x-GD[i].x)>34.||abs(w.y-GD[i].y)>34.)continue;
+  vec2 gq=w-GD[i];
+  vec3 gc=pal(float(i)*.17+.1);
+  float dome=max(length((gq-vec2(0.,-2.))*vec2(1.,1.2))-9.5,-gq.y-9.);
+  col=mix(col,gc,smoothstep(1.4,-1.,dome));
+  col+=vec3(1.)*exp(-length(gq-vec2(-3.,4.))*.55)*.55;
+  col+=gc*exp(-max(dome,0.)*.13)*(.7+.3*sin(T*3.1+float(i)*2.3))*.55;}
+ // ants
+ for(int i=0;i<6;i++){if(float(i)>=ANN)break;
+  vec4 an=AN[i];
+  if(abs(w.x-an.x)>46.||abs(w.y-an.y)>46.)continue;
+  vec2 q=(w-an.xy)*vec2(an.z,1.);
+  float wig=sin(T*9.+an.x*.05)*1.6;
+  float hd=length(q-vec2(10.,6.5))-3.2;
+  float thx=length((q-vec2(2.,6.))*vec2(1.,1.12))-3.4;
+  float abd=length((q-vec2(-8.,7.))*vec2(.86,1.))-5.2;
+  float legs=min(min(seg(q,vec2(0.,4.),vec2(-7.+wig,-1.)),seg(q,vec2(2.,4.),vec2(3.-wig,-1.))),
+                 seg(q,vec2(4.,4.),vec2(10.+wig,-1.)))-1.;
+  float antn=min(seg(q,vec2(11.,8.5),vec2(17.,14.+wig)),seg(q,vec2(11.,8.5),vec2(15.,15.-wig)))-.8;
+  float ad=min(min(min(hd,thx),min(abd,antn)),legs);
+  col=mix(col,vec3(.30,.06,.09),smoothstep(1.,-.5,ad));
+  col+=vec3(1.,.3,.2)*exp(-length(q-vec2(11.5,7.5))*.7)*(.5+.5*an.w);
+  col+=vec3(1.,.2,.15)*exp(-length(q)*.045)*(.2+.3*an.w);}
+ // wasps
+ for(int i=0;i<3;i++){if(float(i)>=WSN)break;
+  if(abs(w.x-WS[i].x)>34.||abs(w.y-WS[i].y)>34.)continue;
+  vec2 q=w-WS[i].xy;
+  float body=length((q-vec2(-1.,0.))*vec2(.72,1.))-4.6;
+  float hd=length(q-vec2(4.5,1.))-2.7;
+  float st=seg(q,vec2(-5.5,-.5),vec2(-10.,-3.5))-.7;
+  float d=min(min(body,hd),st);
+  float m=smoothstep(1.,-.5,d);
+  col=mix(col,vec3(.16,.10,.04),m);
+  col=mix(col,vec3(1.,.78,.12),m*step(.55,fract(q.x*.20+.3))*step(body,1.));
+  col=mix(col,vec3(.92,.96,1.),smoothstep(1.,-1.5,length((q-vec2(-1.,5.5+2.*sin(T*38.+WS[i].z)))*vec2(.55,1.5))-4.2)*.35);
+  }
+ // rainbow trail
+ for(int i=0;i<17;i++){float k=float(i)/17.;
+  float td=seg(w,TR[i],TR[i+1]);
+  float wd=mix(2.5,7.5,k)*(1.+NIT*.35);
+  float a=smoothstep(wd,wd*.25,td)*(.2+.8*k);
+  col=mix(col,pal(clamp(td/wd,0.,1.)*.62+.04+NIT*.3),a*.9);}
+ // Athena
+ if(DEAD>1.5){
+  vec2 q=w-P;
+  float an=-atan(V.y,max(V.x,60.));
+  float ca=cos(an),sa=sin(an);
+  q=mat2(ca,-sa,sa,ca)*q;
+  vec3 PLM=vec3(.27,.09,.28);
+  vec2 wr=vec2(1.5,11.8);
+  float wa=-.05-GUST*.40,cw=cos(wa),sw=sin(wa);
+  mat2 Wm=mat2(cw,-sw,sw,cw);
+  vec2 wt=wr+Wm*vec2(-22.5,13.2);
+  vec2 wb=vec2(-1.5,8.2);
+  vec2 wf1=wr+Wm*vec2(-21.,6.2);
+  vec2 wf2=wr+Wm*vec2(-15.5,2.6);
+  float g1=(wt.x-wr.x)*(q.y-wr.y)-(wt.y-wr.y)*(q.x-wr.x);
+  float g2=(wb.x-wt.x)*(q.y-wt.y)-(wb.y-wt.y)*(q.x-wt.x);
+  float g3=(wr.x-wb.x)*(q.y-wb.y)-(wr.y-wb.y)*(q.x-wb.x);
+  float ins=min(step(0.,min(min(g1,g2),g3))+step(0.,-max(max(g1,g2),g3)),1.);
+  float dwg=min(seg(q,wr,wt),min(seg(q,wt,wb),seg(q,wb,wr)));
+  float wing=mix(dwg,-dwg,ins)-1.3;
+  wing=min(wing,min(seg(q,wr+vec2(-2.,0.),wf1)-2.,seg(q,wr+vec2(-2.,-1.),wf2)-1.8));
+  float gt=1.+GUST*.35;
+  float tail=min(seg(q,vec2(-10.,7.6),vec2(-17.5*gt,5.6))-2.3,
+                 seg(q,vec2(-11.,6.2),vec2(-19.*gt,1.8))-2.);
+  float legs=min(min(seg(q,vec2(-8.,7.2),vec2(-8.2,.9)),seg(q,vec2(-4.1,6.7),vec2(-4.3,.6))),
+                 min(seg(q,vec2(2.7,7.),vec2(3.1,.6)),seg(q,vec2(6.4,7.9),vec2(6.7,1.))))-1.5;
+  vec2 bq=q-vec2(-2.4,9.4);
+  bq=mat2(.993,.122,-.122,.993)*bq;
+  float body=length(bq*vec2(1.,1.46))-8.9;
+  float neck=seg(q,vec2(4.6,10.4),vec2(10.4,19.6))-2.9;
+  float head=min(min(seg(q,vec2(7.6,20.6),vec2(14.,20.8))-3.3,seg(q,vec2(14.,20.8),vec2(18.4,20.4))-2.5),
+                 seg(q,vec2(10.2,23.4),vec2(9.6,27.))-1.);
+  float horn=min(seg(q,vec2(16.8,24.2),vec2(20.5,28.))-1.5,seg(q,vec2(20.5,28.),vec2(24.2,31.9))-.75);
+  float mane=min(min(seg(q,vec2(2.6,11.4),vec2(8.4,20.6))-2.,seg(q,vec2(8.4,20.6),vec2(10.8,24.4))-1.8),
+                 seg(q,vec2(11.6,23.8),vec2(14.2,23.2))-1.2);
+  float brd=min(length((q-vec2(-.5,0.))*vec2(.135,1.))-2.6,seg(q,vec2(-15.5,-1.6),vec2(-16.6,-5.2))-1.2);
+  float blade=seg(q,vec2(19.,.6),vec2(26.5,-.8))-1.15;
+  if(BLD>.5)brd=min(brd,blade);
+  float all=min(min(min(wing,tail),min(legs,body)),
+                min(min(neck,head),min(horn,min(mane,brd))));
+  col=mix(col,PLM,smoothstep(2.6,1.3,all));
+  vec3 WHT=mix(vec3(1.),vec3(.86,.82,.95),clamp((10.-q.y)/14.,0.,1.));
+  vec3 BLU=mix(vec3(.06,.22,.78),vec3(.66,.93,1.),clamp((q.y-4.)/22.,0.,1.));
+  col=mix(col,BLU,smoothstep(1.1,-.3,tail));
+  col=mix(col,mix(vec3(1.),vec3(.81,.89,1.),clamp((q.y-10.)/16.,0.,1.)),smoothstep(1.1,-.3,wing));
+  float le=abs(seg(q,wr,wt)-1.6);
+  col+=pal(q.y*.03+T*.2)*smoothstep(2.2,0.,le)*(.35+GUST*.65)*step(wing,1.5);
+  col=mix(col,WHT,smoothstep(1.1,-.3,min(min(body,neck),min(head,legs))));
+  col=mix(col,mix(vec3(1.,.73,.18),vec3(1.,.98,.91),clamp((q.y-24.)/9.,0.,1.)),smoothstep(1.,-.3,horn));
+  col+=vec3(1.,.9,.5)*exp(-max(horn,0.)*.3)*.4;
+  col=mix(col,BLU,smoothstep(1.1,-.3,mane));
+  col=mix(col,vec3(.23,.07,.21),smoothstep(.8,.1,length(q-vec2(14.4,20.8))-.85));
+  col=mix(col,vec3(1.),smoothstep(.5,.1,length(q-vec2(14.7,21.2))-.32));
+  col=mix(col,mix(vec3(1.,.31,.59),vec3(1.,.82,.4),clamp((q.x+20.)/40.,0.,1.)),smoothstep(1.1,-.3,brd));
+  if(BLD>.5){
+   col=mix(col,vec3(.80,.88,.96),smoothstep(.9,-.3,blade));
+   col+=vec3(1.)*exp(-max(blade,0.)*.55)*(.35+.45*step(600.,V.x));}
+  if(HUL<1.5)col+=vec3(1.,.3,.3)*exp(-max(brd,0.)*.3)*.4*(.6+.4*sin(T*6.));
+  if(NIT>0.){
+   col=mix(col,pal(T*1.6+q.y*.02),smoothstep(1.1,-.3,all)*NIT*.55);
+   col+=pal(T*2.2+q.x*.03)*smoothstep(3.5,1.,all)*NIT*.9;}
+ }
+ // wipeout sprinkles
+ if(DEAD<3.){
+  for(int i=0;i<6;i++){
+   float a=float(i)*1.05;
+   vec2 sp=CR+vec2(cos(a),abs(sin(a)))*DEAD*160.;
+   sp.y-=200.*DEAD*DEAD;
+   col+=pal(float(i)*.24)*exp(-length(w-sp)*.35)*max(1.-DEAD*.6,0.)*2.4;}
+  col+=vec3(1.,.85,.95)*exp(-length(w-CR)*.02)*max(1.-DEAD*2.,0.);}
+ // gust streaks
+ float wl=smoothstep(.975,1.,no(vec2(w.y*.5,w.x*.015-T*11.)));
+ col+=vec3(1.,.95,1.)*wl*(GUST*.4+NIT*.5);
+ col+=vec3(1.,.7,.35)*NIT*.10;
+ col+=pal(T*.3)*max(1.-WIN,0.)*.5;
+ col=mix(col,mix(col,vec3(dot(col,vec3(.33)))*vec3(.95,.9,1.),.5),BUG*.35);
+ col=mix(col,col*vec3(1.15,.82,.6),URG*length(uv)*1.3);
+ col*=1.-.32*length(uv*vec2(.7,1.1));
+ col+=(hs(gl_FragCoord.xy+T)-.5)*.045;
+ gl_FragColor=vec4(col,1.);}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+ if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));return o}
+const pr=gl.createProgram();
+gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(pr);gl.useProgram(pr);
+gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const la=gl.getAttribLocation(pr,"a");gl.enableVertexAttribArray(la);
+gl.vertexAttribPointer(la,2,gl.FLOAT,false,0,0);
+const U={};for(const n of["R","T","DAY","GUST","URG","DEAD","WIN","HUL","BUG","BLD","NIT","CAM","P","V",
+ "CR","GX","TR","TAu","TFu","TPu","XO","GD","GDN","AN","ANN","WS","WSN","SY","SYN"])
+ U[n]=gl.getUniformLocation(pr,n);
+function rs(){const r=Math.min(devicePixelRatio||1,2);
+ cv.width=innerWidth*r;cv.height=innerHeight*r;gl.viewport(0,0,cv.width,cv.height)}
+addEventListener("resize",rs);rs();
+
+// ---------- main loop ----------
+let last=performance.now(),camZ=520;
+const trF=new Float32Array(36),gdF=new Float32Array(40),
+ anF=new Float32Array(24),wsF=new Float32Array(9),syF=new Float32Array(6);
+genLevel(1);px=X0;py=H(px);camX=px;camY=py;
+function frame(now){
+ let dt=Math.min((now-last)/1000,.033);last=now;
+ if(!paused){
+  for(let i=0;i<2;i++)step(dt/2);
+  crashT+=dt;winT+=dt;
+  if(hintT>0){hintT-=dt;if(hintT<=0)HN0().style.opacity=0}}
+ const look=Math.max(-120,Math.min(vx*.28,220));
+ let cx=px+look,cy=py+90,cz=520+Math.min(Math.max(vx,0)*.25,240);
+ if(paused||mode==='card'){cx=px+12;cy=py+26;cz=170}
+ camX+=(cx-camX)*Math.min(1,dt*4);
+ camY+=(cy-camY)*Math.min(1,dt*3);
+ camZ+=(cz-camZ)*Math.min(1,dt*3);
+ if(shake>0){camY+=(Math.random()-.5)*shake;camX+=(Math.random()-.5)*shake;shake*=.86}
+ AU.speed(mode==='play'&&run&&!over?vx:0,nitroT>0);
+ gl.uniform2f(U.R,cv.width,cv.height);
+ gl.uniform1f(U.T,now*.001);
+ gl.uniform1f(U.DAY,((level-1)/CFG.LEVELS*.85+.08)%1);
+ gl.uniform1f(U.GUST,gustV);
+ gl.uniform1f(U.URG,run&&!over&&clock<10?(10-clock)/10:0);
+ gl.uniform1f(U.DEAD,crashT);
+ gl.uniform1f(U.WIN,winT);gl.uniform1f(U.HUL,hull);
+ gl.uniform1f(U.BUG,Math.min(Math.max(level-CFG.ANT_LV,0)/8,1));
+ gl.uniform1f(U.BLD,blade?1:0);
+ gl.uniform1f(U.NIT,Math.max(nitroT,0)/CFG.NITRO_HOLD);
+ gl.uniform3f(U.CAM,camX,camY,camZ);
+ gl.uniform2f(U.P,px,py);
+ gl.uniform2f(U.V,vx,vy);
+ gl.uniform2f(U.CR,crashX,crashY);
+ gl.uniform1f(U.GX,GOAL);
+ gl.uniform3f(U.TAu,TA[0],TA[1],TA[2]);
+ gl.uniform3f(U.TFu,TF[0],TF[1],TF[2]);
+ gl.uniform3f(U.TPu,TP[0],TP[1],TP[2]);
+ gl.uniform1f(U.XO,X0);
+ for(let i=0;i<20;i++){const b=gds[i];gdF[i*2]=(b&&!b.g)?b.x:-1e9;gdF[i*2+1]=(b&&!b.g)?b.y:-1e9}
+ gl.uniform2fv(U.GD,gdF);gl.uniform1f(U.GDN,Math.min(gds.length,20));
+ const na=Math.min(ants.length,CFG.ANT_CAP);
+ for(let i=0;i<CFG.ANT_CAP;i++){const c=ants[i];
+  anF[i*4]=c?c.x:-1e9;anF[i*4+1]=c?c.y:-1e9;anF[i*4+2]=c?c.dir:1;anF[i*4+3]=c&&c.lg>0?1:0}
+ gl.uniform4fv(U.AN,anF);gl.uniform1f(U.ANN,na);
+ const nw=Math.min(wasps.length,CFG.WASP_CAP);
+ for(let i=0;i<CFG.WASP_CAP;i++){const s=wasps[i];
+  wsF[i*3]=s?s.x:-1e9;wsF[i*3+1]=s?s.y:-1e9;wsF[i*3+2]=s?s.ph:0}
+ gl.uniform3fv(U.WS,wsF);gl.uniform1f(U.WSN,nw);
+ const nsy=Math.min(syrup.length,CFG.SYRUP_CAP);
+ for(let i=0;i<CFG.SYRUP_CAP;i++){const s=syrup[i];
+  syF[i*2]=s?s.x:-1e9;syF[i*2+1]=s?s.w:1}
+ gl.uniform2fv(U.SY,syF);gl.uniform1f(U.SYN,nsy);
+ for(let i=0;i<36;i+=2){const h=tr[i]!==undefined;trF[i]=h?tr[i]:px;trF[i+1]=h?tr[i+1]:py}
+ gl.uniform2fv(U.TR,trF);
+ gl.drawArrays(gl.TRIANGLES,0,3);
+ requestAnimationFrame(frame);
+}
+showMenu();
+requestAnimationFrame(frame);
+</script></body></html>

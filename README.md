@@ -1,10 +1,10 @@
 # Classroom
 
-**129 G@M£$ that keep playing when the network does not.** They are plain
-HTML files served from this repository, so there is no embed, no player to
-load and no third party that can refuse a frame — with the wi-fi off, they
-still open. Behind that is a wall of 17,572 streamed publisher titles for when
-the network is fine.
+**Hundreds of G@M£$ that keep playing when the network does not.** They are
+plain HTML files served from this repository, so there is no embed, no player
+to load and no third party that can refuse a frame — with the wi-fi off, they
+still open. Behind that is a wall of 17,572 publisher titles, each of which
+opens on the publisher's own site.
 
 The tab reads **Classroom** with a chalkboard icon, and the page is a plain
 grid of playable titles.
@@ -13,7 +13,8 @@ grid of playable titles.
 
 ## Local HTML G@M£$ and search
 
-The main search includes publisher titles and the **129 local HTML G@M£$**.
+The main search includes publisher titles, the **129 pack files** and every
+imported file.
 Local versions have an **(HTML)** suffix and open the bundled file rather than
 an external publisher. **100% Unblocked** links to `files.html`, whose search
 only filters local G@M£$. Both pages use `assets/js/local-games.js` as their
@@ -307,7 +308,7 @@ the files back.
 - Save titles, and a row of the last eight you opened
 - `#p=<slug>` deep links, `Esc` to close, `/` to search, `` ` `` for a panic exit
 - Tab cloaks (Classroom, Google, Docs), a blank-tab launcher and a quick exit
-- **100% Unblocked** in the header: 129 titles that are plain files,
+- **100% Unblocked** in the header: every title that is a plain file,
   on their own page, with no embed to load — plus filter and Surprise me
 - The player header sizes to its own text (title, stats, source, description, report link) instead of a fixed bar that clipped the title off the top of the screen; the description wraps to three lines and disappears on a window under 520px tall, so the G@M£$ keeps the height
 - Fullscreen for bundled files; every publisher title opens in its own tab,
@@ -334,6 +335,58 @@ analytics integration is the Microsoft Clarity tag in the head of the site
 pages. Nothing in `assets/games/` carries a tag of its own. The optional Hanger 2
 debug editor no longer injects its remote dat.GUI CDN script; normal G@M£$ play
 is unaffected.
+
+## Growing the library
+
+Nobody adds files by hand. `.github/workflows/import-files.yml` runs daily,
+walks the [js13kGames organisation](https://github.com/js13kGames) and turns any
+entry it has not seen into one self-contained file under
+`assets/games/js13k/`. The jam caps every submission at a 13 kB zip, so one
+entry lands at tens of kilobytes and thousands of them fit inside a repo a free
+static host will serve.
+
+**What it does to an entry.** Downloads the repo tarball, prefers
+`.website/game.zip` (the submission exactly as it arrived — plenty of repos
+keep a one-line redirect in `index.html` and the real build in that zip), then
+inlines every script, stylesheet, image, font and sound it references, so the
+result is one file with no siblings. The author's cover image becomes the card.
+
+**What it refuses.** An entry is dropped, not repaired, when the finished file
+would still fetch anything:
+
+- any `src`/`href`/`poster` or CSS `url()` left pointing at a path, a CDN or
+  another site — the file would not work with the wi-fi off;
+- an ES module that imports a sibling, which cannot be flattened into one file;
+- under 1 kB or over 2 MB, or nothing that draws (a redirect stub is not one);
+- a slug already used by another file, or a file it has already imported.
+
+**The budget.** `--budget-mb 750` stops the import when `assets/games/` reaches
+that size, so the site cannot grow past what GitHub Pages will serve (about
+1 GB): the files are about 600 MB today, and the folder is the only thing
+that grows. `--limit` caps how many land in one run and `--max-minutes` caps the wall
+clock, so a scheduled job is bounded even if the backlog is large. Sizes are
+also checked in `npm test`, so a runaway import fails the build instead of the
+deploy.
+
+**Attribution.** Every imported entry records its title, year, author and the
+repo it came from in `data/local-files.json`, and the card says so — `js13k
+2016 · by @someone`. These are other people's work, published by the jam, and
+they are here on that basis. If you are the author of an entry and want it gone,
+open an issue on this repository and it will be removed; nothing else depends on
+any single file.
+
+**Running it yourself** (optional — the schedule does this):
+
+```sh
+python3 scripts/import-js13k.py --dry-run --limit 40   # see what it would add
+python3 scripts/import-js13k.py --limit 400            # add up to 400
+python3 scripts/build-local-list.py                    # rebuild the shared list
+python3 scripts/build-sitemap.py                       # and the sitemap
+```
+
+`data/local-files.json` is the source of truth for the files page.
+`assets/js/local-games.js` is **generated** from it — edit the JSON, or let the
+workflow do it, never the JavaScript.
 
 ## Security
 
@@ -377,12 +430,14 @@ node scripts/csp-hashes.mjs
 sends `<meta name="referrer" content="no-referrer">`, so no publisher learns
 which page sent a click or gets a handle on the opener window.
 
-**What this does not do.** It cannot sandbox the bundled G@M£$ files: they are
-served from this origin, so they share its storage and its service worker, and
-they are third-party code. That is the price of them working offline, and it is
-why they are picked by hand from one pack (see above) rather than mirrored
-wholesale. It also cannot stop a visitor clicking through to a publisher — that
-page is the publisher's, with the publisher's trackers and its own policy.
+**What this does not do.** It cannot sandbox the library's G@M£$ files: they
+are served from this origin, so they share its storage and its service worker,
+and they are third-party code. That is the price of them working offline. The
+129 pack files are hand-picked; everything else is imported automatically (see
+*Growing the library* below), and an imported file has to prove it loads
+nothing but itself before it is kept. It also cannot stop a visitor clicking
+through to a publisher — that page is the publisher's, with the publisher's
+trackers and its own policy.
 
 **Reporting a problem.** Anything in the catalogue can be reported from the
 player or the footer, which opens a GitHub issue with the title and the page
@@ -407,7 +462,7 @@ wall.
 
 What it can and cannot do:
 
-- **It covers** the wall, the files page and all 129 bundled G@M£$, because the
+- **It covers** the wall, the files page and every bundled G@M£$, because the
   service worker controls every page in its scope and sees their subresource
   requests, including the cross-origin ones.
 - **There is nothing left to cover on this site.** 15,972 of the 17,763 titles
@@ -426,7 +481,7 @@ What it can and cannot do:
 
 ## The files that cannot be blocked
 
-`files.html`, reached from **100% Unblocked** in the header, lists 129 titles
+`files.html`, reached from **100% Unblocked** in the header, lists the whole library
 that ship with the site as plain HTML under `assets/games/`. No embed, no
 portal, no third party that can refuse a frame: the page opens a file from its
 own folder, and a filter aimed at a G@M£$ site has nothing to act on.
@@ -527,7 +582,7 @@ new screenshots.
 
 ```
 index.html               the page
-files.html               the 129 titles that are plain files
+files.html               the whole offline library and its search
 404.html                 not-found page
 assets/games/*.html      the G@M£$ themselves, straight from the offline pack
 assets/img/pack/*.jpg    one screenshot per G@M£$, taken by the probe

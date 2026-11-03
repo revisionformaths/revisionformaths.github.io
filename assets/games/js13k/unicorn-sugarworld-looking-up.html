@@ -1,0 +1,813 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Unicorn Sugarworld: Looking Up</title>
+<style>
+html,body{margin:0;height:100%;background:#07060f;overflow:hidden;touch-action:manipulation;
+ -webkit-user-select:none;user-select:none;color:#f1eaff;
+ font-family:Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;
+ justify-content:flex-end}
+/* the speech shares the column with the board, so the two can never overlap:
+   it fills whatever is left above the bottom stack and scrolls only if a very
+   long line meets a very short screen. */
+#top{flex:1;min-height:0;padding:31vh 4vw 2px;display:flex;flex-direction:column;
+ justify-content:flex-end;align-items:center;overflow-y:auto;overscroll-behavior:contain;
+ pointer-events:auto;z-index:2}
+#sp{max-width:540px;text-align:center;font-size:clamp(12.5px,1.75vw,16px);line-height:1.62;
+ padding:12px 18px 14px;border-radius:12px;
+ background:radial-gradient(ellipse at 50% 50%,rgba(5,4,12,.96) 52%,rgba(5,4,12,0) 88%);
+ text-shadow:0 2px 10px #000,0 0 26px rgba(0,0,0,.95)}
+#sp em{color:#ffe9b8;font-style:italic}
+#sp a{color:#cfe7ff;font-style:italic;text-decoration:none}
+#sp.g k:not(.t){animation:kg 1.1s ease-in-out infinite}
+@keyframes kg{0%,100%{background:rgba(255,190,90,.12);box-shadow:0 0 0 0 rgba(255,217,138,.0)}50%{background:rgba(255,190,90,.42);box-shadow:0 0 14px 3px rgba(255,217,138,.55)}}
+#sp s{display:block;font-size:.74em;color:#bfb6dc;text-decoration:none;font-style:italic;
+ letter-spacing:.06em;margin:4px 0}
+k{color:#ffd98a;font-style:normal;cursor:pointer;padding:2px 5px;border-radius:4px;
+ border-bottom:1px solid rgba(255,217,138,.5);background:rgba(255,190,90,.10);
+ text-shadow:0 0 18px rgba(255,190,90,.75);animation:kw 1.9s ease-in-out infinite}
+k.t{color:#d9d2ee;background:none;border:0;padding:0;cursor:default;text-shadow:none;animation:none}
+@keyframes kw{0%,100%{background:rgba(255,190,90,.09)}50%{background:rgba(255,190,90,.26)}}
+#bot{pointer-events:auto;padding:0 2vw max(8px,env(safe-area-inset-bottom));
+ display:flex;flex-direction:column;align-items:center;gap:5px;width:100%;flex:none}
+/* the flow bar: what he is talking about, and how far his mood is from
+   the mood that topic needs. chevrons per channel, exactly as the
+   sugarwright's floor showed its channels. hue is never the only signal. */
+#flow{width:min(620px,96vw);display:flex;align-items:center;gap:9px;padding:6px 11px;
+ border:1px solid #2f2957;border-radius:6px;background:rgba(10,8,22,.72);
+ font-size:clamp(11px,1.7vw,13px);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+#tw{font-size:1.15em;color:#efe3c4;letter-spacing:.02em}
+#tw i{font-style:normal;color:#b9b0da;font-size:.8em;letter-spacing:.16em;
+ text-transform:uppercase;display:block}
+#need{margin-left:auto;display:flex;align-items:center;gap:7px;text-align:right}
+#need u{text-decoration:none;font-size:.82em;letter-spacing:.14em;text-transform:uppercase}
+#chev{display:flex;gap:3px}
+.cv{width:15px;height:19px;position:relative}
+.cv b{position:absolute;left:0;right:0;text-align:center;font-weight:400;font-size:10px;
+ line-height:9px;color:#a9a0cc}
+.cv b.g{color:inherit}
+.cv s{position:absolute;left:0;right:0;bottom:0;text-align:center;text-decoration:none;
+ font-size:8px;letter-spacing:0;color:#a9a0cc}
+#ring{display:flex;gap:4px;margin-left:8px}#ring i{width:9px;height:9px;border-radius:50%;opacity:.45;border:2px solid transparent}#ring i.h{opacity:1;transform:scale(1.5);border-color:#fff}#ring i.n{opacity:1;border-color:#ffd98a;box-shadow:0 0 8px #ffd98a}
+#hand{display:flex;gap:6px;width:min(620px,96vw)}
+.cd{flex:1;min-width:0;padding:7px 5px 6px;font:inherit;text-align:center;cursor:pointer;
+ border:1px solid #342e63;border-radius:6px;background:rgba(13,10,28,.82);color:#e2daf8;
+ transition:.13s;display:flex;flex-direction:column;gap:3px;align-items:center}
+.cd:hover,.cd:focus-visible{border-color:#8f7bc8;color:#fff;outline:none}
+.cd.s{border-color:#ffd98a;background:rgba(40,30,14,.75);color:#ffe9b8}
+.cd em{font-style:normal;font-size:clamp(11px,1.7vw,13px);letter-spacing:.02em}
+.cd b{font-weight:400;font-size:clamp(13px,2vw,16px);font-variant-numeric:tabular-nums}
+.cd s{text-decoration:none;font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+ color:#b9b0da}
+#rail{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;width:min(620px,96vw)}
+.c{font:inherit;font-size:clamp(11px,1.6vw,13px);padding:5px 10px 5px 7px;border-radius:16px;
+ color:#e2daf8;background:rgba(14,11,30,.72);border:1px solid #2f2957;cursor:pointer;
+ display:flex;align-items:center;gap:5px;transition:.13s}
+.c:hover,.c:focus-visible{border-color:#7a6ab0;color:#fff;outline:none}
+.c i{width:9px;height:9px;border-radius:50%;flex:none;
+ border:1px solid rgba(255,255,255,.22)}
+.c.s{border-color:#ffd98a;color:#ffe9b8;background:rgba(40,30,14,.7)}
+.c.p{border-color:#c9b3ff;color:#fff;background:rgba(88,66,150,.85);
+ box-shadow:0 0 13px rgba(160,130,240,.55)}
+.c.d{opacity:.32}
+#tip{font-size:clamp(11.5px,1.6vw,13.5px);font-style:italic;color:#f2d9a6;
+ min-height:2.6em;display:flex;align-items:flex-end;justify-content:center;
+ max-width:520px;line-height:1.35;opacity:0;transition:opacity .45s;text-align:center;
+ text-shadow:0 2px 9px #000,0 0 18px #000}
+#tip.on{opacity:1}
+#day{width:min(620px,96vw);height:5px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+#dayf{height:100%;background:linear-gradient(90deg,#fff6de,#ffd9a0);transition:width .4s}
+.cd i{font-style:normal;font-size:10px;letter-spacing:.1em;color:#b9b0da}
+#hud{position:fixed;left:12px;top:max(11px,env(safe-area-inset-top));font-size:10px;
+ letter-spacing:.26em;text-transform:uppercase;color:#b9b0da;pointer-events:none}
+#hud b{font-weight:400;color:#c9a86a;font-variant-numeric:tabular-nums}
+#mu,#mn,#fold{position:fixed;top:max(9px,env(safe-area-inset-top));pointer-events:auto;
+ cursor:pointer;font-size:14px;color:#b9b0da;padding:6px 9px;background:none;border:0;font:inherit}
+#mu{right:8px}#mn{right:40px}
+#fold{right:74px;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+#fold.a{color:#c9a86a}
+#mn.fl{animation:fl 1.8s ease-out}
+@keyframes fl{0%,72%{color:#ffd98a;text-shadow:0 0 20px rgba(255,190,90,.9)}100%{color:#b9b0da}}
+#lg{position:fixed;inset:0;background:rgba(4,3,10,.94);padding:11vh 8vw;opacity:0;
+ pointer-events:none;transition:opacity .35s;cursor:pointer;overflow:auto}
+#lg.on{opacity:1;pointer-events:auto}
+h2{margin:0 0 14px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;
+ color:#b9b0da;font-weight:400}
+.q{font-size:clamp(13px,2vw,16px);line-height:1.5;padding:8px 0;color:#c4bce0;
+ border-bottom:1px solid #191635;display:flex;align-items:center;gap:9px}
+.q i{width:10px;height:10px;border-radius:50%;flex:none;background:#241f45}
+.q.a{color:#f0e2c0}
+.q a{color:#cfe7ff;font-style:italic;font-size:.9em}
+.q u{text-decoration:none;margin-left:auto;font-size:.72em;letter-spacing:.15em;
+ text-transform:uppercase;color:#b9b0da}
+#lg small,.dz{display:block;margin-top:18px;font-size:10px;letter-spacing:.24em;
+ text-transform:uppercase;color:#a9a0cc}
+#end.w{background:#efe9e2;color:#2a2028}#end.w #eh{color:#2a2028}#end.w #ep{color:#4a3f52}#end.w .cl{color:#2a2028}#end.w #ex{color:#7a6a80}
+#end{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+ flex-direction:column;gap:13px;padding:6vh 7vw;overflow:auto;text-align:center;
+ background:rgba(4,3,10,.88);opacity:0;pointer-events:none;transition:opacity 1.3s}
+#end.on{opacity:1;pointer-events:auto}
+@media (max-height:820px){#top{padding-top:27vh}}
+@media (max-height:700px){#top{padding-top:23vh}#sp{line-height:1.5}}
+@media (max-height:600px){#top{padding-top:18vh}.cd{padding:5px 4px 5px}#tip{min-height:2.2em}}
+@media (max-width:560px){#top{padding-top:30vh}#sp{max-width:100%}}
+#eh{margin:0;font-size:clamp(18px,3.3vw,28px);font-style:italic;font-weight:400;
+ letter-spacing:.05em;color:#f0e2c0}
+#ep{margin:0;max-width:520px;font-size:clamp(12px,1.9vw,15px);line-height:1.7;color:#d6cdf0;
+ text-align:left}
+.cl{font-style:italic;color:#e8e0fa;margin-top:16px}
+#ex{color:#b9b0da;font-size:11px;letter-spacing:.24em;text-transform:uppercase;cursor:pointer}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="ui"><div id="top"><div id="sp"></div></div>
+<div id="bot"><div id="tip"></div><div id="flow"></div><div id="rail"></div><div id="hand"></div><div id="day"><div id="dayf"></div></div></div></div>
+<div id="hud">UNTIL DARK <b id="lt"></b></div>
+<button id="fold">accept his terms</button>
+<button id="mn">&#9776;</button>
+<button id="mu">&#9834;</button>
+<div id="lg"></div>
+<div id="end"><h1 id="eh"></h1><p id="ep"></p><small id="ex">tap to begin again</small></div>
+<script>
+"use strict";
+const TAU=Math.PI*2,cv=document.getElementById("c"),x=cv.getContext("2d"),
+ $=i=>document.getElementById(i),SP=$("sp"),RAIL=$("rail"),HAND=$("hand"),FLOW=$("flow"),
+ TIP=$("tip"),LT=$("lt"),END=$("end"),LG=$("lg");
+const lerp=(a,b,t)=>a+(b-a)*t,clamp=(v,a,b)=>v<a?a:v>b?b:v;
+function rng(s){s>>>=0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+/* ================================================================
+   V3 GAME LAYER — mood and flow, the only two things she can touch.
+
+   Anansi is the board. Athena is the cast. She originates nothing;
+   every card is a modification of a state he is already in.
+
+   TWO VARIABLES, both his, both visible:
+     MOOD  — an RGB point. Named at the nearest anchor, and the light
+             coming down the canyon is tinted with it.
+     TOPIC — what he is currently talking about. Cards either hold it
+             or lose it.
+
+   A topic pays out when you play a holding card and the mood shift
+   lands him inside that topic's tolerance. Base topics pay a keyword.
+   Extraction topics — made by auditing two keywords together — pay a
+   band of sky, lit in the colour of the mood he was in when he broke.
+   All seven extractions want a different mood, so the only route to a
+   full rainbow is through all seven of him.
+   ================================================================ */
+
+/* nine anchors. the seven saturated ones are the seven bands. */
+const MOOD=[
+ ["calm",135,150,140],["guarded",80,85,95],
+ ["annoyed",230,70,75],["raw",235,135,60],["delighted",240,200,80],
+ ["fond",110,205,130],["hollow",70,185,185],["wistful",80,125,230],
+ ["anxious",175,85,210]];
+const NAME=i=>MOOD[i][0], MV=i=>[MOOD[i][1],MOOD[i][2],MOOD[i][3]];
+
+/* topics. m = mood he must be in. a = where the talk drifts.
+   d = keywords he lets go of when he breaks. */
+const T={
+ ants:{w:"ants",m:0,a:["tombs","price"],
+  s:"The ants are only hungry, and hunger and I are old colleagues. It is what they dig <em>toward</em> that I mind. Under that ridge are the [tombs] you stopped visiting."},
+ price:{w:"price",m:5,a:["keeper","ants","shaped"],
+  s:"Your name. I will spend mine first, as you are new to this: I am Anansi, [Keeper] of Stories. Either way it becomes mine."},
+ keeper:{w:"Keeper",m:4,a:["nyame","four","price"],
+  s:"[Nyame]. The sky god. He held every story there was and would not let one go. So I bought them, and the asking price was [four] impossible things."},
+ nyame:{w:"Nyame",m:4,a:["four","keeper","afraid"],
+  s:"A god who thought no creature alive could pay him. He was very nearly right."},
+ four:{w:"four",m:4,a:["nyame","keeper"],
+  s:"Impossible in the way a thing is impossible right up until somebody does it. Afterward it is only clever."},
+ tombs:{w:"tombs",m:8,a:["lullaby","ants","afraid"],
+  s:"Look at the doors when you get down there. Nobody bars a door from the <em>outside</em> to keep the dead comfortable. Nobody carves seven [lullaby] flutes into a monument."},
+ lullaby:{w:"lullaby",m:8,a:["tombs","afraid","grim"],
+  s:"Sung every year without fail, until a comfortable century came, and then another, and now not one of you remembers the tune.<s>a pause</s>I am not in the habit of being [afraid]. I am making an exception."},
+ afraid:{w:"afraid",m:7,a:["grim","tombs","lullaby"],
+  s:"<s>quietly</s>Say that again more quietly."},
+ shaped:{w:"shaped",m:5,a:["horn","price"],
+  s:"One wing. A unicorn who cannot go up. Luck, was it?<s>he leans</s>Look at the thing on your head and tell me your kind grew a [horn] for ornament."},
+ horn:{w:"horn",m:6,a:["shaped","grim"],
+  s:"No. Some things must be found in the room where they happen or they do not take. I am not cruel. I am accurate."},
+ grim:{w:"Grim",m:1,a:["colour","shadows","lullaby","horn"],
+  s:"It is a condition, not a name.<s>he waits</s>Look around you, little horn. This canyon had [colour] in it once, before they were put under it."},
+ colour:{w:"colour",m:6,a:["grim","shadows"],
+  s:"I do not remember.<s>a long stillness</s>That is what they do. The taking is not the cruel part."},
+ shadows:{w:"shadows",m:1,a:["grim","colour"],
+  s:"Nothing, wearing a shape. They come from above, where you never look. You and your cousins are the same animal that way, pointed in opposite directions."}};
+
+/* the seven. p = the two keywords audited together. m = the mood he
+   has to be in before it comes out. b = which arc it lights. */
+const X=[
+ {p:["afraid","tombs"],m:8,w:"what is under the tombs",
+  q:"What is under the tombs?",a:"Unicorns. Grim ones. Ours, buried by ours.",
+  s:"<s>a long stillness</s>Unicorns.<s>he comes down the thread</s>Not a beast. Nothing you can hate cleanly and go home from. <em>Unicorns.</em> [Grim] ones. Your own, buried by your own, sung to sleep by your own until you stopped."},
+ {p:["colour","grim"],m:6,w:"what a Grim does",
+  q:"What does a Grim do?",a:"It takes colour. What it drains gets up and serves it.",
+  s:"A unicorn <em>gives</em> colour. You have built an age of pageantry on it without once asking what the opposite looks like.<s>he answers himself</s>A Grim takes. It walks a field and the green goes out behind it and does not come back. And what is left standing in a drained thing does not lie down. It gets up, and it serves. [Shadows] with no face to read, so do not try."},
+ {p:["tombs","lullaby"],m:7,w:"what keeps them down",
+  q:"What keeps them down?",a:"Seven flutes and a lullaby. Nobody sings it any more.",
+  s:"Seven flutes and a tune. That is all. Not stone, not the doors. A thing that takes colour cannot bear to be sung to; it lies down and dreams instead.<s>quietly</s>So they sang. Every year. And then a comfortable century came, and the singing was left to the ones who could not fly, and then to nobody."},
+ {p:["grim","lullaby"],m:3,w:"who the Grim were",
+  q:"Who were the Grim?",a:"The ones who could not fly. My cousins in the sky are the ones who left.",
+  s:"Yours.<s>he lets it sit</s>When the first of them woke and began to take, your kind did three things, and your Assembly remembers one. The strong-winged went <em>up</em>, and kept going, and built your palace where nothing flightless could follow. The ones who could not fly stayed on the ground, because that is where they were, and what the Grim did not take of them learned the tune and carved the flutes and sang the thing to sleep.<s>a pause</s>And the taken ones got up, and served, and are under there still. Your cousins in the sky are the ones who left. You have never once been told that, and now you know why."},
+ {p:["grim","shaped"],m:2,w:"what she is to become",
+  q:"What am I to become?",a:"He would not finish the sentence. I can.",
+  s:"<s>he is very close now</s>You are quick, and I did not want to be the one to say it.<s>a pause</s>Whoever hunts monsters should take some care that he does not become one in the hunting. And if you spend long enough looking down a hole\u2014<s>he stops</s>\u2026you can finish that part yourself. You are standing in one."}];
+const NB=X.length;
+
+/* he deflects in whatever mood he is actually in */
+const DEF=[["Mm.","Go on, then.","Is that your question?"],
+ ["No.","Ask me something else.","<s>he says nothing</s>"],
+ ["<em>Enough</em> of that.","You are pushing.","Do not."],
+ ["…","<s>he is not steady</s>Not that. Not now.","Ask again later."],
+ ["<em>Ha!</em> Perhaps.","Oh, very good. Nearly.","You are close and you know it."],
+ ["Hm. I like you, which is not the same as answering.","Nearly, little horn.","Almost."],
+ ["<s>a long stillness</s>","Hm.","I have nothing for that."],
+ ["<s>quietly</s>Not yet.","Ask that again when the light is different.","Mm."],
+ ["Not while it is that near.","<s>he glances up</s>No.","Later. Not that."]];
+
+const DRY=["There is nothing left in that one.","We have been over it.","That well is dry, little horn."];
+
+const AU=(()=>{
+let C=null,M=null,on=true,dry=null,pulse=0,dens=0,bedG=null,bedF=null,cache={};
+const SCALE=[0,3,5,7,10,12,15,17,19,22];
+const BELL=[1,0,1,0,1,1,0,1,0,1,0,1];
+function ks(freq,dec,sr,bright){
+ const n=Math.round(sr/freq),len=sr*3.2|0,b=new Float32Array(len),d=new Float32Array(n);
+ for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+ let lp=0,p=0;
+ for(let i=0;i<len;i++){
+  const v=d[p];
+  lp+=(v-lp)*bright;
+  d[p]=(lp*.5+d[(p+1)%n]*.5)*dec;p=(p+1)%n;
+  b[i]=v*.55*Math.exp(-i/sr*.55)}
+ const f=sr*.25|0;for(let i=0;i<f;i++)b[len-1-i]*=i/f;
+ return b}
+function boot(){if(C)return;
+ C=new (window.AudioContext||window.webkitAudioContext)();
+ M=C.createGain();M.gain.value=.55;
+ const cmp=C.createDynamicsCompressor();cmp.threshold.value=-18;cmp.ratio.value=3;
+ M.connect(cmp);cmp.connect(C.destination);
+ dry=C.createGain();dry.connect(M);
+ const dl=C.createDelay(3);dl.delayTime.value=.52;
+ const fb=C.createGain();fb.gain.value=.42;
+ const lp=C.createBiquadFilter();lp.type="lowpass";lp.frequency.value=2100;
+ const wet=C.createGain();wet.gain.value=.42;
+ dry.connect(dl);dl.connect(lp);lp.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(M);
+ const sr=C.sampleRate,nb=C.createBuffer(1,sr*3,sr),nd=nb.getChannelData(0);
+ let l=0;for(let i=0;i<nd.length;i++){l+=((Math.random()*2-1)-l)*.06;nd[i]=l*3}
+ const src=C.createBufferSource();src.buffer=nb;src.loop=true;
+ bedF=C.createBiquadFilter();bedF.type="bandpass";bedF.frequency.value=150;bedF.Q.value=1.1;
+ bedG=C.createGain();bedG.gain.value=.14;
+ src.connect(bedF);bedF.connect(bedG);bedG.connect(M);src.start();
+ weave()}
+function one(midi,g,pan,dec,when){
+ if(!C||!on)return;
+ const f=55*Math.pow(2,(midi-33)/12),k=midi.toFixed(2)+"|"+dec.toFixed(3);
+ let b=cache[k];
+ if(!b){const a=ks(f,dec,C.sampleRate,.42);b=C.createBuffer(1,a.length,C.sampleRate);
+  b.copyToChannel(a,0);cache[k]=b}
+ const s=C.createBufferSource();s.buffer=b;
+ const gn=C.createGain();gn.gain.value=g;s.connect(gn);
+ if(C.createStereoPanner){const p=C.createStereoPanner();p.pan.value=pan;
+  gn.connect(p);p.connect(dry)}else gn.connect(dry);
+ s.start(C.currentTime+(when||0))}
+function pluck(midi,g,pan,dec,when){
+ one(midi,g,pan,dec,when);
+ one(midi+.11,g*.62,pan*-.7,dec*.998,(when||0)+.012)}
+function weave(){
+ if(!C)return;
+ const d=dens,p=pulse++%12,step=lerp(.42,.30,d);
+ const jit=lerp(.30,.02,d)*(Math.random()-.5)*step*2;
+ const play=BELL[p]?.30+.68*d:.10+.34*d;
+ if(Math.random()<play){
+  const deg=SCALE[(p*5+(pulse>>3))%SCALE.length],oct=p%3?0:-12,
+   g=lerp(.10,.20,d)*(BELL[p]?1:.62);
+  pluck(45+deg+oct,g,BELL[p]?-.42:.44,lerp(.980,.9945,d),Math.max(0,jit))}
+ if(Math.random()<.14+d*.42)
+  pluck(69+SCALE[(p*7)%SCALE.length],.045+.055*d,-.25,.976,step*.5+jit);
+ if(!p&&d>.28)pluck(26,.14+.30*d,0,.997,0);
+ if(p===6&&d>.62)pluck(28,.10+.18*d,.15,.996,0);
+ setTimeout(weave,step*1000)}
+return{
+ boot(){boot();if(C)C.resume()},
+ dens(v){dens=clamp(v,0,1);
+  if(bedG){bedG.gain.setTargetAtTime(.12+.30*v,C.currentTime,1.2);
+   bedF.frequency.setTargetAtTime(150-60*v,C.currentTime,1.2)}},
+ speak(){pluck(40+SCALE[Math.random()*6|0],.09,.25,.985,0)},
+ /* a thread comes off him: one bright string, high and clean */
+ take(){pluck(76+SCALE[Math.random()*5|0],.075,.35,.968,0)},
+ /* a band lights: the harp answers itself, climbing */
+ band(i){[0,.13,.27].forEach((w,j)=>pluck(52+i*2+SCALE[j+1],.20-j*.03,j%2?.3:-.3,.992,w))},
+ drop(){pluck(26,.40,0,.997,0);pluck(26+SCALE[1],.24,-.3,.996,.10);pulse=0;
+  if(bedG)bedG.gain.setTargetAtTime(bedG.gain.value+.1,C.currentTime,.4)},
+ toggle(){on=!on;if(C)on?C.resume():C.suspend();return on}}
+})();
+
+
+function mouthPath(){
+ if(wall)return wall;
+ const r=rng(1337),p=new Path2D(),N=90;
+ for(let i=0;i<=N;i++){
+  const a=i/N*TAU,
+  k=1+.19*Math.sin(a*2.1+.7)+.11*Math.sin(a*3.7+2.2)+.055*Math.sin(a*7.3)+(r()-.5)*.045;
+  const px=Math.cos(a)*k,py=Math.sin(a)*k*.86;
+  i?p.lineTo(px,py):p.moveTo(px,py)}
+ p.closePath();return wall=p}
+
+
+function anansi(c,s,t,turn,spin){
+ const PR=s*.30,AB=-s*.34,R=s*.36;
+ const legs=[];
+ for(let i=0;i<8;i++){
+  const side=i<4?-1:1,k=i%4,th=side*(.40+k*.60)+spin;
+  legs.push({th,k,i,d:Math.cos(th)})}
+ legs.sort((a,b)=>a.d-b.d);
+ function leg(Lg){
+  const sn=Math.sin(Lg.th),cs=Lg.d,near=cs*.5+.5,ph=t*1.1+Lg.i*1.9,
+   rch=s*(1.12+.20*Math.sin(ph))*(.62+.55*near),
+   w=s*(.078-Lg.k*.007)*(.45+.85*near),
+   ox=sn*R,oy=PR-cs*R*.32,
+   kx=sn*rch*.66,ky=PR-cs*rch*.26-s*(.52+.15*Math.cos(ph*.8+Lg.i)),
+   fx=sn*rch*1.18,fy=PR-cs*rch*.46+s*(.26+.24*Math.sin(ph*.7+Lg.i));
+  c.beginPath();
+  c.moveTo(ox-w*.5,oy-w);
+  c.quadraticCurveTo(kx*.72,ky*.94,kx,ky);
+  c.quadraticCurveTo(fx*.88,ky+(fy-ky)*.34,fx,fy);
+  c.quadraticCurveTo(fx*.84,ky+(fy-ky)*.30,kx*.93,ky-w*1.5);
+  c.quadraticCurveTo(kx*.60,ky*.90,ox+w*.5,oy+w);
+  c.closePath();c.fill()}
+ for(const Lg of legs)if(Lg.d<0)leg(Lg);
+ const sw=Math.sin(spin)*s*.05;
+ c.beginPath();c.ellipse(sw,AB,s*.50,s*.45,sw*.02,0,TAU);c.fill();
+ c.beginPath();c.ellipse(sw*1.3,AB-s*.42,s*.10,s*.07,0,0,TAU);c.fill();
+ c.beginPath();c.ellipse(sw*.5,(AB+PR)*.5,s*.10,s*.13,0,0,TAU);c.fill();
+ c.beginPath();c.ellipse(0,PR,s*.40,s*.34,0,0,TAU);c.fill();
+ const fs=Math.cos(spin);
+ c.globalCompositeOperation="destination-out";
+ c.save();c.translate(0,PR);c.scale(Math.max(.08,Math.abs(fs)),1);
+ c.beginPath();c.moveTo(0,-s*.16);
+ c.quadraticCurveTo(s*.15,-s*.02,0,s*.20);
+ c.quadraticCurveTo(-s*.15,-s*.02,0,-s*.16);
+ c.closePath();c.fill();c.restore();
+ c.save();c.translate(sw,AB);c.scale(Math.max(.08,Math.abs(fs)),1);
+ for(const d of[-1,1]){c.beginPath();c.ellipse(d*s*.19,s*.26,s*.07,s*.045,0,0,TAU);c.fill()}
+ c.restore();
+ c.globalCompositeOperation="source-over";
+ c.save();c.translate(0,PR);c.rotate(turn*.30);
+ for(const d of[-1,1]){
+  c.beginPath();c.ellipse(d*s*.13*fs,s*.34,s*.11,s*.14,d*.16,0,TAU);c.fill();
+  c.beginPath();
+  c.moveTo(d*s*.19*fs,s*.44);
+  c.quadraticCurveTo(d*s*.16*fs,s*.60,d*s*.03*fs,s*.63);
+  c.quadraticCurveTo(d*s*.12*fs,s*.56,d*s*.11*fs,s*.43);
+  c.closePath();c.fill()}
+ for(const d of[-1,1]){
+  c.beginPath();c.ellipse(d*s*.31*fs,s*.26,s*.075,s*.13,-d*.5,0,TAU);c.fill()}
+ c.globalCompositeOperation="destination-out";
+ for(let r=0;r<2;r++)for(let i=0;i<4;i++){
+  c.beginPath();c.ellipse((i-1.5)*s*.095*fs,s*.10+r*s*.085,s*.030,s*.038,0,0,TAU);c.fill()}
+ c.globalCompositeOperation="source-over";
+ c.restore();
+ for(const Lg of legs)if(Lg.d>=0)leg(Lg)}
+
+/* ================================================================
+   SCENE
+   The framing never moves — she is pinned at the bottom of a hole, and
+   a camera that repositioned itself would hand her an agency the scene
+   is about her not having. Two things change the picture: him coming
+   down, and the colour of the light, which is his mood filling the
+   canyon she is trapped in. The sky disc itself stays untinted so the
+   bands she has taken stay readable against it.
+   ================================================================ */
+let W,H,dpr,mouth,wall=null,skyY=0;
+const look={x:0,y:0,tx:0,ty:0};
+let descent=.05,tDescent=.05,shake=0,t0=performance.now(),spinAt=.4,spinTo=.4,spinT=0;
+const flash=[0,0,0,0,0,0,0];
+let drain=null,lit=[0,0,0,0,0,0,0],pop=[0,0,0,0,0,0,0],hue=[135,150,140];
+const cs=a=>"rgb("+(a[0]|0)+","+(a[1]|0)+","+(a[2]|0)+")";
+
+function resize(){
+ W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);
+ cv.width=W*dpr|0;cv.height=H*dpr|0;
+ mouth=Math.min(W*.28,H*.155);skyY=H*.165;wall=null}
+addEventListener("resize",resize);resize();
+
+function horn(c,cx,cy,s,sway){
+ c.save();c.translate(cx,cy);c.rotate(sway);
+ c.beginPath();c.moveTo(-s*.16,s*.55);
+ c.quadraticCurveTo(-s*.10,-s*.30,0,-s*1.0);
+ c.quadraticCurveTo(s*.11,-s*.28,s*.17,s*.55);
+ c.closePath();c.fill();
+ c.globalCompositeOperation="destination-out";
+ for(let i=0;i<7;i++){const u=i/7,y=lerp(s*.42,-s*.80,u),w=lerp(s*.15,s*.03,u);
+  c.beginPath();c.moveTo(-w,y);c.lineTo(w,y-s*.09);c.lineTo(w,y-s*.045);
+  c.lineTo(-w,y+s*.045);c.closePath();c.fill()}
+ c.globalCompositeOperation="source-over";
+ c.beginPath();c.ellipse(0,s*.95,s*.62,s*.42,0,0,TAU);c.fill();
+ c.beginPath();c.moveTo(-s*.62,s*.72);c.quadraticCurveTo(-s*.80,s*.30,-s*.55,s*.34);
+ c.closePath();c.fill();c.restore()}
+
+const silk=Array.from({length:9},(_,i)=>({a:i/9*TAU+.3,w:Math.random()*.5+.4}));
+
+function frame(now){
+ requestAnimationFrame(frame);
+ const t=(now-t0)/1000;
+ x.setTransform(dpr,0,0,dpr,0,0);x.globalAlpha=1;
+ const M=mood||[135,150,140];
+ for(let i=0;i<3;i++)hue[i]+=(M[i]-hue[i])*.045;
+
+ tDescent=over?tDescent:clamp(.04+turn*.011+(1-light/PERDAY)*.30,0,1);
+ descent+=(tDescent-descent)*(over?.006:.012);
+ AU.dens(descent);
+ look.x+=(look.tx-look.x)*.05;look.y+=(look.ty-look.y)*.05;
+ if(shake>0)shake*=.90;
+ for(let i=0;i<NB;i++){if(flash[i]>0)flash[i]*=.972;if(pop[i]>0)pop[i]*=.93}
+
+ const px=-look.x*.10*W+(Math.random()-.5)*shake,
+       py=-look.y*.06*H+(Math.random()-.5)*shake,
+       cx=W*.5+px,cy=skyY+py,open=1-descent*.52;
+
+ x.fillStyle="#07060f";x.fillRect(0,0,W,H);
+
+ x.save();
+ x.translate(cx,cy);x.scale(mouth*open,mouth*open);x.clip(mouthPath());
+ x.setTransform(dpr,0,0,dpr,0,0);
+
+ const g=x.createRadialGradient(cx,cy,0,cx,cy,mouth*1.25);
+ g.addColorStop(0,"#fff6de");g.addColorStop(.28,"#ffd9a0");
+ g.addColorStop(.62,"#8fb6ea");g.addColorStop(1,"#4a5fae");
+ x.fillStyle=g;x.fillRect(cx-mouth*1.5,cy-mouth*1.5,mouth*3,mouth*3);
+
+ /* THE SCORE. Seven empty arcs, each filled in the colour of the mood
+    he was in when it came out of him. Untinted, so it stays legible. */
+ const bx=cx-mouth*.26,by=cy+mouth*1.00;
+ for(let i=0;i<NB;i++){
+  const r=mouth*(.94+i*.079)*(1+pop[i]*.06),L=lit[i],P=MV(X[i].m);
+  x.lineWidth=mouth*(L?.078+pop[i]*.05:.05);
+  x.globalAlpha=L?.92:.55;
+  x.strokeStyle=L?cs(L):cs(P.map(c=>c*.45+255*.55));
+  x.beginPath();x.arc(bx,by,r,Math.PI*1.10,Math.PI*1.95);x.stroke();
+  if(flash[i]>.01){x.globalAlpha=flash[i];x.lineWidth=mouth*.20;x.strokeStyle=cs(lit[i]);
+   x.beginPath();x.arc(bx,by,r,Math.PI*1.10,Math.PI*1.95);x.stroke()}}
+ x.globalAlpha=1;
+
+ /* the light coming down, in whatever colour he currently is */
+ const hs=hue.map(v=>v|0).join(",");
+ for(let i=0;i<7;i++){
+  const a=-.45+i*.13+Math.sin(t*.09+i)*.02;
+  x.save();x.translate(cx,cy);x.rotate(a);
+  const rg=x.createLinearGradient(0,0,0,mouth*2.4);
+  rg.addColorStop(0,"rgba("+hs+",.30)");rg.addColorStop(1,"rgba("+hs+",0)");
+  x.fillStyle=rg;x.beginPath();x.moveTo(-mouth*.05,0);x.lineTo(-mouth*.30,mouth*2.4);
+  x.lineTo(mouth*.30,mouth*2.4);x.lineTo(mouth*.05,0);x.closePath();x.fill();x.restore()}
+
+ x.strokeStyle="rgba(20,16,34,.55)";
+ for(const s of silk){
+  x.lineWidth=s.w;x.beginPath();
+  x.moveTo(cx+Math.cos(s.a)*mouth*1.3,cy+Math.sin(s.a)*mouth*1.1);
+  x.quadraticCurveTo(cx+Math.sin(t*.3+s.a)*mouth*.12,cy+mouth*.1,
+   cx-Math.cos(s.a)*mouth*1.3,cy-Math.sin(s.a)*mouth*1.1);x.stroke()}
+
+ const wc=(t*.055)%1,pull=wc<.34?Math.sin(wc/.34*Math.PI):0,
+  away=pull*pull*(1-descent*.55)*mouth*.62;
+ if(t>spinT){spinT=t+2.6+Math.random()*5.4;
+  spinTo+=(Math.random()<.5?-1:1)*(.5+Math.random()*1.5)}
+ spinAt+=(spinTo-spinAt)*.026;
+ const spin=spinAt+Math.sin(t*.13)*.09;
+ const sz=mouth*(.10+descent*1.55)*(1-pull*.22*(1-descent*.5)),
+  sy=cy-mouth*.55+descent*mouth*1.5-away,
+  drift=Math.sin(t*.21)*mouth*.05*(1-descent*.7),sx=cx+drift;
+ x.strokeStyle="rgba(12,9,22,.85)";x.lineWidth=Math.max(1,sz*.014);
+ x.beginPath();x.moveTo(cx+drift*.2,cy-mouth*1.6);
+ x.quadraticCurveTo(sx,sy-sz*1.9,sx,sy-sz*1.2);x.stroke();
+
+ /* the rim on him is the one place his mood is on his own body */
+ x.save();x.translate(sx,sy);x.rotate(Math.sin(t*.17)*.05);
+ x.globalAlpha=.55;x.fillStyle="rgb("+hs+")";
+ anansi(x,sz*1.05,t,Math.sin(t*.31)+Math.sin(t*.13+1.4)*.6,spin);
+ x.globalAlpha=1;x.fillStyle="#0b0817";
+ anansi(x,sz,t,Math.sin(t*.31)+Math.sin(t*.13+1.4)*.6,spin);
+ x.restore();
+
+ /* the colour leaving him and going up into her sky */
+ if(drain){
+  drain.t+=.018;
+  if(drain.t>=1)drain=null;
+  else{const u=drain.t,i=drain.i,r=mouth*(.94+i*.079),
+   a=Math.PI*1.10+(Math.PI*.85)*(.15+.7*u),
+   ex=bx+Math.cos(a)*r,ey=by+Math.sin(a)*r;
+   x.globalAlpha=(1-u)*.9;x.strokeStyle=cs(lit[i]);x.lineWidth=mouth*.05*(1-u*.6);
+   x.beginPath();x.moveTo(sx,sy);
+   x.quadraticCurveTo((sx+ex)*.5-mouth*.3,(sy+ey)*.5,ex,ey);x.stroke();x.globalAlpha=1}}
+ x.restore();
+
+ x.save();x.translate(cx,cy);x.scale(mouth*open,mouth*open);
+ x.strokeStyle="rgba(7,6,15,.9)";x.lineWidth=.055;x.stroke(mouthPath());x.restore();
+
+ const vg=x.createRadialGradient(cx,cy,mouth*open*.8,cx,cy,mouth*1.9);
+ vg.addColorStop(0,"rgba(7,6,15,0)");vg.addColorStop(.45,"rgba(7,6,15,.86)");
+ vg.addColorStop(1,"#07060f");
+ x.fillStyle=vg;x.fillRect(0,0,W,H);
+
+ /* the canyon wall picks up his colour too, faintly */
+ x.globalAlpha=.10;x.fillStyle="rgb("+hs+")";x.fillRect(0,0,W,H);x.globalAlpha=1;
+
+ x.globalAlpha=descent*.55;
+ const sg=x.createRadialGradient(sx,sy,0,sx,sy,mouth*2.6);
+ sg.addColorStop(0,"rgba(4,3,10,.95)");sg.addColorStop(1,"rgba(4,3,10,0)");
+ x.fillStyle=sg;x.fillRect(0,0,W,H);x.globalAlpha=1;
+
+ const hx=W*.20+look.x*W*.10,hy=H*1.03+look.y*H*.04,hz=Math.min(W,H)*.16,
+  n=lit.reduce((a,b)=>a+(b?1:0),0);
+ if(n){x.globalAlpha=.10+n*.05;x.fillStyle=cs(lit.filter(Boolean).pop());
+  horn(x,hx,hy,hz*1.06,look.x*.28+Math.sin(t*.4)*.02);x.globalAlpha=1}
+ x.fillStyle="#050410";horn(x,hx,hy,hz,look.x*.28+Math.sin(t*.4)*.02)}
+/* ================================================================
+   ENGINE
+
+   One card per turn. A card does two things and never more: it shifts
+   his mood along one channel, and it either holds the subject or loses
+   it. Everything the player wants is downstream of those two.
+
+   MIRROR  hold the subject, move him a little
+   LABEL   hold the subject, move him a lot
+   OPEN    move him a lot, and he takes the subject somewhere adjacent
+   AUDIT   name two things he has said and put him on what they make,
+           which costs him his composure every single time
+
+   Payout is checked AFTER the shift, so the card that walks him into
+   the right mood is the card he breaks on.
+   ================================================================ */
+/* ================================================================
+   V4 GAME LAYER. One sentence: move his mood to where a secret can
+   come out, then ask. Mood is a ring of nine named states; every card
+   is a thing she could say, and it walks him one step toward the mood
+   printed on it. A base topic pays its word whenever he is within three
+   steps. A secret only comes out when he is exactly there.
+   ================================================================ */
+const PERDAY=24;
+/* ring order: emotional adjacency, as MOOD indices */
+const RING=[0,5,4,3,2,1,8,7,6];
+const posOf=m=>RING.indexOf(m);
+/* signed shortest step from mood a to mood b around the ring */
+const ringD=(a,b)=>{let d=(posOf(b)-posOf(a)+9)%9;return d>4?d-9:d};
+/* verbs: what she says, and the mood it walks him toward */
+const V=[
+ ["needle",2,"You are hiding behind {}."],
+ ["flatter",4,"You like talking about {}, I think."],
+ ["soothe",0,"You owe me nothing about {}."],
+ ["go quiet",6,"\u2026"],
+ ["look up",8,"What is it, above us, that you keep not looking at?"]];
+let mood=[135,150,140],mi=0,cur="ants",chips=new Map(),spent=new Set(),
+ deck=[],hand=[],disc=[],sel=[],light=PERDAY,turn=0,over=false,busy=false,
+ ledgerShown=false,gate=[],tut=0;
+const pairKey=a=>[...a].sort().join("+");
+const xOf=k=>X.findIndex(o=>pairKey(o.p)===k);
+function info(k){
+ if(k[0]==="X"){const o=X[+k.slice(1)];return{w:o.w,m:o.m,s:o.s,a:o.p,x:+k.slice(1)}}
+ const o=T[k];return{w:o.w,m:o.m,s:o.s,a:o.a,x:-1}}
+function focus(){
+ if(sel.length===2){const i=xOf(pairKey(sel));if(i>=0&&!spent.has("X"+i))return"X"+i}
+ return cur}
+/* the first three drifts are fixed so every player reaches the first
+   pair without luck: ants -> tombs -> lullaby -> afraid */
+const FIRST=["tombs","lullaby","afraid"];
+function newDeck(){
+ deck=[];for(let r=0;r<4;r++)for(let v=0;v<5;v++)deck.push({v});
+ shuf(deck);
+ /* the first three hands each carry a look-up or a go-quiet, so the road
+    to anxious is always on the table while she is learning it */
+ const top=[];
+ for(const v of[4,3,4,3,4]){const i=deck.findIndex(k=>k.v===v);if(i>=0)top.push(deck.splice(i,1)[0])}
+ for(let h=0;h<3;h++){deck.push(...deck.splice(0,3));deck.push(top[h]);if(h<2)deck.push(top[3+h]||deck.splice(0,1)[0])}
+ /* pop() draws from the end: reverse so hand 1 is what we planned */
+ deck.reverse()}
+const shuf=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;
+ [a[i],a[j]]=[a[j],a[i]]}return a};
+function draw(){
+ disc.push(...hand);hand=[];
+ for(let i=0;i<4;i++){
+  if(!deck.length){deck=shuf(disc);disc=[]}
+  if(!deck.length)break;
+  hand.push(deck.pop())}}
+
+/* ---- speech, revealed as he says it; tap to cut him off ---- */
+let toks=[],rev=0,revT=0,revDone=true,sq=0,cut=()=>{};
+function tok(s){
+ const out=[],re=/\[([^\]]+)\]|<(s|em|a)>([\s\S]*?)<\/\2>/g;let i=0,m;
+ while(m=re.exec(s)){
+  if(m.index>i)out.push({t:s.slice(i,m.index)});
+  if(m[1])out.push({k:m[1]});else out.push({h:"<"+m[2]+">"+m[3]+"</"+m[2]+">",n:m[3].length});
+  i=re.lastIndex}
+ if(i<s.length)out.push({t:s.slice(i)});return out}
+function paint(){
+ let o="",c=0;
+ for(const q of toks){
+  if(c>=rev)break;
+  if(q.t){o+=q.t.slice(0,Math.min(q.t.length,rev-c));c+=q.t.length}
+  else if(q.k){const id=q.k.toLowerCase();
+   o+="<k class='"+(chips.has(id)?"t":"")+"' data-k='"+id+"'>"+q.k+"</k>";c+=q.k.length}
+  else{o+=q.h;c+=q.n}}
+ SP.innerHTML=o}
+function say(h,then,speed){
+ toks=tok(h);rev=0;revDone=false;revT=performance.now();
+ const my=++sq,total=toks.reduce((a,q)=>a+(q.t?q.t.length:q.k?q.k.length:q.n),0);
+ AU.speak();
+ (function step(now){
+  if(revDone||my!==sq)return;
+  rev=Math.min(total,(now-revT)/1000*(speed||48));paint();
+  if(rev>=total){revDone=true;if(then)then()}else requestAnimationFrame(step)})(revT);
+ return()=>{if(!revDone&&my===sq){rev=1e9;revDone=true;paint();if(then)then()}}}
+/* her line first, in her voice, a breath, then him */
+function exchange(hers,his,then){
+ cut=say("<a>"+hers+"</a>",()=>setTimeout(()=>{cut=say(his,then)},hers.length>3?520:200),34)}
+addEventListener("pointerdown",e=>{
+ const k=e.target.dataset&&e.target.dataset.k;
+ if(k)take(k,e.target);else cut()});
+function take(id,el){
+ if(chips.has(id)||!T[id])return;
+ chips.set(id,T[id].w);el.className="t";AU.take();
+ gate=gate.filter(g=>g!==id);
+ if(!gate.length){SP.classList.remove("g");if(!busy){coach(1);coach(3);render()}}}
+function tip(s,long){TIP.textContent=s;TIP.className="on";
+ clearTimeout(tip.t);tip.t=setTimeout(()=>TIP.className="",long?12000:8000)}
+/* the tap gate: nothing else is playable until she has kept what he let slip */
+function gated(){
+ gate=[...SP.querySelectorAll("k")].map(e=>e.dataset.k).filter(id=>!chips.has(id)&&T[id]);
+ if(gate.length){SP.classList.add("g");HAND.innerHTML="";RAIL.innerHTML="";FLOW.innerHTML="";
+  tip(tut<2?"He said something I should remember. Tap it.":tut<5?"Something worth keeping. Tap it.":"Tap to keep it.",1);return true}
+ return false}
+/* Athena teaching herself the trick out loud, once each, in order */
+const CO=[
+ "Kept. Everything he lets slip, I keep.",
+ "Each card is a thing I could say. It moves his mood one step toward the word on it. I have until dark.",
+ "Two of his words together is a question he has to answer. Afraid, and tombs.",
+ "Wrong weather for that one. He needs to be {}. Cards that say {} walk him there.",
+ "There. He did not mean to give me that. Four more, and the sky will show me the rest."];
+function coach(n){
+ if(n===1&&tut===0){tut=1;tip(CO[0]);return}
+ if(n===2&&tut===1){tut=2;tip(CO[1],1);return}
+ if(n===3&&tut<3&&chips.has("afraid")&&chips.has("tombs")){tut=3;sel=["afraid","tombs"];tip(CO[2],1);showLedger();return}
+ if(n===4&&tut===3){tut=4;const I=info(focus());tip(CO[3].replace(/\{\}/g,NAME(I.m)),1);return}
+ if(n===5&&tut<5){tut=5;tip(CO[4],1)}}
+
+/* ================================================================
+   THE TURN
+   ================================================================ */
+function stepMood(toward){
+ const d=ringD(mi,toward);if(!d)return;
+ mi=RING[(posOf(mi)+(d>0?1:-1)+9)%9];mood=MV(mi).slice()}
+const useful=z=>X.some((o,i)=>!spent.has("X"+i)&&o.p.includes(z));
+function drift(I){
+ const f=FIRST.find(z=>!spent.has(z)&&I.a.includes(z));
+ const next=f||pick(I.a.filter(z=>!spent.has(z)&&useful(z)))||pick(I.a.filter(z=>!spent.has(z)))||pick(I.a);
+ if(next&&next!==cur){cur=next;return"<s>and he is somewhere else now: "+T[next].w+"</s>"}
+ return""}
+function play(n){
+ if(busy||over||gate.length)return;
+ const k=hand[n];if(!k)return;
+ busy=true;
+ hand.splice(n,1);disc.push(k);turn++;light--;
+ const I=info(cur),hers=V[k.v][2].replace("{}",I.w);
+ stepMood(V[k.v][1]);
+ let body;
+ const got=!spent.has(cur)&&Math.abs(ringD(mi,I.m))<=3;
+ if(got){spent.add(cur);body=I.s;AU.take()}
+ else body=spent.has(cur)?DRY[turn%3]:DEF[mi][turn%3];
+ if(spent.has(cur))body+=drift(I);
+ HAND.innerHTML="";RAIL.innerHTML="";FLOW.innerHTML="";
+ draw();
+ exchange(hers,body,()=>{
+  busy=false;
+  if(light<=0)return finish();
+  if(gated())return;
+  coach(3);render()})}
+function ask(){
+ if(busy||over||gate.length||sel.length!==2)return;
+ const i=xOf(pairKey(sel));if(i<0)return tip("he would give you nothing for those two");
+ const key="X"+i;if(spent.has(key))return tip("you already have that one");
+ busy=true;turn++;light--;
+ const I=info(key),hers="You said "+chips.get(sel[0])+". And you said "+chips.get(sel[1])+".";
+ sel=[];
+ let body;
+ const got=Math.abs(ringD(mi,I.m))<=1;
+ if(got){spent.add(key);
+  const B=I.x;lit[B]=MV(mi);flash[B]=1;pop[B]=1;drain={i:B,t:0};shake=12;AU.band(B);
+  body=I.s+drift(info(cur))}
+ else body=DEF[mi][turn%3];
+ HAND.innerHTML="";RAIL.innerHTML="";FLOW.innerHTML="";
+ exchange(hers,body,()=>{
+  busy=false;
+  if(got){mark();coach(5)}
+  else if(tut===3)coach(4);
+  if(light<=0)return finish();
+  if(gated())return;
+  render()})}
+const pick=a=>a&&a.length?a[Math.random()*a.length|0]:null;
+
+/* ================================================================
+   THE BOARD: what he is, what the question needs, what she is holding
+   ================================================================ */
+function render(){
+ if(over)return;
+ const f=focus(),I=info(f),plan=f!==cur,d=Math.abs(ringD(mi,I.m));
+ LT.textContent=light;$("dayf").style.width=(light/PERDAY*100)+"%";
+ FLOW.innerHTML="<span id=tw><i>he is</i>"+NAME(mi)+"</span>"+
+  "<span id=need><u>"+(plan?I.w+"<br>needs "+NAME(I.m):"talking about<br>"+I.w)+"</u>"+
+  (plan?"<b style='font-size:1.1em;color:#f1eaff'>"+(d>1?d-1+(d>2?" steps":" step"):"now")+"</b>":"")+
+  "</span><span id=ring>"+RING.map(m=>"<i style='background:"+cs(MV(m))+"'"+(m===mi?" class=h":plan&&m===I.m?" class=n":"")+"></i>").join("")+"</span>";
+
+ RAIL.innerHTML="";
+ for(const[id,w]of chips){
+  const b=document.createElement("button");
+  const usable=[...chips.keys()].some(o=>o!==id&&
+   (()=>{const i=xOf(pairKey([id,o]));return i>=0&&!spent.has("X"+i)})());
+  b.className="c"+(sel.includes(id)?" s":"")+(usable?"":" d")+
+   (sel.length===1&&!sel.includes(id)&&xOf(pairKey([sel[0],id]))>=0&&
+    !spent.has("X"+xOf(pairKey([sel[0],id])))?" p":"");
+  b.innerHTML="<i style='background:"+cs(MV(T[id].m))+"'></i>"+w;
+  b.onclick=()=>{if(busy)return;
+   sel=sel.includes(id)?sel.filter(s=>s!==id):sel.length<2?[...sel,id]:[id];render()};
+  RAIL.appendChild(b)}
+
+ HAND.innerHTML="";
+ hand.forEach((k,n)=>{
+  const b=document.createElement("button"),v=V[k.v],st=ringD(mi,v[1]);
+  const nm=st?RING[(posOf(mi)+(st>0?1:-1)+9)%9]:mi,after=Math.abs(ringD(nm,I.m));
+  b.className="cd";
+  b.innerHTML="<em>"+v[0]+"</em><b style='color:"+cs(MV(v[1]))+"'>\u2192 "+NAME(v[1])+"</b><i>"+
+   (!st?"holds":!plan?"one step":after<d?"closer":after>d?"farther":"sideways")+"</i>";
+  b.onclick=()=>play(n);
+  HAND.appendChild(b)});
+ if(sel.length===2&&xOf(pairKey(sel))>=0&&!spent.has("X"+xOf(pairKey(sel)))){
+  const b=document.createElement("button");b.className="cd s";
+  b.innerHTML="<em>ask</em><b>\u26a1</b><i>"+(d>1?"wrong weather":"he will break")+"</i>";
+  b.onclick=ask;HAND.appendChild(b)}
+ if(tut===1&&!coach.t2){coach.t2=1;setTimeout(()=>coach(2),3200)}
+ $("fold").textContent=armed?"mean it":lit.some(Boolean)?"take what you have and go":"accept his terms"}
+
+/* ================================================================
+   LEDGER, ENDING
+   ================================================================ */
+function mark(){
+ const m=$("mn");m.classList.remove("fl");void m.offsetWidth;m.classList.add("fl")}
+function showLedger(){if(!ledgerShown){ledgerShown=1;setTimeout(openLedger,900)}}
+function ledgerRows(){
+ return X.map((o,b)=>"<div class='q"+(lit[b]?" a":"")+"'><i style='background:"+
+  (lit[b]?cs(lit[b]):"#3a3260")+"'></i><span>"+o.q+(lit[b]?"<br><a>"+o.a+"</a>":"")+"</span><u>"+(lit[b]?"taken":"needs "+NAME(o.m))+"</u></div>").join("")}
+function openLedger(){
+ LG.innerHTML="<h2>what I came down here to learn</h2>"+ledgerRows()+"<small>tap to close</small>";
+ LG.classList.add("on")}
+LG.onclick=()=>LG.classList.remove("on");
+$("mn").onclick=e=>{e.stopPropagation();openLedger()};
+
+const DEAL="An ancient tree sends a seed out to explore the world. It does not go itself. Down you go, little horn. Wake nothing you cannot sing back to sleep.";
+const CLOSE=[
+ "Good. Ordinary after all \u2014 I did wonder. Go down, little courier, and try not to think too hard about what you are walking into.",
+ "You got something off me. One thing. That is one more than anyone who came down before you managed, and I find I am going to remember you for it.",
+ "You have had more out of me in a day than Nyame managed in a lifetime, and I enjoyed almost none of it. Go carefully down there.",
+ "<em>Look at you.</em> I have said things aloud to you that I have not said since before your mountains stood up. I do not like it at all, and I would very much like you to come back.",
+ "<em>Look up.</em><s>she does not</s>That is your rainbow now, little horn, and there is not one colour in it that was not mine first. I did not feel it going. Nobody ever does.<s>a pause</s>So now you know how it is done. Try to remember, when you are down there and it comes easily, that you did not like me for doing it."];
+let armed=0;
+$("fold").onclick=()=>{
+ if(busy||over)return;
+ if(!armed){armed=1;$("fold").textContent="mean it";$("fold").className="a";return}
+ finish()};
+const BITE="You will not believe a word of it from me. So I will let the story tell itself.<s>he is on her before she can move. The web goes white.</s>";
+/* what she takes down with her depends on how much she got out of him.
+   three cards, all Jesse's to write. */
+const AFTER=[
+ "She falls a long way, and the dream that comes up to meet her is not hers. She does not know whose eyes she is looking through.",
+ "She knows enough to be afraid of what she is about to see. She does not know it will be from the inside.",
+ "She knows exactly whose eyes she is about to look through. That is the one thing he could not have told her."];
+function finish(){
+ over=true;busy=true;sel=[];
+ HAND.innerHTML="";RAIL.innerHTML="";FLOW.innerHTML="";TIP.className="";
+ $("fold").style.display="none";
+ const n=lit.reduce((a,b)=>a+(b?1:0),0),tier=n?n<2?1:n<4?2:n<5?3:4:0;
+ tDescent=Math.min(1,tDescent+.12);
+ cut=say(CLOSE[tier]+"<s>he settles</s>"+DEAL,()=>setTimeout(()=>{
+  tDescent=1;
+  cut=say(BITE,()=>setTimeout(()=>{
+   SP.innerHTML="";END.classList.add("w");
+   $("eh").innerHTML=["No terms at all.","One thing.","Some terms.","Terms.","Every colour he had."][tier];
+   $("ep").innerHTML="<h2>"+n+" of "+NB+" taken</h2>"+ledgerRows()+
+    "<p class='cl'>"+AFTER[n<2?0:n<5?1:2]+"</p>"+
+    "<div class='dz'>the story continues in Unicorn Sugarworld: Unicorn Apocalypse</div>";
+   $("ex").textContent="";
+   END.classList.add("on");setTimeout(()=>{END.onclick=()=>location.reload();$("ex").textContent="tap to try again"},3000)},900))},1200))}
+$("mu").onclick=e=>{e.stopPropagation();AU.boot();
+ $("mu").textContent=AU.toggle()?"\u266a":"\u266a\u0338"};
+addEventListener("pointermove",e=>{
+ look.tx=clamp((e.clientX/W-.5)*2,-1,1);look.ty=clamp((e.clientY/H-.5)*2,-1,1)});
+
+const OPEN="Ahhh. She wakes.<s>he is delighted, which is worse</s>Longer than your Assembly has kept records with nothing but [ants] for company, and now a unicorn falls out of the sky. <em>My.</em> Everything has a [price] down here, little horn. Even hello.";
+let started=false;
+function start(){
+ if(started)return;started=true;AU.boot();newDeck();draw();
+ cut=say(OPEN,()=>{if(!gated())render()})}
+say("<em>Looking Up</em><s>tap anywhere</s>");
+addEventListener("pointerdown",start,{once:true});
+addEventListener("keydown",start,{once:true});
+requestAnimationFrame(frame);
+
+</script></body></html>

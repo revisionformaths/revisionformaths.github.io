@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Rainbow Unicorn</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      touch-action: none;
+      user-select: none;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #070817;
+      color: #fff;
+      font: 700 14px system-ui;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #hud,
+    #toolbar {
+      position: fixed;
+      z-index: 2;
+      top: 9px;
+      padding: 7px 10px;
+      border: 1px solid #f6a8;
+      border-radius: 12px;
+      background: #081025c9;
+      box-shadow: 0 0 18px #0cf4;
+    }
+
+    #hud { left: 9px; }
+
+    #toolbar {
+      right: 9px;
+      padding: 4px;
+    }
+
+    #toolbar button {
+      margin: 0;
+      padding: 5px 8px;
+      font-size: 13px;
+      background: #172044;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      background: #0009;
+      text-align: center;
+    }
+
+    #card {
+      width: min(360px, 90vw);
+      padding: 23px;
+      border: 1px solid #f6a;
+      border-radius: 24px;
+      background: #11152eee;
+      box-shadow: 0 0 40px #f38;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      color: #ff8ad7;
+    }
+
+    small {
+      color: #bdf;
+      line-height: 1.55;
+    }
+
+    button {
+      margin-top: 17px;
+      border: 0;
+      border-radius: 13px;
+      padding: 11px 20px;
+      font: 800 16px system-ui;
+      color: #fff;
+      background: linear-gradient(90deg, #f38, #85f, #0cf);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" style="visibility:hidden">
+    ⭐ <b id="score">0</b>　⚡ <b id="distance">0</b>m
+  </div>
+
+  <div id="toolbar" style="visibility:hidden">
+    <button id="languageButton">EN</button>
+    <button id="soundButton">🔊</button>
+  </div>
+
+  <div id="overlay">
+    <div id="card">
+      <div id="languageScreen">
+        <h1>🌈 Rainbow Unicorn</h1>
+        <small>选择语言 / Choose language</small><br>
+        <button id="chineseButton">中文</button>
+        <button id="englishButton">English</button>
+      </div>
+
+      <div id="menuScreen" style="display:none">
+        <h1 id="title"></h1>
+        <small id="message"></small><br>
+        <button id="startButton"></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------------------
+    // Canvas + DOM setup
+    // -------------------------------------------------------------------------
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const byId = id => document.getElementById(id);
+    const overlay = byId('overlay');
+    const startButton = byId('startButton');
+    const message = byId('message');
+    const scoreLabel = byId('score');
+    const distanceLabel = byId('distance');
+    const languageButton = byId('languageButton');
+    const soundButton = byId('soundButton');
+    const title = byId('title');
+    const languageScreen = byId('languageScreen');
+    const menuScreen = byId('menuScreen');
+    const chineseButton = byId('chineseButton');
+    const englishButton = byId('englishButton');
+    const hud = byId('hud');
+    const toolbar = byId('toolbar');
+
+    let viewportWidth;
+    let viewportHeight;
+    let deviceScale = 1;
+
+    // -------------------------------------------------------------------------
+    // Game state
+    // -------------------------------------------------------------------------
+
+    let running = false;
+    let isDead = false;
+    let isHolding = false;
+
+    let unicornY = 20;
+    let cameraY = 26.5;
+    let cameraPitch = -0.15;
+    let smoothedVerticalSpeed = 0;
+    let cameraOffset = 6.5;
+    let verticalSpeed = 0;
+
+    let distance = 0;
+    let score = 0;
+    let forwardSpeed = 34;
+    let bestScore = 0;
+    let previousFrameTime = 0;
+
+    let obstacles = [];
+    let collectibles = [];
+    let rainbowTrail = [];
+    let particles = [];
+
+    let language = 0; // 0 = Chinese, 1 = English
+    let soundEnabled = true;
+
+    const lowerBoundary = 3;
+    const upperBoundary = 100;
+
+    // Audio state.
+    let audioContext;
+    let musicBus;
+    let musicBeat = 0;
+    let lastMusicTick = 0;
+
+    const rainbowColors = [
+      '#ff2785',
+      '#ff7a16',
+      '#ffe23b',
+      '#35ef90',
+      '#31cfff',
+      '#985cff'
+    ];
+
+    const translations = [
+      [
+        '🦄 彩虹独角兽冲刺',
+        '长按屏幕 / 空格立即上升<br>松开俯冲 · 躲障碍/雷击 · 别碰上下边界',
+        '踏上彩虹',
+        '再来一次',
+        '💥 撞到障碍',
+        '得分',
+        '距离',
+        '最高'
+      ],
+      [
+        '🦄 Rainbow Unicorn Run',
+        'Hold screen / Space to rise<br>Release to dive · Dodge lightning · Avoid bounds',
+        'Ride the Rainbow',
+        'Run Again',
+        '💥 You crashed',
+        'Score',
+        'Distance',
+        'Best'
+      ]
+    ];
+
+    function resizeCanvas() {
+      deviceScale = Math.min(window.devicePixelRatio || 1, 2);
+      viewportWidth = innerWidth;
+      viewportHeight = innerHeight;
+
+      canvas.width = viewportWidth * deviceScale;
+      canvas.height = viewportHeight * deviceScale;
+      ctx.setTransform(deviceScale, 0, 0, deviceScale, 0, 0);
+    }
+
+    window.onresize = resizeCanvas;
+    resizeCanvas();
+
+    // -------------------------------------------------------------------------
+    // UI / localization
+    // -------------------------------------------------------------------------
+
+    function updateText() {
+      const copy = translations[language];
+
+      title.innerHTML = copy[0];
+      languageButton.textContent = language ? '中' : 'EN';
+
+      if (isDead) {
+        message.innerHTML =
+          `${copy[4]}<br>${copy[5]} ${score}　${copy[6]} ${distance | 0}m<br>${copy[7]} ${bestScore}`;
+        startButton.textContent = copy[3];
+      } else {
+        message.innerHTML = copy[1];
+        startButton.textContent = copy[2];
+      }
+    }
+
+    function chooseLanguage(selectedLanguage) {
+      language = selectedLanguage;
+      languageScreen.style.display = 'none';
+      menuScreen.style.display = 'block';
+      hud.style.visibility = 'visible';
+      toolbar.style.visibility = 'visible';
+      updateText();
+    }
+
+    updateText();
+
+    // -------------------------------------------------------------------------
+    // Small perspective projection
+    // -------------------------------------------------------------------------
+
+    function project(worldX, worldY, worldZ) {
+      const relativeY = worldY - cameraY;
+      const relativeZ = 18 - worldZ;
+      const cosine = Math.cos(cameraPitch);
+      const sine = Math.sin(cameraPitch);
+
+      // Rotate the world relative to the camera's pitch.
+      const depth = Math.max(2, relativeY * sine + relativeZ * cosine);
+      const scale = Math.min(viewportWidth, viewportHeight) * 0.86 / depth;
+      const projectedY = relativeY * cosine - relativeZ * sine;
+
+      return [
+        viewportWidth / 2 + worldX * scale,
+        viewportHeight * 0.52 - projectedY * scale,
+        scale
+      ];
+    }
+
+    // -------------------------------------------------------------------------
+    // Background and world bounds
+    // -------------------------------------------------------------------------
+
+    function drawBackground() {
+      let gradient = ctx.createLinearGradient(0, 0, 0, viewportHeight);
+      gradient.addColorStop(0, '#08091a');
+      gradient.addColorStop(0.55, '#17113a');
+      gradient.addColorStop(1, '#080a17');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, viewportWidth, viewportHeight);
+
+      // Deterministic pseudo-starfield. No image assets are used.
+      ctx.fillStyle = '#fff';
+      for (let i = 0; i < 95; i++) {
+        const seed = (i * 9301 + 17) % 9973;
+        const x = seed / 9973 * viewportWidth;
+        const y = ((seed * 17) % 9973) / 9973 * viewportHeight * 0.62;
+        const size = 0.4 + (seed % 7) / 7 * 1.4;
+        ctx.globalAlpha = 0.22 + (seed % 5) / 8;
+        ctx.fillRect(x, y, size, size);
+      }
+      ctx.globalAlpha = 1;
+
+      gradient = ctx.createLinearGradient(0, viewportHeight * 0.58, 0, viewportHeight);
+      gradient.addColorStop(0, '#30285b00');
+      gradient.addColorStop(1, '#11142d');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, viewportHeight * 0.55, viewportWidth, viewportHeight * 0.45);
+
+      if (!running) return;
+
+      // Warning glow near the lower / upper death bounds.
+      const lowerWarning = Math.max(0, (9 - unicornY) / 8);
+      const upperWarning = Math.max(0, (unicornY - 88) / 12);
+
+      if (lowerWarning) {
+        gradient = ctx.createLinearGradient(0, viewportHeight * 0.6, 0, viewportHeight);
+        gradient.addColorStop(0, '#a000ff00');
+        gradient.addColorStop(1, '#b900ff');
+        ctx.globalAlpha = lowerWarning * 0.55;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, viewportHeight * 0.55, viewportWidth, viewportHeight * 0.45);
+      }
+
+      if (upperWarning) {
+        gradient = ctx.createLinearGradient(0, 0, 0, viewportHeight * 0.4);
+        gradient.addColorStop(0, '#48dfff');
+        gradient.addColorStop(1, '#8500ff00');
+        ctx.globalAlpha = upperWarning * 0.55;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, viewportWidth, viewportHeight * 0.45);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawBounds() {
+      for (const boundaryY of [lowerBoundary - 1.1, upperBoundary + 1]) {
+        ctx.strokeStyle = boundaryY < 10 ? '#d43cff' : '#42dfff';
+        ctx.shadowColor = ctx.strokeStyle;
+        ctx.shadowBlur = 12;
+        ctx.globalAlpha = 0.55;
+
+        for (let z = 3; z < 18; z += 3) {
+          const left = project(-13, boundaryY, z);
+          const right = project(13, boundaryY, z);
+          ctx.lineWidth = Math.max(1, left[2] * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(left[0], left[1]);
+          ctx.lineTo(right[0], right[1]);
+          ctx.stroke();
+        }
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Rainbow road
+    // -------------------------------------------------------------------------
+
+    function trailBend(z) {
+      const influence = 1 - Math.exp(-z / 13);
+      return influence * (
+        Math.sin((distance - z) * 0.014) * 1.2 +
+        Math.sin((distance - z) * 0.005) * 1.5
+      );
+    }
+
+    function drawRainbowRoad() {
+      const count = rainbowTrail.length;
+      if (count < 2) return;
+
+      for (let stripe = 0; stripe < 6; stripe++) {
+        ctx.beginPath();
+
+        // Left edge of stripe.
+        for (let i = 0; i < count; i++) {
+          const point = rainbowTrail[i];
+          const z = point[1];
+          const bend = trailBend(z);
+          const projected = project(bend + (stripe - 3) * 0.52, point[0], z);
+
+          if (i) ctx.lineTo(projected[0], projected[1]);
+          else ctx.moveTo(projected[0], projected[1]);
+        }
+
+        // Right edge in reverse order.
+        for (let i = count - 1; i >= 0; i--) {
+          const point = rainbowTrail[i];
+          const z = point[1];
+          const bend = trailBend(z);
+          const projected = project(bend + (stripe - 2) * 0.52, point[0], z);
+          ctx.lineTo(projected[0], projected[1]);
+        }
+
+        ctx.closePath();
+        ctx.fillStyle = rainbowColors[stripe];
+        ctx.globalAlpha = 0.88;
+        ctx.shadowColor = rainbowColors[stripe];
+        ctx.shadowBlur = 5;
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collectibles and hazards
+    // -------------------------------------------------------------------------
+
+    function drawStar(star) {
+      const projected = project(star.x, star.y, star.z);
+      const radius = Math.max(2, projected[2] * 0.72);
+
+      ctx.save();
+      ctx.translate(projected[0], projected[1]);
+      ctx.rotate(distance * 0.025);
+      ctx.shadowColor = '#ffd92b';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = '#ffe34d';
+      ctx.beginPath();
+
+      for (let i = 0; i < 10; i++) {
+        const angle = -1.57 + i * 0.628;
+        const r = i % 2 ? radius : radius * 0.43;
+        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      }
+
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = '#5ee7ff';
+      ctx.lineWidth = Math.max(1, radius * 0.09);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 1.38, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawCrystal(obstacle) {
+      const projected = project(obstacle.x, obstacle.y, obstacle.z);
+      const radius = projected[2] * 1.35;
+
+      ctx.save();
+      ctx.translate(projected[0], projected[1]);
+      ctx.rotate(distance * 0.01);
+      ctx.fillStyle = '#ff285f';
+      ctx.shadowColor = '#ff174f';
+      ctx.shadowBlur = 12;
+
+      ctx.beginPath();
+      ctx.moveTo(0, -radius * 1.8);
+      ctx.lineTo(radius * 0.8, 0);
+      ctx.lineTo(0, radius * 1.8);
+      ctx.lineTo(-radius * 0.8, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#8b1748';
+      ctx.beginPath();
+      ctx.moveTo(0, -radius * 1.8);
+      ctx.lineTo(0, radius * 1.8);
+      ctx.lineTo(-radius * 0.8, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawSpikyOrb(obstacle) {
+      const projected = project(obstacle.x, obstacle.y, obstacle.z);
+      const radius = projected[2] * 1.05;
+
+      ctx.save();
+      ctx.translate(projected[0], projected[1]);
+      ctx.rotate(distance * 0.018);
+      ctx.fillStyle = '#171426';
+      ctx.shadowColor = '#fb3b9a';
+      ctx.shadowBlur = 12;
+
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ff2e85';
+      for (let i = 0; i < 8; i++) {
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.moveTo(radius * 0.8, -radius * 0.17);
+        ctx.lineTo(radius * 1.65, 0);
+        ctx.lineTo(radius * 0.8, radius * 0.17);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function drawStormCloud(obstacle) {
+      const projected = project(obstacle.x, obstacle.y, obstacle.z);
+      const radius = projected[2];
+      const lightningActive = obstacle.phase > 1.38;
+
+      ctx.save();
+      ctx.translate(projected[0], projected[1]);
+      ctx.fillStyle = lightningActive ? '#4a3764' : '#312941';
+      ctx.shadowColor = lightningActive ? '#fff36a' : '#8b4cff';
+      ctx.shadowBlur = lightningActive ? 20 : 10;
+
+      for (const puff of [
+        [-radius * 0.7, 0, radius * 0.8],
+        [0, -radius * 0.25, radius],
+        [radius * 0.75, 0, radius * 0.7]
+      ]) {
+        ctx.beginPath();
+        ctx.arc(puff[0], puff[1], puff[2], 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      if (!lightningActive) return;
+
+      // Lightning visually reaches the lower danger layer. The gameplay loop
+      // separately checks whether the unicorn is inside this vertical strike.
+      ctx.strokeStyle = '#fff76a';
+      ctx.lineWidth = Math.max(2, radius * 0.16);
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+
+      for (let i = 0; i < 7; i++) {
+        const lightningPoint = project(
+          obstacle.x + (i % 2 ? 0.38 : -0.28),
+          obstacle.y - (obstacle.y - lowerBoundary) * i / 6,
+          obstacle.z
+        );
+
+        if (i) ctx.lineTo(lightningPoint[0], lightningPoint[1]);
+        else ctx.moveTo(lightningPoint[0], lightningPoint[1]);
+      }
+
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // Unicorn
+    // -------------------------------------------------------------------------
+
+    function drawUnicorn() {
+      // The rainbow and unicorn share the same world-space hoof height.
+      const hoofPosition = project(0, unicornY - 1.18, 0);
+      const displayScale = Math.min(viewportWidth, viewportHeight) / 560;
+
+      ctx.save();
+      ctx.translate(hoofPosition[0], hoofPosition[1]);
+      ctx.scale(displayScale, displayScale);
+
+      const rainbowGradient = ctx.createLinearGradient(-38, -112, 38, -12);
+      rainbowColors.forEach((color, index) => {
+        rainbowGradient.addColorStop(index / 5, color);
+      });
+
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#fff9ff';
+
+      // Body.
+      ctx.beginPath();
+      ctx.ellipse(0, -45, 31, 35, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Neck.
+      ctx.beginPath();
+      ctx.ellipse(0, -82, 13, 23, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head.
+      ctx.beginPath();
+      ctx.ellipse(0, -105, 19, 21, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ears.
+      ctx.beginPath();
+      ctx.moveTo(-13, -118);
+      ctx.lineTo(-24, -138);
+      ctx.lineTo(-5, -127);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(13, -118);
+      ctx.lineTo(24, -138);
+      ctx.lineTo(5, -127);
+      ctx.fill();
+
+      // Horn.
+      ctx.fillStyle = '#ffd92b';
+      ctx.beginPath();
+      ctx.moveTo(-5, -123);
+      ctx.lineTo(0, -157);
+      ctx.lineTo(6, -123);
+      ctx.fill();
+
+      // Mane and tail.
+      ctx.strokeStyle = rainbowGradient;
+      ctx.lineWidth = 9;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(15, -117);
+      ctx.bezierCurveTo(35, -105, 27, -75, 40, -61);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, -21);
+      ctx.bezierCurveTo(18, -4, 31, -16, 38, 0);
+      ctx.stroke();
+
+      // Running legs.
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 9;
+      for (let i = 0; i < 4; i++) {
+        const side = i < 2 ? -15 : 15;
+        const legSwing = Math.sin(distance * 0.22 + (i & 1) * Math.PI) * 7;
+
+        ctx.beginPath();
+        ctx.moveTo(side + (i & 1 ? 6 : -6), -25);
+        ctx.lineTo(side + legSwing, -3);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffd92b';
+        ctx.fillRect(side + legSwing - 5, -5, 10, 5);
+      }
+
+      ctx.restore();
+    }
+
+    // -------------------------------------------------------------------------
+    // Particles
+    // -------------------------------------------------------------------------
+
+    function createBurst(worldObject, color, count = 18) {
+      const projected = project(worldObject.x || 0, worldObject.y || unicornY, worldObject.z || 0);
+
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const particleSpeed = 40 + Math.random() * 110;
+
+        particles.push({
+          x: projected[0],
+          y: projected[1],
+          vx: Math.cos(angle) * particleSpeed,
+          vy: Math.sin(angle) * particleSpeed,
+          life: 0.6 + Math.random() * 0.5,
+          color: color || rainbowColors[i % 6],
+          radius: 2 + Math.random() * 3
+        });
+      }
+    }
+
+    function drawParticles(deltaTime) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const particle = particles[i];
+        particle.life -= deltaTime;
+        particle.x += particle.vx * deltaTime;
+        particle.y += particle.vy * deltaTime;
+        particle.vy += 90 * deltaTime;
+
+        if (particle.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.globalAlpha = Math.min(1, particle.life * 2);
+        ctx.fillStyle = particle.color;
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Object spawning and collision
+    // -------------------------------------------------------------------------
+
+    function spawnObstacle(z) {
+      // Most hazards spawn around the player's current altitude, while some
+      // still cover the full vertical play space. This prevents a permanent
+      // safe zone at the top or bottom.
+      const obstacleY = Math.random() < 0.72
+        ? Math.max(7, Math.min(96, unicornY + (Math.random() - 0.5) * 32))
+        : 7 + Math.random() * 89;
+
+      const obstacle = {
+        z,
+        x: (Math.random() - 0.5) * 4.3,
+        y: obstacleY,
+        type: Math.random() * 3 | 0,
+        radius: 1.4,
+        phase: Math.random() * 2
+      };
+
+      obstacles.push(obstacle);
+
+      if (Math.random() > 0.35) {
+        collectibles.push({
+          z: z - 8 - Math.random() * 10,
+          x: (Math.random() - 0.5) * 3.6,
+          y: Math.max(7, Math.min(96, obstacleY + (Math.random() > 0.5 ? 7 : -7))),
+          radius: 1
+        });
+      }
+    }
+
+    function collides(object, radius) {
+      return Math.hypot(object.x, object.y - unicornY, object.z) < radius + 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Web Audio music and sound effects
+    // -------------------------------------------------------------------------
+
+    function ensureAudio() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        musicBus = audioContext.createGain();
+        musicBus.gain.value = 0;
+        musicBus.connect(audioContext.destination);
+      }
+
+      return audioContext.resume().then(() => {
+        musicBus.gain.setTargetAtTime(
+          soundEnabled && running ? 0.7 : 0,
+          audioContext.currentTime,
+          0.06
+        );
+      });
+    }
+
+    function playTone(
+      frequency,
+      duration = 0.12,
+      waveform = 'sine',
+      volume = 0.035,
+      delay = 0,
+      routeToMusicBus = false
+    ) {
+      if (!soundEnabled || !audioContext) return;
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const startTime = audioContext.currentTime + delay;
+
+      oscillator.type = waveform;
+      oscillator.frequency.setValueAtTime(frequency, startTime);
+
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+      oscillator.connect(gain);
+      gain.connect(routeToMusicBus ? musicBus : audioContext.destination);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration + 0.02);
+    }
+
+    function playKick() {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const time = audioContext.currentTime;
+
+      oscillator.frequency.setValueAtTime(105, time);
+      oscillator.frequency.exponentialRampToValueAtTime(42, time + 0.13);
+
+      gain.gain.setValueAtTime(0.12, time);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.14);
+
+      oscillator.connect(gain);
+      gain.connect(musicBus);
+      oscillator.start();
+      oscillator.stop(time + 0.15);
+    }
+
+    function playSoundEffect(kind) {
+      ensureAudio();
+
+      if (kind === 0) {
+        // Star pickup.
+        playTone(880, 0.09, 'sine', 0.07);
+        playTone(1320, 0.12, 'sine', 0.05, 0.05);
+      } else if (kind === 1) {
+        // Crash.
+        playTone(110, 0.35, 'sawtooth', 0.12);
+        playTone(55, 0.45, 'square', 0.08);
+      } else {
+        // Lift impulse.
+        playTone(660, 0.07, 'triangle', 0.045);
+      }
+    }
+
+    function updateMusic(timeMs) {
+      if (!running || !soundEnabled || !audioContext || audioContext.state !== 'running') return;
+      if (timeMs - lastMusicTick < 145) return;
+
+      lastMusicTick = timeMs;
+
+      // Cmaj7 -> Am7 -> Fmaj7 -> G6, arranged as lightweight arpeggios,
+      // bass notes and a soft generated kick.
+      const chords = [
+        [262, 330, 392, 494],
+        [220, 262, 330, 392],
+        [175, 220, 262, 330],
+        [196, 247, 294, 330]
+      ];
+      const arpeggio = [0, 1, 2, 3, 2, 1, 3, 1];
+
+      const beatIndex = musicBeat++;
+      const chord = chords[(beatIndex >> 4) & 3];
+
+      if (!(beatIndex & 1)) {
+        playTone(chord[arpeggio[beatIndex & 7]] * 2, 0.2, 'triangle', 0.045, 0, true);
+      }
+
+      if (!(beatIndex & 3)) {
+        playTone(chord[0] / 2, 0.36, 'sine', 0.075, 0, true);
+        playKick();
+      }
+
+      if (beatIndex % 16 === 0) {
+        for (const note of chord) {
+          playTone(note, 2.45, 'sine', 0.022, 0, true);
+        }
+      }
+
+      if (beatIndex % 4 === 2) {
+        playTone(1200, 0.035, 'triangle', 0.009, 0, true);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Game flow
+    // -------------------------------------------------------------------------
+
+    function startGame() {
+      obstacles = [];
+      collectibles = [];
+      rainbowTrail = [];
+      particles = [];
+
+      isDead = false;
+      unicornY = 20;
+      cameraOffset = 6.5;
+      cameraY = 26.5;
+      cameraPitch = -0.15;
+      smoothedVerticalSpeed = 0;
+      verticalSpeed = 0;
+      distance = 0;
+      score = 0;
+      forwardSpeed = 34;
+      running = true;
+      isHolding = false;
+      musicBeat = 0;
+      lastMusicTick = -1e9;
+
+      // The first user click unlocks Web Audio in browsers. Once resumed,
+      // play a short opening chord before the loop takes over.
+      ensureAudio().then(() => {
+        [262, 330, 392, 494].forEach((note, i) => {
+          playTone(note, 0.7, 'sine', 0.035, i * 0.03, true);
+        });
+        playTone(131, 0.8, 'sine', 0.08, 0, true);
+      });
+
+      for (let i = 1; i < 8; i++) {
+        spawnObstacle(-i * 38);
+      }
+
+      overlay.style.display = 'none';
+    }
+
+    function gameOver() {
+      running = false;
+      isDead = true;
+      ensureAudio();
+      playSoundEffect(1);
+      createBurst({ x: 0, y: unicornY, z: 0 }, '#ff287f', 34);
+      bestScore = Math.max(bestScore, score);
+      updateText();
+      setTimeout(() => overlay.style.display = 'grid', 420);
+    }
+
+    function setLift(active) {
+      if (!running) return;
+
+      if (active && !isHolding) {
+        verticalSpeed = Math.max(verticalSpeed, 8.5);
+        playSoundEffect(2);
+      }
+
+      isHolding = active;
+    }
+
+    // -------------------------------------------------------------------------
+    // Main update + render loop
+    // -------------------------------------------------------------------------
+
+    function frame(timeMs) {
+      requestAnimationFrame(frame);
+
+      const deltaTime = Math.min((timeMs - previousFrameTime) / 1000 || 0, 0.05);
+      previousFrameTime = timeMs;
+
+      drawBackground();
+      updateMusic(timeMs);
+
+      if (running) {
+        forwardSpeed = Math.min(72, forwardSpeed + 0.38 * deltaTime);
+        const distanceMoved = forwardSpeed * deltaTime;
+
+        distance += distanceMoved;
+        score += distanceMoved * 2 | 0;
+
+        // Hold = strong lift, release = gravity. At very high altitude, an
+        // extra downward force prevents camping at the ceiling.
+        verticalSpeed += (isHolding ? 54 : -36) * deltaTime;
+        if (unicornY > 80) {
+          verticalSpeed -= (unicornY - 80) * 4.2 * deltaTime;
+        }
+
+        verticalSpeed = Math.max(-34, Math.min(23, verticalSpeed));
+        unicornY += verticalSpeed * deltaTime;
+
+        if (unicornY < lowerBoundary || unicornY > upperBoundary) {
+          gameOver();
+        }
+
+        // Stable camera: filter vertical speed first, then slowly alter camera
+        // offset and pitch. This avoids the nausea-inducing camera jumps from
+        // earlier prototypes.
+        smoothedVerticalSpeed +=
+          (verticalSpeed - smoothedVerticalSpeed) * (1 - Math.exp(-deltaTime * 2.2));
+
+        const downwardSpeed = Math.max(0, -smoothedVerticalSpeed);
+        const desiredCameraOffset = 6.5 + Math.min(2, downwardSpeed * 0.055);
+        cameraOffset +=
+          (desiredCameraOffset - cameraOffset) * (1 - Math.exp(-deltaTime * 2.5));
+
+        cameraY = unicornY + cameraOffset;
+
+        const desiredPitch = Math.max(
+          -0.52,
+          Math.min(0.18, -0.15 + smoothedVerticalSpeed * 0.012)
+        );
+        cameraPitch +=
+          (desiredPitch - cameraPitch) * (1 - Math.exp(-deltaTime * 2.1));
+
+        // Advance rainbow history toward the camera, then append the current
+        // hoof contact point. The newest point therefore stays exactly under
+        // the unicorn's feet.
+        for (const point of rainbowTrail) {
+          point[1] += distanceMoved;
+        }
+        rainbowTrail.unshift([unicornY - 1.18, 0]);
+        rainbowTrail = rainbowTrail.filter(point => point[1] < 18).slice(0, 100);
+
+        // Obstacles + collectibles.
+        for (const list of [obstacles, collectibles]) {
+          for (let i = list.length - 1; i >= 0; i--) {
+            const object = list[i];
+            object.z += distanceMoved;
+
+            if (list === obstacles && object.type === 2) {
+              object.phase = (object.phase + deltaTime * 1.65) % 2;
+
+              const lightningActive = object.phase > 1.38;
+              const inStrikeDepth = Math.abs(object.z) < 1.35;
+              const inStrikeWidth = Math.abs(object.x) < 1.15;
+              const belowCloud = unicornY < object.y;
+
+              if (lightningActive && inStrikeDepth && inStrikeWidth && belowCloud) {
+                gameOver();
+                break;
+              }
+            }
+
+            if (collides(object, object.radius)) {
+              if (list === obstacles) {
+                gameOver();
+                break;
+              }
+
+              playSoundEffect(0);
+              createBurst(object);
+              score += 250;
+              list.splice(i, 1);
+              continue;
+            }
+
+            if (object.z > 16) {
+              list.splice(i, 1);
+            }
+          }
+        }
+
+        // Keep the world populated ahead of the player.
+        const furthestObstacleZ = obstacles.length
+          ? obstacles[obstacles.length - 1].z
+          : 0;
+
+        if (furthestObstacleZ > -230) {
+          spawnObstacle(furthestObstacleZ - 30 - Math.random() * 21);
+        }
+
+        scoreLabel.textContent = score;
+        distanceLabel.textContent = distance | 0;
+      } else if (!rainbowTrail.length) {
+        // A short rainbow is visible before the first run begins.
+        for (let i = 0; i < 24; i++) {
+          rainbowTrail.push([18.82, i * 0.65]);
+        }
+      }
+
+      drawBounds();
+      drawRainbowRoad();
+
+      // Painter's algorithm: far objects first.
+      const renderables = [
+        ...obstacles.map(object => [object.z, 0, object]),
+        ...collectibles.map(object => [object.z, 1, object])
+      ].sort((a, b) => a[0] - b[0]);
+
+      for (const [, isCollectible, object] of renderables) {
+        if (isCollectible) {
+          drawStar(object);
+        } else if (object.type === 0) {
+          drawCrystal(object);
+        } else if (object.type === 1) {
+          drawSpikyOrb(object);
+        } else {
+          drawStormCloud(object);
+        }
+      }
+
+      drawUnicorn();
+      drawParticles(deltaTime);
+    }
+
+    requestAnimationFrame(frame);
+
+    // -------------------------------------------------------------------------
+    // Input
+    // -------------------------------------------------------------------------
+
+    chineseButton.onclick = () => chooseLanguage(0);
+    englishButton.onclick = () => chooseLanguage(1);
+    startButton.onclick = startGame;
+
+    languageButton.onclick = () => {
+      language ^= 1;
+      updateText();
+    };
+
+    soundButton.onclick = () => {
+      soundEnabled ^= 1;
+      soundButton.textContent = soundEnabled ? '🔊' : '🔇';
+      ensureAudio();
+    };
+
+    window.onpointerdown = event => {
+      if (!event.target.closest('button')) setLift(true);
+    };
+
+    window.onpointerup = () => {
+      isHolding = false;
+    };
+
+    window.onpointercancel = () => {
+      isHolding = false;
+    };
+
+    window.onkeydown = event => {
+      if (event.code === 'Space' || event.code === 'ArrowUp') {
+        setLift(true);
+      }
+    };
+
+    window.onkeyup = event => {
+      if (event.code === 'Space' || event.code === 'ArrowUp') {
+        isHolding = false;
+      }
+    };
+  </script>
+</body>
+</html>

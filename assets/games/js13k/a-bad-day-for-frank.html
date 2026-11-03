@@ -1,0 +1,886 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <title>A bad day for Frank</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, user-scalable=0" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta property="og:title" content="JS13K Starter" />
+        <meta property="og:description" content="" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="" />
+        <meta property="og:image" content="" />
+        <!-- build:css -->
+        <style>body { 
+    margin: 0; 
+    padding: 0; 
+    background: #000;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -khtml-user-select: none;
+    -ms-user-select: none;
+    text-align: center;
+}
+
+h1, h2, h3 {
+    color: #FFF;
+}
+
+div {
+    width: 200;
+    color: #FFF;
+    display: inline-block;
+    text-align: left;
+
+}
+
+#chat {
+    text-align: center;
+}
+#death {
+    text-align: center;
+}
+canvas { 
+    display: block; 
+    margin: 0 auto; 
+    background: #4b0082; 
+}
+
+@media screen and (min-width: 0px) and (max-width: 660px) {
+    #fork { display: none; }
+}
+
+@media screen and (min-width: 660px) {
+    #fork { display: block; }
+}
+</style>
+        <!-- endbuild -->
+    </head>
+    <body>
+        <h1>A bad day for Frank</h1>
+        <canvas></canvas>
+        <div id="death"></div>
+        <br />
+        <div id="quests"></div>
+        <br />
+        <div id="chat"></div>
+
+        <!-- build:js -->
+        <script>"use strict";
+
+var $ = {};
+
+$.width = 800;
+$.height = 500;
+
+$.colors = {
+//    black: 'rgba(0, 0, 0, 1)',
+  //  gray: 'rgba(157, 157, 157, 1)',
+//    white: 'rgba(255, 255, 255, 1)',
+  //  red: 'rgba(190, 38, 51, 1)',
+    pink: 'rgba(295, 99, 247, 1)',
+    purple: 'rgba(91, 0, 110, 1)',
+    darkbrown: 'rgba(73, 60, 43, 1)',
+    brown: 'rgba(164, 100, 34, 1)',
+    yellow: 'rgba(247, 226, 107, 1)',
+    darkgreen: 'rgba(47, 72, 78, 1)',
+    green: 'rgba(88, 167, 46, 1)',
+ //   slimegreen: 'rgba(163, 206, 39, 1)',
+    nightblue: 'rgba(27, 38, 50, 1)',
+ //   seablue: 'rgba(0, 87, 132, 1)',
+    skyblue: 'rgba(49, 162, 242, 1)',
+   // cloudblue: 'rgba(178, 220, 239, 1)',
+
+};
+
+$.red = 'rgba(190, 38, 51, 1)';
+$.black = 'rgba(0, 0, 0, 1)';
+$.gray ='rgba(157, 157, 157, 1)';
+
+$.timer = 0;
+$.red_chat = 0;
+$.frank_chat = 0;
+$.hermit_chat = 0;
+
+$.entities = [];
+$.glitch = 0;
+
+$.stop = false;
+$.stop_count = 10;
+
+$.quest_state = 0;
+$.skip_state = 0;
+
+var dt = 0;
+var controls = { left: false, right: false, jump: false };
+
+$.init = function () {
+    $.canvas = document.getElementsByTagName('canvas')[0];
+    $.canvas.width = $.width;
+    $.canvas.height = $.height;
+    $.ctx = $.canvas.getContext('2d');
+    $.chat = new $.Chat();
+    $.quests = new $.Quests();
+    $.generateRandomObjects();
+    $.map_x = 80;
+    $.map_y = 50;
+    $.loop();
+};
+
+$.loop = function () {
+    $.render();
+    $.update();
+
+    window.requestAnimFrame($.loop);
+};
+
+$.update = function () {
+    if ($.stop) return;
+
+    $.timer++;
+
+    if ($.timer == 100) {
+        $.chat.addChat("Frank","Oh hi. I'm Frank, how are you?", $.colors["green"]);
+    }
+    if ($.timer == 300) {
+        $.chat.addChat("Frank","You can control me with the arrow keys. How do you like my home?", $.colors["green"]);
+    }
+    if ($.timer == 700) {
+        $.chat.addChat("Frank","I know, it could use a lick of paint. But I like it here!", $.colors["green"]);
+    }
+    if ($.timer == 800) {
+        $.chat.addChat("Frank","I got my stuff, I got my space. I'm happy.", $.colors["green"]);
+    }
+    if ($.timer == 1100) {
+        $.chat.addChat("Frank","Let's go outside for a bit. You can walk on all the light tiles.", $.colors["green"]);
+    }
+
+    if ($.timer == 1350) {
+        if ($.player.y > (61%25)*20) {
+            $.map.setData(96,60,$.colors["darkgreen"]);
+        }
+        else {
+            $.map.setData(96,63,$.colors["darkgreen"]);
+        }
+    }
+    if ($.timer == 1380) {
+        $.chat.addChat("Frank","What in the highest!", $.colors["green"]);
+    }
+    if ($.timer == 1440) {
+        $.chat.addChat("Frank","A tree! In the middle of my house!", $.colors["green"]);
+    }
+    if ($.timer == 1550) {
+        $.chat.addChat("Frank","I mean, I like trees. But not ones appearing without an invitation.", $.colors["green"]);
+    }
+    if ($.timer == 1720) {
+        $.chat.addChat("Frank","This is highly irregular!", $.colors["green"]);
+    }
+    if ($.timer == 2000) {
+        $.chat.addChat("Frank","I need to go ask Gunnar. Gunnar knows about science and stuff.", $.colors["green"]);
+    }
+    if ($.timer == 2200) {
+        $.chat.addChat("Frank","He lives not far to the south east. Let's go!", $.colors["green"]);
+    }
+    if ($.timer == 2400) {
+        $.quests.addQuest(1, "Find Gunnar the science guy in the south east" , 3,3);
+        $.quest_state = 1;
+
+    }
+    if ($.skip_state == 0 && controls.space) {
+        $.skip_state = 1;
+        $.timer = 1999;
+    }
+    if ($.timer > 3000 && $.map_y == 50 && $.map_x == 80 && $.red_chat == 0) {
+        $.red_chat = $.timer;
+        $.map.setData(110,70,$.red);
+        
+    }
+    if ( $.red_chat > 0) {
+        if ($.timer === ($.red_chat + 30)) {
+            $.chat.addChat("Frank","Did you see that?", $.colors["green"]);
+        }
+        if ($.timer === ($.red_chat + 150)) {
+            $.chat.addChat("Frank","That's... not good", $.colors["green"]);
+        }
+        if ($.timer === ($.red_chat + 300)) {
+            $.chat.addChat("Frank","That red sludge is highly dangerous. Don't go near it!", $.colors["green"]);
+        }
+        if ($.timer === ($.red_chat + 500)) {
+            $.chat.addChat("Frank","It will ooze around open spaces. Good luck it's been trapped between solid stuff!", $.colors["green"]);
+        }
+        if ($.timer === ($.red_chat + 650)) {
+            $.chat.addChat("Frank","But how did it get there?", $.colors["green"]);
+            $.red_chat = -1;
+        }
+    }
+
+    if ($.npcs.overlap() === "noone") {
+    }
+    else {
+        if( $.npcs.overlap() === "Gunnar") {
+            var qs = $.quests.getAll();
+
+           for (var i=0; i<qs.length; i++) {
+               if (qs[i].id === 1 && !qs[i].complete) {
+                    $.quests.complete(1);
+                    $.quest_state = 2;
+
+                    $.chat.addChat("Gunnar","HI FRANK!", $.colors["skyblue"]);
+                    $.frank_chat = $.timer;    
+
+                }
+            }
+        }
+        else  if( $.npcs.overlap() === "The Hermit") {
+            var qs = $.quests.getAll();
+
+           for (var i=0; i<qs.length; i++) {
+               if (qs[i].id === 2 && !qs[i].complete) {
+                    $.quests.complete(2);
+                    $.quest_state = 3;
+
+                    $.chat.addChat("The Hermit","Frank. I didn't expect _you_", $.colors["yellow"]);
+                    $.hermit_chat = $.timer;    
+
+                }
+            }
+        }
+
+    }
+    if ($.hermit_chat > 0) {
+        if ($.timer === ($.hermit_chat + 70)) {
+            $.chat.addChat("Frank","Apologies oh great Hermit...", $.colors["green"]);
+        }
+        if ($.timer === ($.hermit_chat + 270)) {
+            $.chat.addChat("The Hermit","Yeah yeah. This kinda thing happens way too often for my liking.", $.colors["yellow"]);
+        }
+        if ($.timer === ($.hermit_chat + 350)) {
+            $.chat.addChat("Frank","So sorry oh great Hermit...", $.colors["green"]);
+        }
+        if ($.timer === ($.hermit_chat + 500)) {
+            $.chat.addChat("The Hermit","I got good news: I have the perfect solution!", $.colors["yellow"]);
+        }
+        if ($.timer === ($.hermit_chat + 600)) {
+            $.chat.addChat("Frank","Ah! Thank you so much oh great...", $.colors["green"]);
+        }
+        if ($.timer === ($.hermit_chat + 660)) {
+            $.chat.addChat("The Hermit","If you lot can't learn... maybe others will.", $.colors["yellow"]);
+        }
+        if ($.timer === ($.hermit_chat + 800)) {
+            $.chat.addChat("Frank","What do you mean...others? ", $.colors["green"]);
+        }
+        if ($.timer > ($.hermit_chat + 1000)) {
+
+            for (var i = 1; i < 5; i++) {
+                var offsetX = $.util.randomIntInRange(0,41);
+                var offsetY = $.util.randomIntInRange(0,26);
+
+               $.map.setData(offsetX, offsetY, $.red);
+            }
+        }
+        if ($.timer > ($.hermit_chat + 1500)) {
+
+            for (var i = 0; i < 41; i++) {
+                for (var j = 0; j < 26; j++) {
+                   $.map.setData(i,j, $.red);
+                }
+            }
+            $.Draw.rectFill(8*20, 8*20, 160,160, $.red);
+            document.getElementById('death').innerHTML = "Frank had one last thought before the red sludge ate him up: It had been a bad day for Frank.<br/><br/>Thanks for playing!<br/><br/>Made by dollarone for JS13k 2016.";
+
+
+            $.stop = true;
+        }
+    }
+
+    if ($.frank_chat > 0) {
+        if ($.timer === ($.frank_chat + 70)) {
+            $.chat.addChat("Frank","Hi Gunnar.", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 150)) {
+            $.chat.addChat("Frank","Uhm... weird things are happening man.", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 300)) {
+            $.chat.addChat("Frank","A tree suddenly appeared in my house!", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 400)) {
+            $.chat.addChat("Gunnar","OH NOT THIS AGAIN.", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 480)) {
+            $.chat.addChat("Frank","Again? What do you...", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 600)) {
+            $.chat.addChat("Gunnar","OHSHITOHSHITOHSHIT", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 800)) {
+            $.chat.addChat("Frank","Gunnar? Why is this happening?", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 1000)) {
+            $.chat.addChat("Gunnar","FRANK! YOU HAVE TO GO ASK FOR HELP.", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 1300)) {
+            $.chat.addChat("Gunnar","GO TO THE HERMIT AND PLEAD!", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 1650)) {
+            $.chat.addChat("Frank","The Hermit? but...", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 1690)) {
+            $.chat.addChat("Gunnar","FRANK!", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 1700)) {
+            $.chat.addChat("Gunnar","YOU NEED TO DO THIS FOR ME. I HAVE ... HISTORY WITH HIM.", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 2000)) {
+            $.chat.addChat("Gunnar","THE HERMIT LIVES ON THE ISLAND NORTH WEST OF HERE.", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 2250)) {
+            $.chat.addChat("Frank","But how do I cross the red sludge?", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 2500)) {
+            $.chat.addChat("Gunnar","NOT A PROBLEM. HERE. TAKE THIS. ", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 2800)) {
+            $.chat.addChat("Gunnar","ITS A RANDOMASSER™. ", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 3000)) {
+            $.chat.addChat("Gunnar","JUST PRESS THAT X BUTTON TO USE IT. ", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 3300)) {
+            $.chat.addChat("Gunnar","AND BE CAREFUL. IT'S NOT PASSED SAFETY TESTING YET. ", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 3450)) {
+            $.chat.addChat("Frank","Gunnar... what does it do?", $.colors["green"]);
+        }
+        if ($.timer === ($.frank_chat + 3750)) {
+            $.chat.addChat("Gunnar","OH IT JUST CHANGES THE STRUCTURE OF MASS AROUND YOU.", $.colors["skyblue"]);
+        }
+        if ($.timer === ($.frank_chat + 4100)) {
+            $.chat.addChat("Gunnar","NOW GO AS QUICK AS YOU CAN. TIME IS POTENTIALLY LIMITED.", $.colors["skyblue"]);
+            $.quests.addQuest(2, "Ask the Hermit on the northwestern island for help" , 3,3);
+            $.quest_state = 2;
+
+        }
+
+    }
+
+    $.glitch++;
+    if ($.quest_state > 0 && $.glitch > parseInt(63-($.quest_state*20)) ) {
+       $.randomGlitch();
+       $.glitch = 0;
+    }
+    for (var i = 0; i < $.entities.length; i++) {
+        $.entities[i].update();    
+    }
+
+    $.player.update();
+    $.quests.update();
+    $.chat.update();
+    $.npcs.update();
+};
+
+$.render = function () {
+    $.Draw.clear();
+    $.map.render($.map_x, $.map_y);
+    $.player.render();
+    $.quests.render();
+    $.chat.render();
+    $.npcs.render();
+};
+
+$.randomGlitch = function () {
+
+    var offsetX = $.util.randomIntInRange(1,199);
+    var offsetY = $.util.randomIntInRange(1,124);
+    while (offsetY === parseInt($.map_y + $.player.y/20) && offsetX === parseInt($.map_x + $.player.x/20)) {
+        offsetX = $.util.randomIntInRange(1,199);
+        offsetY = $.util.randomIntInRange(1,124);
+    }
+
+    if ($.map.getData(offsetX, offsetY) != $.gray) {
+
+       $.map.setData(offsetX, offsetY, $.util.pickRandomFromObject($.colors));
+   }
+};
+
+$.generateRandomObjects = function () {
+    $.entities = [];
+
+    $.map = new $.Map(202,127, $.colors);
+    $.player = new $.Player(20*20+9,12*20+9);
+    $.npcs = new $.Npcs();
+    $.npcs.addNpc("Gunnar", 187,92);
+    $.npcs.addNpc("The Hermit", 15, 15); //187,92));
+};
+
+window.addEventListener('load', $.init, false);
+
+window.addEventListener('keydown', function(ev) { return onkey(ev, ev.keyCode, true);  }, true);
+window.addEventListener('keyup',   function(ev) { return onkey(ev, ev.keyCode, false); }, false);
+
+function onkey(ev, key, down) {
+    var KEY = { SPACE: 32, LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, X: 88 };
+
+  switch(key) {
+    case KEY.LEFT:  controls.left  = down; return false;
+    case KEY.RIGHT: controls.right = down;  return false;
+    case KEY.UP: controls.up  = down; return false;
+    case KEY.DOWN: controls.down  = down; return false;
+    case KEY.SPACE: controls.space = down; return false;
+    case KEY.X: controls.x = down; return false;
+  }
+}</script>
+        <script>"use strict";
+
+$.Draw = {
+    clear: function() {
+        $.ctx.clearRect(0, 0, $.width, $.height);
+    },
+
+    rectFill: function(x, y, w, h, col) {
+        $.ctx.beginPath();
+        $.ctx.rect(x, y, w, h);
+        $.ctx.fillStyle = col;
+        $.ctx.fill();
+    },
+    rect: function(x, y, w, h, col) {
+        $.ctx.beginPath();
+        $.ctx.rect(x, y, w, h);
+        $.ctx.strokeStyle = col;
+        $.ctx.stroke();
+    },
+    putImageData: function(myImageData, dx, dy) {
+        $.ctx.putImageData(myImageData, dx, dy);
+    },
+    fillText: function() {
+
+        $.ctx.font="20px";
+        $.ctx.fillText("Hello World!",10,50);
+    }
+};
+</script>
+        <script>"use strict";
+
+$.util = {};
+
+window.requestAnimFrame = (function(){
+    return window.requestAnimationFrame ||
+    window.webkitRequestAnimationFrame || 
+    window.mozRequestAnimationFrame    || 
+    window.oRequestAnimationFrame      || 
+    window.msRequestAnimationFrame     || 
+    function( callback ){
+        window.setTimeout(callback, 1000 / 60);
+    };
+})();
+
+
+$.util.randomInRange= function (min, max) {
+    return Math.random() * ( max - min ) + min;
+};
+
+$.util.randomIntInRange= function (min, max) {
+    return Math.floor( Math.random() * ( max - min ) + min);
+};
+
+$.util.pickRandomFromObject = function (obj) {
+    var keys = Object.keys(obj)
+    return obj[keys[ keys.length * Math.random() << 0]];
+};
+
+$.util.rndSeed = function(s) {
+    return function() {
+        s = Math.sin(s) * 10000; return s - Math.floor(s);
+    };
+};
+
+
+$.util.bound = function(x, min, max) {
+    return Math.max(min, Math.min(max, x));
+};
+</script>
+        <script>"use strict";
+
+$.RandomObj = function (x, y) {
+    this.x = x; // $.util.randomInRange(0, $.width);
+    this.y = y; // $.util.randomInRange(0, $.height);
+    this.dimension = 40;
+    this.targetDimension = $.util.randomInRange(40, 40);
+    this.growthSpeed = $.util.randomInRange(0.5, 2);
+    this.color = $.util.pickRandomFromObject($.colors);
+};
+
+
+$.RandomObj.prototype.render = function () {
+    $.Draw.rect(this.x, this.y, this.dimension, this.dimension, this.color);
+};
+
+$.RandomObj.prototype.update = function () {
+    if (this.dimension < this.targetDimension) {
+        this.dimension += this.growthSpeed;
+    }
+};
+</script>
+        <script>"use strict";
+
+$.Player = function(x1, y1) {
+    this.x = x1;
+    this.y = y1;
+    this.color = 'rgba(3, 3, 3, 1)';
+    this.diameter = 10;
+    this.dimension = 10;
+    this.targetDimension = 6;
+    this.growthSpeed = 1;
+    this.left = false;
+    this.right = false;
+    this.jump = false;
+    this.direction = 0;
+    this.accel = 2;
+};
+
+
+$.Player.prototype.render = function () {
+    $.Draw.rect(this.x-4, this.y-4, this.dimension, this.dimension, this.color);
+
+};
+
+$.Player.prototype.localGlitch = function () {
+
+    var offsetX = $.util.randomIntInRange(-5,5);
+    var offsetY = $.util.randomIntInRange(-5,5);
+    while (offsetY === 0 && offsetX === 0) {
+        offsetY = $.util.randomIntInRange(-5,5);
+        offsetX = $.util.randomIntInRange(-5,5);
+    }
+    if ($.map.getData($.map_x + parseInt(this.x/20) + offsetX, $.map_y + parseInt(this.y/20) + offsetY) != $.gray) {
+        $.map.setData($.map_x + parseInt(this.x/20) + offsetX, $.map_y + parseInt(this.y/20) + offsetY, $.util.pickRandomFromObject($.colors));
+    }   
+};
+
+$.Player.prototype.update = function () {
+    var newX = this.x;
+    var newY = this.y; 
+
+    if (controls.left) {
+      // collision
+        newX -= this.accel;
+    }
+    else if (controls.right) {
+        newX += this.accel;
+    }
+    else if (controls.up) {
+        newY -= this.accel;
+    }
+    else if (controls.down) {
+        newY += this.accel;
+    }
+    else if (controls.x && $.quest_state > 0) {
+        this.localGlitch();
+    }
+
+    if ($.map.isSolid($.map.getDataFromPixel(newX-5, newY-5)) || $.map.isSolid($.map.getDataFromPixel(newX+5, newY+5)) ||
+        $.map.isSolid($.map.getDataFromPixel(newX-5, newY+5)) || $.map.isSolid($.map.getDataFromPixel(newX+5, newY-5))
+        ){
+        
+    }
+    else {
+        this.x = newX;
+        this.y = newY;
+    }
+        if ($.hermit_chat === 0 && ($.red === $.map.getDataFromPixel(newX-5, newY-5) || $.red === $.map.getDataFromPixel(newX+5, newY+5) ||
+            $.red === $.map.getDataFromPixel(newX-5, newY+5) || $.red === $.map.getDataFromPixel(newX+5, newY-5))) {
+            //death
+            document.getElementById('death').innerHTML = "Frank was brutally absorbed by the red sludge.<br />A few days later, the glitching stopped and normal living resumed - except for Frank, who was dead.";
+            $.stop = true;
+
+        }
+    if (this.x < 0) {
+        this.x += 40*20;
+        $.map_x -= 40;
+    }
+    else if (this.x > 40*20) {
+        this.x -= 40*20;
+        $.map_x += 40;
+    }
+
+    if (this.y < 0) {
+        this.y += 25*20;
+        $.map_y -= 25;
+
+    }
+    else if (this.y > 25*20) {
+        this.y -= 25*20;
+        $.map_y += 25;
+    }
+
+};
+
+</script>
+        <script> "use strict";
+
+$.Npcs = function() {
+    this.list = [];
+    this.npcs = 0;
+    this.color = 'rgba(3, 3, 3, 1)';
+    this.dimension = 10;
+};
+
+$.Npcs.prototype.addNpc = function (name, x, y) {
+    this.list.push({name:name, x:x,y:y});
+    this.npcs++;
+
+};
+$.Npcs.prototype.render = function () {
+    
+
+    for (var i=0; i<this.npcs; i++) {
+        if (this.list[i].x > $.map_x && this.list[i].x < $.map_x+40 &&
+            this.list[i].y > $.map_y && this.list[i].y < $.map_y+25) {
+            $.Draw.rect((this.list[i].x-$.map_x)*20+5, (this.list[i].y-$.map_y)*20+5, this.dimension, this.dimension, this.color);
+        }
+    }
+};
+
+$.Npcs.prototype.overlap = function () {
+    
+
+    for (var i=0; i<this.npcs; i++) {
+        if (this.list[i].x > $.map_x && this.list[i].x < $.map_x+40 &&
+            this.list[i].y > $.map_y && this.list[i].y < $.map_y+25) {
+            if (Math.abs($.player.x-15 - (this.list[i].x-$.map_x)*20+5) < 10 &&
+                Math.abs($.player.y-15 - (this.list[i].y-$.map_y)*20+5) < 10) {
+                return this.list[i].name;
+            }
+        }
+    }
+    return "noone";
+};
+
+
+$.Npcs.prototype.update = function () {
+    for (var i=0; i<this.npcs; i++) {
+        $.map.setData(this.list[i].x, this.list[i].y, $.colors["yellow"]);
+    }
+
+};
+</script>
+        <script>
+"use strict";
+
+$.TILE_SIZE = 20;
+
+$.Map = function(width, height, colors) {
+    this.width = width;
+    this.height = height;
+    this.colors = colors;
+    this.offset = 1;
+    this.data = [width+1];
+    for (var i = 0; i < width; i++) {
+        this.data[i] = [height+1];
+
+
+        for (var j = 0; j < height-1; j++) {
+            this.data[0][j] = $.gray;
+
+            this.data[i][j] = $.util.pickRandomFromObject($.colors);
+            if (i>98 && i<104 && j>60 && j<65) this.data[i][j] = $.colors["yellow"];
+            if (i==101 && j==65) this.data[i][j] = $.colors["yellow"];
+            if (i>94 && i<102 && j>65 && j<68) this.data[i][j] = $.colors["yellow"];
+            if (i==100 && j==60) this.data[i][j] = $.colors["yellow"];
+            if (i>98 && i<101 && j>56 && j<60) this.data[i][j] = $.colors["yellow"];
+            if (i==103 && j==60) this.data[i][j] = $.colors["yellow"];
+            if (i>101 && i<105 && j>56 && j<60) this.data[i][j] = $.colors["yellow"];
+            if (i==98 && j==62) this.data[i][j] = $.colors["yellow"];
+            if (i>92 && i<98 && j>58 && j<65) this.data[i][j] = $.colors["yellow"];
+
+            if (i>108 && i<112 && j>68 && j<72) this.data[i][j] = $.colors["darkbrown"];
+            if (i==109 && j==69) this.data[i][j] = $.colors["purple"];
+            if (i==110 && j==71) this.data[i][j] = $.colors["nightblue"];
+            if (i==111 && j==71) this.data[i][j] = $.colors["darkgreen"];
+            if (i==110 && j==69) this.data[i][j] = $.colors["darkgreen"];
+            if (i==109 && j==71) this.data[i][j] = $.colors["nightblue"];
+            if (i==110 && j==70) this.data[i][j] = $.colors["pink"];
+            if (i>100 && i<106 && j==72) this.data[i][j] = $.colors["green"];
+            if (i>103 && i<108 && j==73) this.data[i][j] = $.colors["green"];
+            if (i>106 && i<113 && j==72) this.data[i][j] = $.colors["green"];
+            if (i==98 && j>67 && j<72) this.data[i][j] = $.colors["green"];
+            if (i>98 && i<102 && j==71) this.data[i][j] = $.colors["green"];
+            if (i==112 && j>68 && j<72) this.data[i][j] = $.colors["green"];
+            if (i>112 && i<118 && j==69) this.data[i][j] = $.colors["green"];
+            if (i==117 && j>69 && j<71) this.data[i][j] = $.colors["green"];
+            if (i>117 && i<126 && j==70) this.data[i][j] = $.colors["green"];
+            if (i>124 && i<133 && j==71) this.data[i][j] = $.colors["green"];
+            if (i>131 && i<137 && j==72) this.data[i][j] = $.colors["green"];
+            if (i==136 && j>72 && j<75) this.data[i][j] = $.colors["green"];
+            if (i>136 && i<139 && j==74) this.data[i][j] = $.colors["green"];
+            if (i==138 && j>74 && j<80) this.data[i][j] = $.colors["green"];
+            if (i>138 && i<144 && j==79) this.data[i][j] = $.colors["green"];
+            if (i==143 && j>79 && j<85) this.data[i][j] = $.colors["green"];
+            if (i==144 && j>83 && j<90) this.data[i][j] = $.colors["green"];
+            if (i>144 && i<152 && j==89) this.data[i][j] = $.colors["green"];
+            if (i>150 && i<153 && j==88) this.data[i][j] = $.colors["green"];
+            if (i>151 && i<160 && j==87) this.data[i][j] = $.colors["green"];
+            if (i>158 && i<165 && j==86) this.data[i][j] = $.colors["green"];
+            if (i>163 && i<170 && j==87) this.data[i][j] = $.colors["green"];
+            if (i>168 && i<172 && j==88) this.data[i][j] = $.colors["green"];
+            if (i>170 && i<175 && j==89) this.data[i][j] = $.colors["green"];
+            if (i>173 && i<178 && j==90) this.data[i][j] = $.colors["green"];
+            if (i==177 && j>90 && j<93) this.data[i][j] = $.colors["green"];
+            if (i>177 && i<182 && j==92) this.data[i][j] = $.colors["green"];
+            if (i>180 && i<184 && j==93) this.data[i][j] = $.colors["green"];
+            if (i>184 && i<196 && j>90 && j<96) this.data[i][j] = $.colors["yellow"];
+            if (i==184 && j>91 && j<95) this.data[i][j] = $.colors["yellow"];
+            if (i==196 && j>91 && j<95) this.data[i][j] = $.colors["yellow"];
+            if (i>185 && i<195 && j==90) this.data[i][j] = $.colors["yellow"];
+            if (i>185 && i<195 && j==96) this.data[i][j] = $.colors["yellow"];
+            if (i>176 && i<186 && j>30 && j<38) this.data[i][j] = $.colors["yellow"];
+            //if (i>10 && i<20 && j>10 && j<20) this.data[i][j] = $.colors["yellow"];
+            if (i>0 && i<45 && j>26 && j<36) this.data[i][j] = $.red;
+            if (i>15 && i<45 && j>25 && j<35) this.data[i][j] = $.red;
+            if (i>30 && i<46 && j>0 && j<35) this.data[i][j] = $.red;
+
+        }
+        this.data[i][0] = $.gray;
+        this.data[i][height-3] = $.gray;
+
+    }
+    for (var j = 0; j < height; j++) {
+        this.data[width-3][j] = $.gray;
+    }
+
+
+    
+
+};
+
+$.Map.prototype.getData = function (x1, y2) {
+    var x = parseInt(x1);
+    var y = parseInt(y2);
+    return this.data[x][y];
+};
+
+$.Map.prototype.getDataFromPixel = function (x,y) {
+    if (x < 0)     return this.getData($.map_x - 1,$.map_y + parseInt(y/$.TILE_SIZE));
+    if (y < 0)     return this.getData($.map_x + parseInt(x/$.TILE_SIZE),$.map_y - 1);
+
+    return this.getData($.map_x + parseInt(x/$.TILE_SIZE),$.map_y + parseInt(y/$.TILE_SIZE));
+}
+$.Map.prototype.setData = function (x,y, col) {
+    this.data[x][y] = col;
+}
+
+$.Map.prototype.render = function (x, y) {
+    for (var i = x; i < x+40; i++) {
+        for (var j = y; j < y+25; j++) {
+            $.Draw.rectFill((i-x)*$.TILE_SIZE, (j-y)*$.TILE_SIZE, $.TILE_SIZE, $.TILE_SIZE, this.getData(i, j));
+ 
+        }
+    }
+
+};
+
+$.Map.prototype.isSolidAt = function (x,y) {
+    return this.isSolid(this.getData(parseInt(x/20),parseInt(y/20)));
+}
+
+$.Map.prototype.isSolid = function (col) {
+    return (col === $.colors["nightblue"] ||
+           col === $.colors["darkbrown"] ||
+           col === $.colors["purple"] ||
+           col == $.gray ||
+           col === $.colors["darkgreen"]);
+};
+
+$.Map.prototype.tile2pixel = function (x,y) {
+    return [(x%40)*TILE_SIZE, (y%25)*TILE_SIZE];
+};
+
+$.Map.prototype.clamp = function (x,y) {
+    return [parseInt(x/TILE_SIZE)*TILE_SIZE, parseInt(y/TILE_SIZE)*TILE_SIZE];
+};
+</script>
+        <script>"use strict";
+
+
+$.Chat = function() {
+    this.list = [];
+    this.chatlines = 0;
+};
+
+
+$.Chat.prototype.addChat = function (who, text, color) {
+    this.list.push({who:who, text:text, color:color, fade:200});
+    this.chatlines++;
+
+};
+$.Chat.prototype.render = function () {
+    var buffer = "";
+    for (var i=0; i<this.chatlines; i++) {
+        if( this.list[i].fade > 0) {
+            buffer += "<div style='color: " + this.list[i].color + "; opacity:" + Math.min(this.list[i].fade, 100)/100 + ";'>" +
+             this.list[i].text + "</div><br />";
+        }
+    }
+    buffer += "";
+    document.getElementById('chat').innerHTML = buffer;
+    
+};
+
+$.Chat.prototype.update = function (id) {
+    for (var i=0; i<this.chatlines; i++) {
+        if (this.list[i].fade > 0) {
+            this.list[i].fade -= 0.5;
+        }
+    }
+};
+</script>
+        <script>"use strict";
+
+
+$.Quests = function() {
+    this.list = [];
+    this.quests = 0;
+};
+
+
+$.Quests.prototype.addQuest = function (id, text, x, y) {
+    this.list.push({id:id, text:text, x:x,y:y,complete:false,fade:100});
+    this.quests++;
+
+};
+$.Quests.prototype.render = function () {
+    var buffer = "<ul>";
+    for (var i=0; i<this.quests; i++) {
+        if( this.list[i].fade > 0) {
+            buffer += "<li style='color: " + $.colors["pink"] + "; opacity:" + this.list[i].fade/100 + ";'>" + this.list[i].text + "</li>";
+        }
+    }
+    buffer += "</ul>";
+    document.getElementById('quests').innerHTML = buffer;
+    
+};
+
+$.Quests.prototype.getAll = function () {
+    return this.list;
+};
+
+
+$.Quests.prototype.complete = function (id) {
+    for (var i=0; i<this.quests; i++) {
+        if(this.list[i].id == id) {
+            this.list[i].complete = true;
+        }
+    }
+};
+
+$.Quests.prototype.update = function (id) {
+    for (var i=0; i<this.quests; i++) {
+        if (this.list[i].complete && this.list[i].fade > 0) {
+            this.list[i].fade -= 0.5;
+        }
+    }
+};
+</script>
+        <!-- endbuild -->
+    </body>
+</html>

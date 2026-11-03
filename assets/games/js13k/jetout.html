@@ -1,0 +1,3231 @@
+<!doctype html><html><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Jetout</title>
+<style>
+html,body{margin:0;height:100%;background:#0b0722;overflow:hidden}
+canvas{display:block;touch-action:none;user-select:none}
+</style>
+<canvas id=c></canvas>
+<script>
+var C = c.getContext('2d'), W, H, M = Math, PI = M.PI
+
+// state  0 stage list   1 playing   2 end screen   3 dying   4 home
+// The home screen is where the game opens. It leads to the stage list, which
+// is what state 0 has always been, and the list leads back to it with Escape.
+// last / now are the animation clock, hold is the finger or the space bar,
+// port is true when the phone is held upright and we refuse to play.
+var state, last, now, hold, port
+
+// ---------- the playfield, all computed in fit() ----------
+// ceilY and floorY bound it, playH is its height. Everything else is a
+// fraction of playH, so the game feels the same on a phone and on a desktop.
+var ceilY, floorY, playH, uniSize, haloR, uniX, cardW
+var gravity, thrust, maxVY
+
+// ---------- the unicorn ----------
+// X is her position in the world and never resets within a stage; Y is her
+// height on screen. uniDrawX is where she is actually drawn, which differs
+// from uniX only while she flies in and out between stages.
+var X, Y, vertSpeed, tilt, onGround
+var legPhase, wingPhase, flyBlend                // flyBlend eases the legs from running to flying
+var hurtTime, deathTime, knocked, invuln          // knocked stiffens her legs during the fall
+
+// ---------- how fast the world goes by ----------
+// scrollAim is the speed this stage aims for, scrollNow the one in force:
+// the two gems bend it, slowRate downward and turboRate upward.
+var scrollAim, scrollNow, turboRate
+var worldTime, genEdge                          // genEdge: how far ahead the world is already built
+
+// ---------- everything the world holds ----------
+// zaps    {x,y,l:length,a:angle,s:spin,m:sway,p:phase}   the electric bars
+// coinList{x,y}
+// gemList {x,y,k:which gem}
+// missiles{x,y,t:warning countdown, then hiss timer}
+// hazards {t:1 falling block 2 updraft, x,y, v:direction, w:rumble left}
+// sparks  {x,y,vx,vy,l:life left,h:hue,k:0 dot 1 or 2 shockwave}
+// trail   a flat list of x,y: the rainbow she leaves behind
+var zaps, coinList, gemList, missiles, hazards, sparks, trail
+var hazardTimer, missileTimer, rushTimer
+var depth                                      // set by deep(): 0 far away, 1 close by
+
+// ---------- the run ----------
+// One resource and one only: the fuel in her jetpack. It burns on its own, a
+// coin fills it, a knock punctures the tank. Nothing to add up, nothing to
+// remember: a jetpack that runs dry falls, and everyone knows that already.
+//
+// There is no ceiling on purpose. Capping it would mean only the last stage
+// counted, since you would always reach the endless mode with a full tank:
+// playing the twelve worlds well has to be worth something. Past what the gauge
+// holds, the surplus shows as a figure, which never saturates.
+//
+// The gauge holds twice what you set off with, so the first stage opens on a
+// half full bar: there is something to fill from the very first second, and
+// filling it is a goal you can see before anyone explains it to you.
+var dist, best, timeLeft, shake
+
+// The stage machine. stagePhase is where we are in the passage from one
+// world to the next, phaseTime how long we have been in that phase:
+// 0 flying in from the left   1 playing   2 flying out to the right
+// 3 black falls on the stage we leave   4 the title, on black
+var stage, stagePhase, phaseTime, stageStartX, endless, uniDrawX
+var seamFrom = -1                              // the world being left while the seam crosses, -1 for none
+var stageLen = 60000  // 1000 metres, the length of one stage
+// Each world's own hazard, on top of the common ones:
+// 1 falling blocks   2 updraft column
+// The gust was dropped: it pushed down at 780 px/s2 while gravity
+// already pushes at 1298, so it was weaker than a plain fall.
+var worldHazard = [0, 1, 0, 2, 1, 0, 1, 0, 0, 1, 2, 2]
+// the stage carousel on the title screen: where it sits, where it is
+// heading, and the drag in progress
+var carPos = 0, carAim = 0, dragging, dragX0, dragFrom, dragDist
+// the timed gems: colour and duration. gemTime[k] is each one's remaining time,
+// they run in parallel and stack freely. Number 5, the super ring, is not one of
+// them: it pays out at once and has no gauge.
+var gemTime
+var gemColour = ['#ff4d5e', '#4dff88', '#4dc8ff', '#ff8c1a', '#ffd21f']
+var gemDur = [6, 7, 8, 5, 6]
+// draw table: the first ones come up more often than the super ring
+var gemDraw = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5]
+
+// Reading localStorage THROWS when the browser is set to refuse site data, and
+// this runs at load: unguarded, the whole game would die on a blank page. The
+// empty object takes its place, reads come back undefined and writes go nowhere,
+// which simply means no record is kept. Keys are prefixed because every game on
+// the site shares one origin, and for the same reason we never call clear().
+var LS
+try { LS = localStorage } catch (e) { LS = {} }
+best = +(LS.jetoutD || 0)
+// Best remaining time on entering each stage. A stage still at zero
+// has never been reached: it stays locked.
+var bestTimes = (LS.jetoutT || '').split(',').map(Number)
+// The clock you begin a stage with: the best time ever carried into it.
+// Stage 1 always grants the full 60 s. A stage still at zero has never been
+// reached, and the title screen keeps it locked.
+//   stageNo  which stage, counted from 0
+function getStartTime(stageNo) {
+	return stageNo ? bestTimes[stageNo] || 0 : 60
+}
+// ---------- the worlds ----------
+// sky top, sky bottom, ground, edge, name
+var worlds = [
+	['#79cfe6', '#dcf1dd', '#3c6b2f', '#5d9a45', 'Forest'],
+	['#3d3752', '#8a7280', '#2c2833', '#4e4659', 'Factory'],
+	['#ffc0e0', '#fff0f7', '#e0578f', '#ff9ec7', 'Candyland'],
+	['#0b3550', '#1f7fa8', '#1d4a5c', '#3f8fa8', 'Seabed'],
+	['#f2b45c', '#ffeec0', '#d9ab63', '#eecb8e', 'Desert'],
+	['#141433', '#5c3a6e', '#201e38', '#3a3557', 'City'],
+	['#0e2a4d', '#bce6f5', '#dcedf5', '#ffffff', 'Icefield'],
+	['#183a20', '#4a7a45', '#25401f', '#3f6b34', 'Jungle'],
+	['#ff8f4a', '#ffe3b0', '#e5c583', '#f7e6b6', 'Beach'],
+	['#1a0a0a', '#7d2012', '#241010', '#8a3418', 'Volcano'],
+	['#2a0d4a', '#6a1b6b', '#14041f', '#ff3d81', 'Neon Grid'],
+	['#05030f', '#171240', '#191633', '#3a3570', 'Orbital Station']
+]
+
+// Stable draw: a given spot in the world always yields the same scenery.
+// This is real hashing, not a linear generator: with one, two neighbouring
+// indices gave values in arithmetic progression, hence regular scenery.
+//   seed  any number; the same seed always gives back the same value
+function getHash(seed) {
+	seed = M.sin(seed * 127.1 + 311.7) * 43758.5453
+	return seed - M.floor(seed)
+}
+
+// Spreads one family of scenery (trees, cacti, palms...) over several depth
+// planes at once. Each plane has its own scroll speed, spacing and drawing,
+// and exposes its distance in `depth` (0 = far, 1 = near) so the pattern can
+// adapt its size and tint. That is what gives a forest its thickness.
+//   planes            how many planes
+//   spacing           the gap between two items on the nearest plane
+//   parFar, parNear   the scroll speed of the furthest and the nearest plane
+//   seed              fixes the draw, so a given spot always yields the same thing
+//   drawItem          what to paint for one item
+function drawPlanes(planes, spacing, parFar, parNear, seed, drawItem) {
+	for (var plane = 0; plane < planes; plane++) {
+		depth = plane / (planes - 1)
+		drawScattered(spacing * (.7 + depth * .6), parFar + (parNear - parFar) * depth, seed + plane * 97, drawItem)
+	}
+}
+
+// Sows a pattern all along the world, with its own parallax depth.
+// Each item is jittered around its slot: without it items form a strict
+// grid, and two planes end up lining up at regular intervals.
+//   spacing   the gap between two items
+//   parallax  how fast this plane scrolls, 1 being the speed of the ground
+//   seed      fixes the draw for this family
+//   drawItem  called for each item as (x, rand1, rand2, slot)
+function drawScattered(spacing, parallax, seed, drawItem) {
+	var shift = X * parallax, i = M.floor((shift - spacing * 1.5) / spacing), j = M.ceil((shift + W + spacing * 1.5) / spacing)
+	for (; i <= j; i++) {
+		drawItem(i * spacing + (getHash(i * 3 + seed + 7) - .5) * spacing * .62 - shift, getHash(i * 7 + seed), getHash(i * 13 + seed + 37), i)
+	}
+}
+
+// ---------- sound ----------
+// musNo is the tune playing right now, so that changing tune restarts it on
+// its own first beat instead of picking it up mid bar.
+var actx, mg, thr, NB, nextT = 0, st16 = 0, musNo = -1
+// The chord grid: one root per bar, in MIDI, negative when the chord is
+// minor. The arpeggio notes follow from the intervals.
+
+// Builds the whole audio chain, and only on the first tap: a browser refuses
+// to make a sound before the player has asked for one. Called again later, it
+// simply wakes a context the system had suspended.
+function initAudio() {
+	if (actx) {
+		if (actx.state == 'suspended') {
+			actx.resume()
+		}
+		return
+	}
+	try {
+		actx = new(window.AudioContext || window.webkitAudioContext)
+	} catch (e) {
+		return
+	}
+	mg = actx.createGain()
+	mg.gain.value = .5
+	mg.connect(actx.destination)
+	// the jet: looped white noise through a band-pass, whose centre is swept by a
+	// slow oscillator so the breath keeps moving instead of sitting as a flat hiss
+	var b = NB = actx.createBuffer(1, actx.sampleRate, actx.sampleRate), d = b.getChannelData(0), i
+	for (i = 0; i < d.length; i++) {
+		d[i] = M.random() * 2 - 1
+	}
+	var o = actx.createBufferSource(), f = actx.createBiquadFilter()
+	var lo = actx.createOscillator(), lg = actx.createGain()
+	o.buffer = b
+	o.loop = 1
+	f.type = 'bandpass'
+	f.frequency.value = 900
+	f.Q.value = .8
+	lo.frequency.value = 3.5
+	lg.gain.value = 470   // one breath every 0.29 s
+	lo.connect(lg)
+	lg.connect(f.frequency)
+	lo.start()
+	thr = actx.createGain()
+	thr.gain.value = 0
+	o.connect(f)
+	f.connect(thr)
+	thr.connect(mg)
+	o.start()
+	nextT = actx.currentTime
+}
+
+// One voice for everything: an oscillator, or a burst of the shared white noise
+// through a sweeping low-pass when noisy is set, which is how explosions are made.
+//   fromHz, toHz  the sweep; equal values hold a single note
+//   secs          how long it lasts
+//   wave          the oscillator shape, ignored when noisy is set
+//   vol           its peak volume
+//   delay         seconds from now, for scheduling a run of notes
+//   noisy         set it to fire a burst of white noise instead of a note
+function playSound(fromHz, toHz, secs, wave, vol, delay, noisy) {
+	if (!actx) {
+		return
+	}
+	var t = actx.currentTime + (delay || 0), o, f, g = actx.createGain()
+	if (noisy) {
+		o = actx.createBufferSource()
+		o.buffer = NB
+		f = actx.createBiquadFilter()             // lowpass is the default type
+		f.frequency.setValueAtTime(fromHz, t)
+		f.frequency.exponentialRampToValueAtTime(toHz, t + secs)
+		o.connect(f)
+		f.connect(g)
+	} else {
+		o = actx.createOscillator()
+		o.type = wave
+		o.frequency.setValueAtTime(fromHz, t)
+		if (toHz != fromHz) {
+			o.frequency.exponentialRampToValueAtTime(toHz, t + secs)
+		}
+		o.connect(g)
+	}
+	g.gain.setValueAtTime(.0001, t)
+	g.gain.exponentialRampToValueAtTime(vol, t + .01)
+	g.gain.exponentialRampToValueAtTime(.0001, t + secs)
+	g.connect(mg)
+	o.start(t)
+	o.stop(t + secs + .03)
+}
+
+// One arrangement per world, packed into a string. The fields, in order:
+//   tempo | swing | chords | bass | arpeggio | melody | kick | snare | hat | voices
+// A chord is one letter whose code carries the root in MIDI; a lower case letter
+// means a minor chord. In a pattern a digit or letter is a degree of the chord,
+// a dash holds the note before it, and a dot is a rest. A pattern may run over
+// several bars: that is what stops the loop from being heard.
+// The last field: three waveforms, three volumes, then the octave of the arpeggio.
+var MUS = [
+'144|0|DKmIfKDK|1.1.5.5.1.1.5.5.|1358a8531358a853|..5.8.9.8.5.3.5.8.9.a.9.8.5.....5.8.9.8.9.a.9.8.5.3.5.8-------....8.9.a.9.8.5.3.5.8.9.a.b.a.9.8.a.9.8.5.8.9.8.5.3------.........|x...x...x...x...|....x.......x...|x.xxx.xxx.xxx.xx|.|1SS:H0T:018>:H0T:02<N:H0T:00',
+'124|0|mmKKmmIK|1..1..1.1..1..1.|5..8..5.3...|1.1.1...1.5.8-..1.1.1...5-8-5-..3.3.1...5...8-5-|x..x..x.x..x..x.|....x.......x...|x.xxx.xxx.xxx.xx|.|1VN:H1<:028<:H0T:02H?2B3`N<0',
+'168|1|DImKDmIK|1...1...5...5...|1.3.5.8.5.3.1.3.|8.9.8...5...3...5.6.5---3-------5.8.9.a.9...8...5---8---5-------1.3.5...8-------a...9.8.5---....3.5.6.8.a---9...8.5.3.5.1-------|x.......x..x....|....x.......x...|..x...x...x...x.|.|1AN:H1B:028?:H0T:02:L:H0T:00',
+'150|0|fDNDfNID|1.1.5.5.1.1.8.5.|1358a8531358a853|1.3.5.3.1.3.5.8.3.5.8.5.3.5.8.9.5.8.9.8.5.8.9.a.9.8.5---8-------8.9.a.9.8.9.a.b.a.9.8.9.a.b.a.9.b.a.9.8.9.a.b.a.b---a---8-------|x...x...x...x...x...x...x...x...|....x.......x...|x.x.x.x.x.x.x.x.|.|1XN<@1J:01:<4B1]:91?NDT1d:00',
+'151|0|ODODODmO|1.......5...1...|....5...8...5...|1---3.4.3.1-----1...3.5---......3---4.5.4.3.1---5.3.1.3---..........5.4.3---4.5.a.3.5.8.5---....8---7.5.3.5.1...3.4.3---1-------|x.......x.......x.......x...x...|.|....x.......x...|..x...x.....x.....x...x...x.x...|1Vg:H0T:019N:H0T:03>X:H1`:00',
+'125|3|mfHmIfHm|1.8.1.8.5.8.5.8.|..3...5.....7...|........5.8.7.5.3-------............2.3.5.....8.7...5...3...2...........5.8.7.5.3---2---............2.3.5.8...7.5...3...2-------|x...x...x...x...|....x.......x...|x.x.x.x.x.x.x.x.|.|1XZ:L0T:019N:H0T:00@ZNH0T:00',
+'146|0|dLGNdLNL|1.1.1.1.1.1.1.1.|8.a.8.5.8.a.b.a.|....8---9.a.8---5-------8.9.........a---b---a---9---8---5...........8---9.a.9---b---a.9.8-------....9---8---5---3---8---7-------|x...x...x...x...|....x.......x...|..x...x...x...x.|.|1XF:H0T:007:3B0T:01<N4X0T:01',
+'132|0|fDNMfNDM|1..1..1...1.1...|..5.....3.....8.|5.8.5...................3.5.3...8.9.8.5.................5...1---a.9.8...................a.9.8.5.9.8.5.3.................5---1---|x..x..x...x..x..|....x..x....x...|x.xxx.xxx.xxx.xx|..............................xx|1VL:H0T:029@:H0T:01@N:H0T:00',
+'130|2|KFhDmFKF|1..1..5.8..8..5.|..5...5...5...5.|..3-5-8-a---8---8-------6-8-......7-8-9-a-9-8-9-b---------------..7-8-9-a---7---c-------b-------..c-b-a---8---9-..9---b---c-a-d-|x...x...x...x...|....x.......x...|..x.x.x...x.x.x...x.x.x...x.x.x.|.|1]N:H0T:01<>:H0T:01@b:X0T:00',
+'150|0|ffNMffNM|1...1...1..1.1..|8.8.8.8.7.7.7.7.|1..1..1..3..5...1..1..1..7..5...1..1..1..3..8...1..1..1..3------1..1..1..5..8...1..1..1..3..a...1..1..1..8..9...1..1..1..7------|x...x...x...x...|....x.......x...|xxxxxxxxxxxxxxxx|.|2PS:H1>:029D:H0T:03>X:H1]:00',
+'142|0|oKFMoKMF|1.1.1.1.1.1.1.1.1.1.1.1.1.1.5.8.|1358535813585358|8...9.8.8.......9...9.8.........a...a.9.8.......5...5.8.........8...9.8.8.......9...a.9.8.......8...9.8.5.3.....5...3.1.........|x...x...x...x...|....x.......x...|..x...x...x...x.|.|3>JBD1<=93=;:H1l:02>@481d:00',
+'160|0|iELGiEnG|1.1.1.1.1.1.5.5.1.1.1.1.8.8.5.5.|1358a8531358a853|8-------9---a---b-------a---9---8---9---a---9---b-------a-------a---b---a---9---b-------9---8---8---9---a---b---b---------------|x...x...x...x.x.|....x.......x...|..x...x...x...xx|.|3:L<@1L:83B9:H1t:03;F<B1h:80',
+'128|1|KFhDKFDF|1.5.8.5.1.5.8.5.|1.3.5.8.5.3.5.8.|5.8.9.a.9.8.....8.9.8.5----.....3.5.8.9.8.5.3.2.1.3.5.8--------...8.9.a.b.a.9.8.9.8.9.a.9.8.5.3.5.8.9.8.5.3.5.8.5.3.2.1-------..|x...x...x..x....|....x.......x...|x.x.x.x.x.x.x.x.|.|1XN:H0T:01:@:H0T:01@N:H0T:00'
+]
+
+// A degree, in semitones above the root. T is the third of the chord, which is
+// why the sixth and the seventh follow the quality without being stored twice.
+// d and e fill the top octave in: without them the fourth and the seventh do
+// not exist above the octave, and a melody passing through there had to be
+// pulled back by a semitone.
+var OFF = [0, 2, 0, 5, 7, 5, 7, 12, 14, 12, 17, 19, 21, 19]
+var PLUST = '00100110010001'
+var WAVE = ['sine', 'triangle', 'square', 'sawtooth']
+var FILT = [0, 'lowpass', 'highpass', 'bandpass']
+// the four colours of a coin, from the widest ring to the glint
+var COIN = ['#ffcf4d42', '#b8801a', '#ffcf4d', '#fff6cf']
+// The time bonus is no longer a gem but a giant ring, in what used to be the
+// heart's colour: nothing needs explaining, you can see it is a ring and you can
+// see it is out of the ordinary.
+var BIGRING = ['#12d6a042', '#0a7a5b', '#12d6a0', '#c8fdec']
+
+// A number packed into one character, 48 being zero. Code 44 is never emitted:
+// it is the backslash, which would have to be escaped inside a string.
+//   s  the nine characters describing a voice
+//   i  which of its numbers
+function musChar(s, i) {
+	return s.charCodeAt(i) - 48
+}
+
+// One note of the music. The sound effects keep playSound, which is cheaper;
+// this one exists because a timbre is not just a waveform. It carries the
+// envelope, an optional second oscillator a few cents away, and an optional
+// filter — that is what makes the game sound like the page the music is
+// composed on, essais.html, rather than a rough copy of it.
+//   hz     the pitch
+//   secs   how long it lasts, envelope included
+//   p      the nine characters describing this voice
+//   delay  seconds from now
+function playNote(hz, secs, p, delay) {
+	var t = actx.currentTime + delay, g = actx.createGain(), f, o, i
+	var vol = musChar(p, 1) * .005, att = musChar(p, 3) * .001, rel = musChar(p, 4) * .005
+	g.gain.setValueAtTime(.0001, t)
+	g.gain.exponentialRampToValueAtTime(vol, t + att)
+	g.gain.setValueAtTime(vol, t + M.max(att, secs - rel))
+	g.gain.exponentialRampToValueAtTime(.0001, t + secs)
+	if (musChar(p, 5)) {
+		f = actx.createBiquadFilter()
+		f.type = FILT[musChar(p, 5)]
+		f.frequency.value = musChar(p, 6) * 50
+		f.Q.value = musChar(p, 7) * .1
+		g.connect(f)
+		f.connect(mg)
+	} else {
+		g.connect(mg)
+	}
+	for (i = musChar(p, 8) ? 2 : 1; i--; ) {           // the second one beats against the first
+		o = actx.createOscillator()
+		o.type = WAVE[musChar(p, 0)]
+		o.frequency.value = hz
+		o.detune.value = i * musChar(p, 8)
+		o.connect(g)
+		o.start(t)
+		o.stop(t + secs + .05)
+	}
+}
+
+function scheduleMusic() {
+	if (!actx) {
+		return
+	}
+	// The home screen and the stage list share the thirteenth tune. The end
+	// screen and the fall stay silent, as they always have.
+	if (port || state == 2 || state == 3) {
+		nextT = actx.currentTime
+		musNo = -1
+		return
+	}
+	var no = state == 1 ? stage % worlds.length : 12
+	if (no != musNo) {
+		musNo = no
+		st16 = 0
+		nextT = actx.currentTime
+	}
+	var m = MUS[no].split('|')
+	var t = actx.currentTime, sp = 60 / m[0] / 4, i, v, c, k, tenu, q, n, tierce, ch, quand, p
+	while (nextT < t + .25) {
+		k = st16
+		ch = m[2].charCodeAt((k / 16|0) % m[2].length)
+		n = ch > 90 ? ch - 52 : ch - 20       // a lower case letter means a minor chord
+		tierce = ch > 90 ? 3 : 4
+		quand = nextT - t + (k % 2 ? m[1] * sp / 10 : 0)      // the swing delays the off-beats
+		for (i = 0; i < 3; i++) {             // 0 the bass, 1 the arpeggio, 2 the melody
+			v = m[3 + i]
+			c = '123456789adbce'.indexOf(v[k % v.length])
+			if (c < 0) {
+				continue
+			}
+			tenu = 1
+			while (v[(k + tenu) % v.length] == '-') {
+				tenu++
+			}
+			p = m[10].substr(i * 9, 9)
+			q = 440 * M.pow(2, (n + OFF[c] + PLUST[c] * tierce + (i - 1) * 12 +
+				(i == 1 ? m[10][27] * 12 : 0) - 69) / 12)
+			// the note lasts as long as it is held, but never less than its own
+			// minimum: that minimum is what gives a voice its body
+			playNote(q, M.max(tenu * sp, musChar(p, 2) * .01), p, quand)
+		}
+		if (m[6][k % m[6].length] != '.') {
+			playSound(190, 55, .15, 'sine', .26, quand)          // the kick
+		}
+		if (m[7][k % m[7].length] != '.') {
+			playSound(2400, 900, .17, 0, .16, quand, 1)          // the snare
+		}
+		if (m[8][k % m[8].length] != '.') {
+			playSound(9000, 5000, .04, 0, .05, quand, 1)         // the hi-hat
+		}
+		if (m[9][k % m[9].length] != '.') {
+			playSound(260, 117, .22, 'sine', .32, quand)         // the tek of the darbuka
+		}
+		nextT += sp
+		st16++
+	}
+}
+
+// ---------- layout ----------
+
+// Recomputes the whole layout after a resize or a rotation. Every size derives
+// from playH, the height of the playfield, so the game plays the same on a
+// phone and on a desktop. The pixel ratio is capped at 2.
+function layoutScreen() {
+	// capped at 2: beyond that we paint 2 to 3 times more pixels for no visible gain
+	var ratio = M.min(2, devicePixelRatio || 1)
+	W = innerWidth
+	H = innerHeight
+	c.width = W * ratio
+	c.height = H * ratio
+	c.style.width = W + 'px'
+	c.style.height = H + 'px'
+	C.setTransform(ratio, 0, 0, ratio, 0, 0)
+	port = H > W
+	ceilY = M.max(38, H * .085)
+	floorY = H - M.max(26, H * .07)
+	playH = floorY - ceilY
+	// the unicorn takes up a little over a fifth of the playfield
+	uniSize = playH * .21
+	haloR = uniSize * .30
+	uniX = W * .24
+	cardW = W * .34
+	// everything scales with the playfield height: same feel on phone and tablet
+	gravity = playH * 4.2
+	thrust = playH * 9
+	maxVY = playH * 1.9
+}
+
+// Puts everything back to the opening of a stage. It does not start playing:
+// the state stays on the title, and the stage card is shown first.
+//   fromStage  which stage to open on, 0 for a fresh run
+function resetRun(fromStage) {
+	stage = fromStage || 0
+	// Every difficulty ramp used to be indexed on distance and saturated
+	// during stage 1. They now follow the stage number.
+	// where she starts, and how fast the world scrolls at this stage
+	X = stage * stageLen
+	Y = (ceilY + floorY) / 2
+	vertSpeed = 0
+	scrollAim = W * (.34 + M.min(.12, stage * .008))
+	scrollNow = scrollAim
+
+	// her state: on the ground, wing phase, flying, wing beat
+	onGround = 0
+	legPhase = 0
+	flyBlend = 1
+	wingPhase = 0
+	tilt = 0
+	hurtTime = 0
+
+	// the two resources, and the stage machine
+	timeLeft = getStartTime(stage)
+	dist = 0
+	stagePhase = 4                                    // we open on the stage title
+	phaseTime = 0
+	stageStartX = X
+	uniDrawX = uniX
+	endless = stage >= worlds.length
+
+	// everything the world holds, emptied
+	zaps = []
+	coinList = []
+	gemList = []
+	missiles = []
+	hazards = []
+	sparks = []
+	trail = []
+	hazardTimer = 2
+	genEdge = X + W * .8
+
+	// gems, and the slow motion / turbo pair, all back to neutral
+	gemTime = [0, 0, 0, 0, 0]
+	invuln = 0
+	turboRate = 1
+	worldTime = 0
+	deathTime = 0
+	knocked = 0
+	rushTimer = 0
+	missileTimer = 3
+	shake = 0
+	buildWorldAhead()
+	state = 0
+}
+
+// ---------- the world ----------
+
+// Coins are laid along a genuinely flyable path: a virtual unicorn is
+// flown with the same physics, and a coin is dropped every uniSize * 1.15 px.
+// An unflyable pattern therefore cannot be generated.
+//   startX  where in the world the run begins
+function addCoinRun(startX) {
+	// The path is drawn from the position in the world: two to five beats of
+	// varying length, never the same twice. Four fixed patterns were
+	// recognisable after three minutes.
+	var beats = 2 + (getHash(startX) * 4|0), plan = [], up = getHash(startX * 7 + 3) > .5 ? 1 : 0, k
+	for (k = 0; k < beats; k++) {
+		plan.push(up, .16 + getHash(startX * 13 + k * 29) * .42)
+		up = 1 - up
+	}
+	var y = plan[0] ? floorY - uniSize * .5 : ceilY + uniSize * .56 + playH * .14, vy = 0, x = startX, lx = startX - uniSize, i, t, dt = 1 / 60
+	for (i = 0; i < plan.length; i += 2) {
+		for (t = 0; t < plan[i + 1]; t += dt) {
+			vy += (plan[i] ? -thrust : 0) * dt + gravity * dt
+			if (vy > maxVY) {
+				vy = maxVY
+			}
+			if (vy < -maxVY) {
+				vy = -maxVY
+			}
+			y += vy * dt
+			x += scrollAim * dt
+			if (y > floorY - uniSize * .42) {
+				y = floorY - uniSize * .42
+				vy = 0
+			}
+			if (y < ceilY + uniSize * .56) {
+				y = ceilY + uniSize * .56
+				vy = 0
+			}
+			if (x - lx > uniSize * .85) {
+				coinList.push({x: x, y: y})
+				lx = x
+			}
+		}
+	}
+}
+
+// Builds the world in front of the unicorn, up to two screens ahead, and stops
+// short of the end of the stage so the passage is always clear. Lays down
+// electric bars, coin runs and gems as it goes.
+function buildWorldAhead() {
+	var k, y, i, n, w
+	// The endless mode never leaves the end of a stage empty: without this, half a
+	// screen of nothing would land exactly on the seam between two worlds.
+	while (genEdge < X + W * 2.2 && (endless || genEdge < stageStartX + stageLen - W * .5)) {
+		k = endless ? 0 : M.random()   // in endless mode, not a single coin or gem
+		if (k < .28 + M.min(.15, stage * .011)) {
+			n = M.random() < .5 ? 0 : M.random() < .22 + stage * .010 ? 2 : 1   // half the time, no barrier at all
+			for (i = 0; i < n; i++) {
+				// Two barriers in five start from the floor or ceiling: without them,
+				// hugging the floor was the safest route in the game.
+				w = M.random()
+				if (w < .42) {
+					y = playH * (.26 + M.random() * .26)
+					zaps.push({x: genEdge + i * uniSize * 3.2, y: w < .21 ? ceilY + y / 2 : floorY - y / 2, l: y, a: PI / 2, s: 0,
+									m: M.random() < .25 ? playH * .10 : 0, p: M.random() * 7})
+				} else {
+					zaps.push({
+						x: genEdge + i * uniSize * 3.2,
+						y: ceilY + playH * (.22 + M.random() * .56),
+						l: playH * (.18 + M.random() * .22),
+						a: [0, PI / 2, PI * .25, PI * .75][M.random() * 4|0],
+						s: M.random() < .28 + stage * .010 ? (M.random() - .5) * 1.6 : 0,
+						m: M.random() < .3 ? playH * .16 : 0,
+						p: M.random() * 7
+					})
+				}
+			}
+		} else if (k < .90) {
+			addCoinRun(genEdge)
+		} else {
+			gemList.push({x: genEdge + uniSize, y: ceilY + playH * (.25 + M.random() * .5), k: gemDraw[M.random() * gemDraw.length|0]})
+		}
+		genEdge += W * (.58 + M.random() * .34) - M.min(W * (.02 + stage * .007), dist * .015)
+	}
+}
+
+// ---------- the unicorn ----------
+
+// A linear gradient per volume rather than pasted shadow blobs:
+// light comes from the top left, as on the coins and the emitters.
+// A three-stop vertical gradient. Used to give a volume its own shading rather
+// than pasting a shadow under it.
+//   x1, y1, x2, y2   the axis the gradient runs along
+//   top, mid, bottom the three colours
+function makeGradient(x1, y1, x2, y2, top, mid, bottom) {
+	var g = C.createLinearGradient(x1, y1, x2, y2)
+	g.addColorStop(0, top)
+	g.addColorStop(.55, mid)
+	g.addColorStop(1, bottom)
+	return g
+}
+
+// a wing: folded on the ground, spread and beating in flight
+//   angle       how far the wing is rotated, which is the beat itself
+//   span        how far it is spread: folded on the ground, open in flight
+//   colA, colB  the two colours of its gradient
+function drawWing(angle, span, colA, colB) {
+	var i
+	C.save()
+	C.translate(-.04, -.15)
+	C.rotate(angle)
+	C.scale(span, span)
+	C.fillStyle = makeGradient(-.08, -.06, -.40, -.30, colA, colB, colB)
+	C.beginPath()
+	C.moveTo(0, 0)
+	C.quadraticCurveTo(-.12, -.34, -.48, -.32)
+	C.quadraticCurveTo(-.32, -.06, -.10, .08)
+	C.closePath()
+	C.fill()
+	C.strokeStyle = '#7e76a873'
+	C.lineWidth = .013
+	for (i = 1; i < 4; i++) {
+		C.beginPath()
+		C.moveTo(-.04, -.03)
+		C.quadraticCurveTo(-.18 - i * .05, -.22 - i * .01, -.36 - i * .035, -.30 + i * .08)
+		C.stroke()
+	}
+	C.restore()
+}
+
+// Draws her whole body, wings and mane, in the state the run has put her in.
+//   atX, atY  where she goes on screen
+//   size      her height; everything else is a fraction of it
+//   lean      how far she is tipped, nose up or nose down
+//   legs      the leg cycle, which keeps running while she is on the ground
+function drawUnicorn(atX, atY, size, lean, legs) {
+	var i, a, hx, kx, ky, fx, fy, L, t, sx, sy, bob
+	C.save()
+	C.translate(atX, atY)
+	C.rotate(lean)
+	C.scale(size, size)
+	// Her body rises and falls instead of riding along flat: twice per stride on
+	// the ground, once per wingbeat in the air. On the ground the term is never
+	// positive, so it is nil at the two moments a diagonal pair lands and lifts
+	// her in between, while she is airborne between two pairs. That way the
+	// hooves keep touching down at the same depth without any correction.
+	bob = (M.cos(legs * 2) - 1) * .016 * (1 - flyBlend) + M.sin(wingPhase - 1) * .04 * flyBlend
+	C.translate(0, bob)
+	C.lineCap = 'round'
+	C.lineJoin = 'round'
+
+	for (i = 0; i < 5; i++) {                              // the tail
+		a = i / 4
+		C.strokeStyle = 'hsl(' + i * 55 + ',95%,60%)'
+		C.lineWidth = .09
+		C.beginPath()
+		C.moveTo(-.44 + a * .02, -.06 + a * .10)
+		C.quadraticCurveTo(-.68 + a * .02, .04 + a * .10, -.60 + a * .02 + M.sin(legs - a * 2) * .05, .28 + a * .10)
+		C.stroke()
+	}
+
+	drawWing(-.20 + M.sin(wingPhase + .6) * .5 * flyBlend, .52 + flyBlend * .46, '#cdc7e2', '#a49bc8')   // the far wing
+
+	// Each leg carries where it hangs and where it sits in the cycle. She trots:
+	// the diagonal pairs move together, so a hind leg shares its offset with the
+	// front leg on the other side, and the two pairs are half a cycle apart.
+	L = [[-.30, 0, '#b9b3d6', '#6f6898'], [.06, 3.1, '#b9b3d6', '#6f6898'],
+		[-.32, 3.1, '#f0eef8', '#8880b4'], [.08, 0, '#f0eef8', '#8880b4']]
+	for (i = 0; i < 4; i++) {                              // the legs and their hooves
+		hx = L[i][0]
+		a = M.sin(legs + L[i][1]) * .55
+		kx = hx + M.sin(a) * .16
+		ky = .10 + M.cos(a) * .17
+		// The knee folds while the leg swings forward and straightens once it is
+		// under the body, which is what a stride actually does. A shin that only
+		// copies the thigh, as this did, keeps the leg stiff from end to end.
+		t = a * .35 - M.max(0, M.cos(legs + L[i][1])) * .95
+		fx = kx + M.sin(t) * .17
+		fy = ky + M.cos(t) * .17
+		// In flight: thigh vertical under the hip, shin folded back.
+		// Both sway in the wind, the shin trailing the thigh, and the whole
+		// leg trails further when she climbs fast.
+		a = M.sin(wingPhase * .34 + i * 1.1) * .26 + vertSpeed / maxVY * .22
+		t = -2.83 + M.sin(wingPhase * .34 + i * 1.1 - .8) * .34 + vertSpeed / maxVY * .20
+		sx = hx + M.sin(a) * .18
+		sy = .08 + M.cos(a) * .18
+		kx += (sx - kx) * flyBlend
+		ky += (sy - ky) * flyBlend
+		fx += (sx + M.cos(t) * .20 - fx) * flyBlend
+		fy += (sy + M.sin(t) * .20 - fy) * flyBlend
+		if (knocked) {                                      // knocked out: legs stiff and splayed
+			kx += (hx + (i < 2 ? -.03 : .03) - kx) * knocked
+			ky += (.24 - ky) * knocked
+			fx += (hx + (i < 2 ? -.08 : .08) - fx) * knocked
+			fy += (.42 - fy) * knocked
+		}
+		C.strokeStyle = L[i][2]
+		C.lineWidth = .085
+		C.beginPath()
+		C.moveTo(hx, .08)
+		C.lineTo(kx, ky)
+		C.lineTo(fx, fy)
+		C.stroke()
+		C.strokeStyle = L[i][3]
+		C.lineWidth = .092
+		C.beginPath()
+		C.moveTo(fx, fy - .028)
+		C.lineTo(fx, fy)
+		C.stroke()
+	}
+
+	C.fillStyle = makeGradient(-.34, -.22, .08, .22, '#fff', '#f1eff9', '#c9c3de')
+	C.beginPath()
+	C.moveTo(.20, -.06)
+	C.bezierCurveTo(.10, -.19, -.20, -.21, -.40, -.11)
+	C.bezierCurveTo(-.49, -.03, -.49, .09, -.42, .15)
+	C.bezierCurveTo(-.30, .21, -.05, .21, .10, .17)
+	C.bezierCurveTo(.18, .13, .22, .04, .20, -.06)
+	C.closePath()
+	C.fill()
+
+	drawWing(-.28 + M.sin(wingPhase) * .5 * flyBlend, .62 + flyBlend * .5, '#fff', '#ddd8ee')          // the near wing
+
+	C.translate(.20, -.26)
+	// A running horse nods its head with the gait. In the air the nod follows the
+	// wings instead, a beat behind them: her head comes up as the downstroke
+	// pushes her up, which is small but enough to stop the head reading as bolted on.
+	C.rotate(M.sin(legs) * .07 * (1 - flyBlend) + M.sin(wingPhase - .9) * .05 * flyBlend)
+	C.scale(.66, .66)
+	C.fillStyle = '#ddd9ec'                          // the ear, set back
+	C.beginPath()
+	C.moveTo(-.19, -.13)
+	C.lineTo(-.06, -.23)
+	C.lineTo(-.16, -.37)
+	C.closePath()
+	C.fill()
+
+	C.fillStyle = makeGradient(-.12, -.30, .26, .26, '#fff', '#f1eff9', '#c9c3de')
+	C.beginPath()
+	C.moveTo(-.06, -.26)
+	C.bezierCurveTo(.10, -.28, .22, -.22, .29, -.11)
+	C.bezierCurveTo(.38, -.01, .38, .07, .33, .14)
+	C.bezierCurveTo(.24, .19, .14, .18, .08, .16)
+	C.bezierCurveTo(-.02, .18, -.06, .28, -.11, .42)
+	C.lineTo(-.42, .42)
+	C.bezierCurveTo(-.33, .11, -.25, -.09, -.06, -.26)
+	C.closePath()
+	C.fill()
+
+	C.beginPath()                                  // the horn, shaded across its width
+	C.moveTo(.01, -.25)
+	C.lineTo(.13, -.21)
+	C.lineTo(.17, -.48)
+	C.closePath()
+	C.fillStyle = makeGradient(.02, -.34, .16, -.20, '#ffeaa8', '#ffd65c', '#cf9418')
+	C.fill()
+	C.save()
+	C.clip()
+	C.strokeStyle = '#9664148c'
+	C.lineWidth = .020   // the spiral grooves
+	for (i = 0; i < 3; i++) {
+		C.beginPath()
+		C.moveTo(-.02, -.26 - i * .075)
+		C.lineTo(.16, -.20 - i * .075)
+		C.stroke()
+	}
+	C.restore()
+	C.fillStyle = '#fffbe8'
+	C.beginPath()
+	C.arc(.157, -.435, .020, 0, 7)
+	C.fill()
+
+	if (knocked > .55) {                                    // the eye as a cross
+		C.strokeStyle = '#372d55'
+		C.lineWidth = .030
+		C.lineCap = 'round'
+		C.beginPath()
+		C.moveTo(.11, -.16)
+		C.lineTo(.19, -.08)
+		C.moveTo(.19, -.16)
+		C.lineTo(.11, -.08)
+		C.stroke()
+	} else {
+		C.beginPath()
+		C.arc(.15, -.12, .030, 0, 7)   // the eye and its catchlight
+		C.fillStyle = '#372d55'
+		C.fill()
+		C.beginPath()
+		C.arc(.142, -.129, .011, 0, 7)
+		C.fillStyle = '#fff'
+		C.fill()
+	}
+
+	for (i = 0; i < 6; i++) {                              // the mane
+		t = i / 5
+		sx = -.10 - t * .17
+		sy = -.22 + t * .36
+		C.strokeStyle = 'hsl(' + i * 50 + ',95%,62%)'
+		C.lineWidth = .10
+		C.beginPath()
+		C.moveTo(sx, sy)
+		C.quadraticCurveTo(sx - .20, sy + .04, sx - .11, sy + .26)
+		C.stroke()
+	}
+	C.restore()
+}
+
+// ---------- physics ----------
+
+// A unicorn is far wider than tall: a single circle left the rump out
+// and bulged into empty sky above the back. Four circles follow the
+// silhouette: rump, belly, chest, head. (x offset, y offset, radius)
+var hitParts = [-.28, .02, .185, -.10, .01, .19, .08, -.01, .185, .28, -.31, .16]
+
+// Her hitbox is four circles, not one: a single circle either left her rump
+// out or bulged into empty sky. They turn with her lean.
+//   part  0 rump, 1 belly, 2 chest, 3 head
+//   atX   where to centre them, usually her position in the world
+// returns [x, y, radius]
+function getHitCircle(part, atX) {
+	var z = uniSize, ox = hitParts[part * 3] * z, oy = hitParts[part * 3 + 1] * z, ca = M.cos(tilt), sa = M.sin(tilt)
+	return [atX + ox * ca - oy * sa, Y + ox * sa + oy * ca, hitParts[part * 3 + 2] * z]
+}
+
+
+// Squared distance from a point to a segment. Squared, because we only ever
+// compare it with another squared distance and a square root costs for nothing.
+// This is what tests a hitbox circle against an electric bar.
+function getSegDist(px, py, x1, y1, x2, y2) {
+	var dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy, t = l ? ((px - x1) * dx + (py - y1) * dy) / l : 0
+	t = t < 0 ? 0 : t > 1 ? 1 : t
+	dx = x1 + t * dx - px
+	dy = y1 + t * dy - py
+	return dx * dx + dy * dy
+}
+
+// The two ends of an electric bar, its angle and its sway included.
+//   zap  the bar
+// returns [x1, y1, x2, y2]
+function getZapEnds(zap) {
+	var h = zap.l / 2, ca = M.cos(zap.a) * h, sa = M.sin(zap.a) * h, y = zap.y + (zap.m ? M.sin(worldTime * 1.5 + zap.p) * zap.m : 0)
+	return [zap.x - ca, y - sa, zap.x + ca, y + sa]
+}
+
+// A knock punctures the tank: ten seconds of fuel vented at once, the screen
+// shakes, and one second of immunity follows so the same obstacle cannot catch
+// you twice.
+function takeHit() {
+	if (invuln || hurtTime > 0) {
+		return
+	}
+	timeLeft -= 10
+	hurtTime = 1
+	shake = .8
+	playSound(220, 220, .22, 'square', .16)
+	playSound(233, 233, .22, 'square', .16)
+	addSparks(X, Y, 16, 440, 0, 0)
+	if (timeLeft <= 0) {
+		timeLeft = 0
+		startDying()
+	}
+}
+
+// Throws a burst of particles from one spot: a hit, an explosion, a pickup.
+//   atX, atY   where the burst starts
+//   count      how many particles
+//   speed      how hard they are thrown
+//   hue, hueSpread  their colour, and how far it varies from one to the next
+function addSparks(atX, atY, count, speed, hue, hueSpread) {
+	for (var i = 0; i < count; i++) {
+		sparks.push({x: atX, y: atY, vx: (M.random() - .5) * speed, vy: (M.random() - .5) * speed, l: 1, h: hue + M.random() * hueSpread})
+	}
+}
+
+// The heart gem: a canful of fuel, and the four note rise that used to salute
+// a new life.
+function addLife() {
+	timeLeft += 18
+	playSound(784, 784, .10, 'square', .18)
+	playSound(1047, 1047, .10, 'square', .18, .095)
+	playSound(1319, 1319, .10, 'square', .18, .19)
+	playSound(1568, 1568, .38, 'square', .20, .285)
+	addSparks(X, Y, 20, 500, 330, 0)
+}
+
+// Starts the fall. She dives, hits the ground and slides on her back before
+// the score screen appears. Called when the tank runs dry.
+function startDying() {
+	if (state == 3) {
+		return
+	}
+	hurtTime = 0                                       // otherwise she would stay invisible through the fall
+	state = 3
+	deathTime = 0
+	shake = 1   // she falls and slides before the score screen
+	playSound(520, 60, .5, 'triangle', .26)
+	playSound(300, 90, .25, 'triangle', .18, .28)
+	playSound(180, 50, .4, 'triangle', .16, .5)
+	if (dist > best) {
+		best = dist
+		LS.jetoutD = dist
+	}
+}
+
+// One step of the whole simulation: the unicorn, the scrolling, everything the
+// world holds, the collisions and the stage machine.
+//   dt  seconds since the previous frame, capped so a long pause in a
+//       background tab cannot teleport her straight through a barrier
+function updateGame(dt) {
+	// i sweeps a list, item is the entry in hand
+	var i, item
+	// from the unicorn to that entry, and the distance it gives
+	var dx, dy, away
+	// one of her four hitbox circles, and which one it is
+	var circle, part
+	var speedCap                                 // this stage's speed ceiling
+	var aim                                      // what slow-mo and turbo are heading for
+	var ends, hit                                // a bar's two ends, and whether it caught her
+	var hazardKind                               // this world's own hazard: 1 falling block, 2 updraft
+	var note                                     // which beep of the missile alarm
+	var touched                                  // did a missile reach her
+	var pull                                     // how far the magnet drags a coin this frame
+
+	for (i = sparks.length; i--; ) {
+		item = sparks[i]
+		if (!item.k) {
+			item.x += item.vx * dt
+			item.y += item.vy * dt
+			item.vy += 300 * dt
+		}
+		item.l -= dt * (item.k ? 2.6 : 1.7)
+		if (item.l <= 0) {
+			sparks.splice(i, 1)
+		}
+	}
+	if (shake > 0) {
+		shake -= dt * 3
+	}
+	// Barrier sway follows time slowed by the purple gem, but never the
+	// turbo: it is the unicorn that speeds up, not the world.
+	if (state) {
+		worldTime += dt
+	}
+	if (thr) {
+		thr.gain.setTargetAtTime(hold && state == 1 ? .09 : 0, actx.currentTime, .04)
+	}
+
+	if (state == 3) {                                // she dives, crashes and slides on her back
+		deathTime += dt
+		X += scrollNow * M.max(0, 1 - M.max(0, deathTime - .18) * 1.05) * dt
+		vertSpeed += gravity * 1.7 * dt
+		Y += vertSpeed * dt
+		onGround = 0
+		// .40: the lowest point of the tipped silhouette, so she rests on the
+		// ground without horn or wing going under it
+		if (Y > floorY - uniSize * .40) {
+			Y = floorY - uniSize * .40
+			vertSpeed = 0
+			onGround = 1
+		}
+		knocked += ((onGround ? 1 : .5) - knocked) * M.min(1, dt * 9)          // knocked-out pose
+		tilt += (-2.4 - tilt) * M.min(1, dt * 6)              // she tips onto her back
+		flyBlend -= flyBlend * M.min(1, dt * 10)
+		wingPhase += dt * 1.5
+		if (onGround && M.random() < .8) {
+			sparks.push({x: X - uniSize * .4, y: floorY - 3, vx: -scrollNow * .55 - M.random() * 140, vy: -25 - M.random() * 80, l: 1, h: 32})
+		}
+		if (deathTime > 1.3) {
+			state = 2
+		}
+		return
+	}
+	if (state != 1) {
+		return
+	}
+
+	// ---- the stage machine ----
+	phaseTime += dt
+	if (stagePhase == 0) {                                   // the fade opens, then she flies in from the left
+		uniDrawX = -uniSize * 1.6 + (uniX + uniSize * 1.6) * M.min(1, M.max(0, (phaseTime - .5) / .7))
+		if (phaseTime > 1.25) {
+			stagePhase = 1
+			phaseTime = 0
+			uniDrawX = uniX
+		}
+	} else if (stagePhase == 2) {                              // she flies out to the right
+		uniDrawX = uniX + (W + uniSize * 1.6 - uniX) * M.min(1, phaseTime / .7)
+		if (phaseTime > .8) {
+			stagePhase = 3
+			phaseTime = 0
+		}
+	} else if (stagePhase == 3) {                              // black falls on the stage we are leaving
+		// the stage only changes once the screen is fully black: otherwise the
+		// next scenery appears in full light before the fade
+		if (phaseTime > .45) {
+			stage++
+			endless = stage >= worlds.length
+			stagePhase = 4
+			phaseTime = 0
+			if (stage == worlds.length) {                      // we cross into endless mode
+				playSound(262, 262, .12, 'square', .16)
+				playSound(330, 330, .12, 'square', .16, .11)
+				playSound(392, 392, .12, 'square', .16, .22)
+				playSound(523, 523, 1.1, 'triangle', .20, .33)
+			}
+		}
+		return
+	} else if (stagePhase == 4) {                              // the title, on black
+		if (phaseTime > (stage == worlds.length ? 2 : 1.1)) {
+			if (timeLeft > getStartTime(stage)) {                         // we store the full state on arrival
+				bestTimes[stage] = timeLeft
+				LS.jetoutT = bestTimes.join(',')
+			}
+			stagePhase = 0
+			phaseTime = 0
+			stageStartX = X
+			Y = (ceilY + floorY) / 2
+			vertSpeed = 0
+			uniDrawX = -uniSize * 1.6
+			zaps = []
+			coinList = []
+			gemList = []
+			missiles = []
+			hazards = []
+			sparks = []
+			trail = []
+			hazardTimer = 10 + M.random() * 15
+			genEdge = X + W * .8
+			buildWorldAhead()
+		}
+		return
+	}
+
+	// clamped to zero: a negative counter would be truthy and never expire
+	if (stagePhase == 1) {
+		for (i = 0; i < 5; i++) {
+			if (gemTime[i] > 0) {
+				gemTime[i] = M.max(0, gemTime[i] - dt)
+			}
+		}
+		if (hurtTime > 0) {
+			hurtTime = M.max(0, hurtTime - dt)
+		}
+	}
+	scrollAim += W * .0045 * dt
+	speedCap = W * (.58 + M.min(.13, stage * .009))
+	if (scrollAim > speedCap) {
+		scrollAim = speedCap
+	}
+	// Slow-mo drops sharply when picked up, but the world must not snap
+	// back to speed: the ramp back is spread over two full seconds.
+	aim = gemTime[3] > 0 ? 2.4 : 1                              // turbo too: sharp in, 2 s back
+	turboRate += M.max(-dt * .7, M.min(dt * 5.6, aim - turboRate))
+	scrollNow = scrollAim * turboRate
+	// Turbo protects until the world is back to speed: otherwise you die
+	// during the slowdown while still going faster than normal.
+	invuln = gemTime[0] > 0 || turboRate > 1.02
+	vertSpeed += (hold ? -thrust : 0) * dt + gravity * dt
+	if (vertSpeed > maxVY) {
+		vertSpeed = maxVY
+	}
+	if (vertSpeed < -maxVY) {
+		vertSpeed = -maxVY
+	}
+	tilt = M.max(-.3, M.min(.42, vertSpeed / (maxVY * 2.4)))
+	Y += vertSpeed * dt
+	onGround = 0
+	if (Y > floorY - uniSize * .42) {
+		Y = floorY - uniSize * .42
+		vertSpeed = 0
+		onGround = 1
+	}
+	if (Y < ceilY + uniSize * .56) {
+		Y = ceilY + uniSize * .56
+		vertSpeed = 0
+	}
+	legPhase += dt * (onGround ? 17 : 7)
+	flyBlend += ((onGround ? 0 : 1) - flyBlend) * M.min(1, dt * 9)             // gradual switch between running and flying
+	wingPhase += dt * (onGround ? 3 : 11)                              // wing beat
+
+	if (stagePhase != 1) {
+		return                                // during the fly in and out, the world is frozen
+	}
+
+	timeLeft -= dt                                        // the timer only runs during play
+	if (timeLeft <= 0) {
+		timeLeft = 0
+		startDying()
+		return
+	}
+	X += scrollNow * dt
+	dist = (X / 60)|0
+	if (X - stageStartX >= stageLen) {                              // end of stage
+		// In the endless mode the worlds run on without a pause. No flying out to the
+		// right, no fade to black, no stage card: the scenery changes beneath her and
+		// she keeps flying.
+		if (endless) {
+			seamFrom = stage                     // it stays visible left of the seam
+			stage++
+			stageStartX = X
+			return
+		}
+		stagePhase = 2
+		phaseTime = 0
+		return
+	}
+
+	trail.push(X, Y)
+	while (trail.length > 2 && X - trail[0] > scrollNow * .55) {
+		trail.splice(0, 2)
+	}
+
+	if (hold) {
+		for (i = 0; i < 2; i++) {
+			sparks.push({
+				x: X - uniSize * .1 + (M.random() - .5) * uniSize * .4, y: Y + uniSize * .30,
+				vx: -scrollNow * .25, vy: 180 + M.random() * 260, l: 1, h: M.random() * 360
+			})
+		}
+	}
+
+	if (gemTime[4] > 0) {                                 // gold rush: a shower of coins
+		rushTimer -= dt
+		if (rushTimer <= 0) {
+			rushTimer = .085
+			coinList.push({x: X + W * .8, y: M.max(ceilY + uniSize * .7, M.min(floorY - uniSize * .6, Y + (M.random() - .5) * playH * .55))})
+		}
+	}
+
+	for (i = zaps.length; i--; ) {
+		item = zaps[i]
+		if (item.s) {
+			item.a += item.s * dt
+		}
+		if (item.x < X - W) {
+			zaps.splice(i, 1)
+			continue
+		}
+		ends = getZapEnds(item)
+		hit = 0
+		for (part = 0; part < 4; part++) {
+			circle = getHitCircle(part, X)
+			if (getSegDist(circle[0], circle[1], ends[0], ends[1], ends[2], ends[3]) < (circle[2] + uniSize * .065) * (circle[2] + uniSize * .065)) {
+				hit = 1
+				break
+			}
+		}
+		if (hit) {
+			takeHit()                              // a hit costs one life
+		}
+	}
+
+	// ---- the world's own hazard ----
+	hazardKind = worldHazard[stage % worlds.length]
+	if (hazardKind) {
+		hazardTimer -= dt
+		if (hazardTimer <= 0) {
+			hazardTimer = 26 + M.random() * 24                  // blocks and updrafts alike: two to four per stage
+			// The block is sown at the distance the world will travel while it
+			// rumbles then falls, so it crosses her column mid-fall.
+			if (hazardKind == 1) {
+				hazards.push({t: 1, x: X + scrollNow * (1.3 + M.random() * .5), y: ceilY, v: 0, w: .75})
+			} else {
+				hazards.push({t: 2, x: X + W * (.7 + M.random() * .5), w: W * .34, v: M.random() < .5 ? -1 : 1})   // it blows either up or down
+			}
+		}
+	}
+	for (i = hazards.length; i--; ) {
+		item = hazards[i]
+		if (item.x < X - W) {
+			hazards.splice(i, 1)
+			continue
+		}
+		if (item.t == 2) {                                // the updraft lifts as long as you are in it
+			if (M.abs(X - item.x) < item.w / 2) {
+				vertSpeed += 1600 * item.v * dt
+			}
+			continue
+		}
+		if (item.w > 0) {                                 // it rumbles at the ceiling before letting go
+			item.w -= dt
+			continue
+		}
+		item.v += gravity * .38 * dt
+		item.y += item.v * dt   // slow fall: it sweeps less altitude
+		if (item.y > floorY) {
+			hazards.splice(i, 1)
+			continue
+		}
+		if (invuln || hurtTime > 0) {
+			continue
+		}
+		for (part = 0; part < 4; part++) {
+			circle = getHitCircle(part, X)
+			if ((circle[0] - item.x) * (circle[0] - item.x) + (circle[1] - item.y) * (circle[1] - item.y) < (circle[2] + uniSize * .15) * (circle[2] + uniSize * .15)) {
+				takeHit()
+				break
+			}
+		}
+	}
+
+	// ---- missiles: they warn at the screen edge, then charge ----
+	missileTimer -= dt
+	if (missileTimer <= 0) {
+		// The gap between two missiles: seven seconds at the start, easing down to a
+		// floor of four by the time the endless mode begins. The random stretch keeps
+		// the rhythm from becoming a metronome you can learn by heart.
+		missileTimer = M.max(4, 7 - stage * .25) * (1 + M.random() * .4)
+		if (stage) {                                 // no missile on stage 1
+			missiles.push({x: X + W * .9, y: Y, t: 1.2})
+			for (note = 0; note < 5; note++) {
+				playSound(1200, 1200, .07, 'square', .16, note * .286)
+			}
+		}
+	}
+	for (i = missiles.length; i--; ) {
+		item = missiles[i]
+		if (item.t > 0) {
+			item.t -= dt
+			if (item.t > .5) {
+				item.y += (Y - item.y) * M.min(1, dt * 3)     // it aims, then locks on
+			}
+			item.x = X + W * .9
+		} else {
+			item.x -= (scrollNow * .5 + 230 + stage * 8) * dt
+			item.t -= dt                                    // it keeps counting, now as a hiss timer
+			if (item.t < -.09) {
+				item.t = 0
+				playSound(900, 400, .14, 0, .07, 0, 1)
+			}
+		}
+		if (item.x < X - W * .4) {
+			missiles.splice(i, 1)
+			continue
+		}
+		if (item.t > 0) {
+			continue
+		}
+		touched = 0
+		for (part = 0; part < 4; part++) {
+			circle = getHitCircle(part, X)
+			if ((circle[0] - item.x) * (circle[0] - item.x) + (circle[1] - item.y) * (circle[1] - item.y) < (circle[2] + uniSize * .22) * (circle[2] + uniSize * .22)) {
+				touched = 1
+				break
+			}
+		}
+		if (!touched) {
+			continue
+		}
+		if (invuln || hurtTime > 0) {                             // we blow it up instead of taking it
+			playSound(2400, 200, .32, 0, .34, 0, 1)
+			addSparks(item.x, item.y, 18, 520, 0, 60)
+			missiles.splice(i, 1)
+		} else {
+			takeHit()
+		}
+	}
+
+	for (i = coinList.length; i--; ) {
+		item = coinList[i]
+		if (item.x < X - W) {
+			coinList.splice(i, 1)
+			continue
+		}
+		if (gemTime[1] > 0) {
+			// We aim at the pickup centre itself: aiming ahead of the unicorn left
+			// the coins parked out of reach. And we never overshoot the target.
+			dx = X - uniSize * .06 - item.x
+			dy = Y - item.y
+			away = M.sqrt(dx * dx + dy * dy)
+			if (away < W * .5 && away > 1) {
+				pull = M.min(away, (scrollNow * 1.5 + 260) * dt)
+				item.x += dx / away * pull
+				item.y += dy / away * pull
+			}
+		}
+		dx = X - uniSize * .06 - item.x
+		dy = Y - item.y
+		if (dx * dx + dy * dy < (uniSize * .58) * (uniSize * .58)) {
+			// half a second of fuel each, a full second while the doubler runs
+			timeLeft += (gemTime[2] > 0 ? 2 : 1) * .5
+			playSound(1047, 1047, .045, 'square', .13)
+			playSound(1568, 1568, .13, 'square', .13, .05)
+			sparks.push({x: item.x, y: item.y, vx: 0, vy: 0, l: 1, h: 45, k: 1})   // the shockwave
+			addSparks(item.x, item.y, 11, 430, 38, 24)
+			coinList.splice(i, 1)
+		}
+	}
+
+	for (i = gemList.length; i--; ) {
+		item = gemList[i]
+		if (item.x < X - W) {
+			gemList.splice(i, 1)
+			continue
+		}
+		dx = X - uniSize * .06 - item.x
+		dy = Y - item.y
+		if (dx * dx + dy * dy < (uniSize * .62) * (uniSize * .62)) {
+			if (item.k == 5) {
+				addLife()                    // the super ring: eighteen seconds at once
+			} else {
+				gemTime[item.k] = M.min(gemDur[item.k] * 1.8, gemTime[item.k] + gemDur[item.k])      // picking the same gem again extends it
+				playSound(520, 780, .10, 'triangle', .16)
+				playSound(780, 1170, .10, 'triangle', .16, .08)
+				playSound(1170, 1560, .16, 'triangle', .16, .16)
+			}
+			sparks.push({x: item.x, y: item.y, vx: 0, vy: 0, l: 1, h: item.k * 36, k: 2})
+			addSparks(item.x, item.y, 22, 520, 0, 360)
+			gemList.splice(i, 1)
+		}
+	}
+
+	buildWorldAhead()
+}
+
+// ---------- scenery ----------
+
+// Paints the background of a world: the sky, then each family of scenery from
+// the far planes to the near ones. Nothing here is stored: it is all redrawn
+// from the position in the world, so it costs no memory.
+//   worldNo  which world, indexing the worlds table
+function drawScenery(worldNo) {
+	var world = worlds[worldNo]                  // its five colours and its name
+	var sky                                      // the gradient painted behind everything
+	var i, j                                     // loop counters inside the drawing callbacks
+	var h, w                                     // height and width of the item being drawn
+	var y2                                       // a second line: horizon, waterline, cloud base
+	sky = C.createLinearGradient(0, 0, 0, H)
+	sky.addColorStop(0, world[0])
+	sky.addColorStop(1, world[1])
+	C.fillStyle = sky
+	C.fillRect(0, 0, W, H)
+
+	if (worldNo == 0) {                                        // ---- Forest ----
+		drawScattered(230, .09, 3, function(x, rand1) {
+			C.fillStyle = '#93c283'
+			C.beginPath()
+			C.arc(x, floorY + playH * .10, playH * (.32 + rand1 * .24), PI, 0)
+			C.fill()
+		})
+		drawPlanes(5, 370, .12, .50, 11, function(x, rand1, rand2) {        // the trees, on five planes
+			h = playH * (.22 + depth * .28 + rand1 * .16)
+			var baseY = floorY
+			C.fillStyle = 'hsl(28,24%,' + (48 - depth * 26) + '%)'
+			C.fillRect(x - playH * .008 - depth * playH * .014, baseY - h * .48, playH * .016 + depth * playH * .028, h * .48)
+			C.fillStyle = 'hsl(' + (92 + rand2 * 48) + ',' + (28 + depth * 14) + '%,' + (47 - depth * 25 + rand1 * 8) + '%)'
+			// moveTo before each arc: without it canvas joins the circles with a
+			// chord and cuts a notch out of the foliage
+			C.beginPath()
+			C.arc(x, baseY - h * .66, h * .29, 0, 7)
+			C.moveTo(x, baseY - h * .47)
+			C.arc(x - h * .23, baseY - h * .47, h * .23, 0, 7)
+			C.moveTo(x + h * .47, baseY - h * .49)
+			C.arc(x + h * .23, baseY - h * .49, h * .24, 0, 7)
+			C.fill()
+		})
+		drawScattered(120, .42, 31, function(x, rand1, rand2) {             // canopy at the ceiling
+			C.fillStyle = 'hsl(' + (94 + rand2 * 46) + ',40%,' + (17 + rand1 * 9) + '%)'
+			C.beginPath()
+			C.arc(x, ceilY - playH * .03 + rand1 * playH * .09, playH * (.09 + rand2 * .06), 0, 7)
+			C.fill()
+		})
+	} else if (worldNo == 1) {                                   // ---- Factory ----
+		drawScattered(330, .11, 5, function(x, rand1, rand2) {
+			h = playH * (.42 + rand1 * .34)
+			w = playH * (.09 + rand2 * .05)
+			C.fillStyle = '#5a5266'
+			C.fillRect(x, floorY - h, w, h)
+			C.fillStyle = '#6d6479'
+			C.fillRect(x - playH * .015, floorY - h, w + playH * .03, playH * .045)
+			C.fillStyle = '#d6d1e026'
+			for (i = 0; i < 4; i++) {
+				C.beginPath()
+				C.arc(x + w / 2 + i * playH * .05, floorY - h - playH * (.07 + i * .09), playH * (.045 + i * .022), 0, 7)
+				C.fill()
+			}
+		})
+		drawScattered(250, .28, 17, function(x, rand1, rand2) {
+			h = playH * (.24 + rand1 * .18)
+			w = playH * (.15 + rand2 * .09)
+			C.fillStyle = '#413a4f'
+			C.beginPath()
+			C.roundRect(x, floorY - h, w, h, playH * .045)
+			C.fill()
+			C.fillStyle = '#564d66'
+			C.fillRect(x, floorY - h * .62, w, playH * .028)
+		})
+		drawScattered(140, .28, 29, function(x) {
+			C.strokeStyle = '#4a4257'
+			C.lineWidth = playH * .04
+			C.beginPath()
+			C.moveTo(x, floorY - playH * .09)
+			C.lineTo(x + playH * .34, floorY - playH * .09)
+			C.stroke()
+			C.fillStyle = '#5d5470'
+			C.fillRect(x + playH * .12, floorY - playH * .125, playH * .028, playH * .07)
+		})
+		drawScattered(100, .44, 41, function(x) {
+			C.strokeStyle = '#4e4660'
+			C.lineWidth = 4
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.lineTo(x + 50, ceilY + playH * .10)
+			C.lineTo(x + 100, ceilY)
+			C.stroke()
+		})
+	} else if (worldNo == 2) {                                   // ---- Candyland ----
+		drawScattered(240, .09, 3, function(x, rand1) {
+			C.fillStyle = '#fff2f8'
+			C.beginPath()
+			C.arc(x, floorY + playH * .12, playH * (.30 + rand1 * .22), PI, 0)
+			C.fill()
+		})
+		drawPlanes(4, 900, .11, .44, 17, function(x, rand1) {           // the candy canes, on four planes
+			h = playH * (.26 + depth * .26 + rand1 * .22)
+			w = playH * (.022 + depth * .026)
+			C.lineCap = 'butt'
+			// the shaft: stripes clipped to the cane's rectangle
+			C.fillStyle = '#fff'
+			C.fillRect(x - w, floorY - h, w * 2, h)
+			C.save()
+			C.beginPath()
+			C.rect(x - w, floorY - h, w * 2, h)
+			C.clip()
+			C.strokeStyle = '#ff5f8f'
+			C.lineWidth = w * .55
+			for (i = 1; i < 10; i++) {
+				C.beginPath()
+				C.moveTo(x - w * 1.5, floorY - h * i / 10 + w)
+				C.lineTo(x + w * 1.5, floorY - h * i / 10 - w)
+				C.stroke()
+			}
+			C.restore()
+			// the hook: stripes drawn as arcs, so never outside the candy
+			C.strokeStyle = '#fff'
+			C.lineWidth = w * 2
+			C.beginPath()
+			C.arc(x + w * 1.6, floorY - h, w * 1.6, PI, 0)
+			C.stroke()
+			C.strokeStyle = '#ff5f8f'
+			for (i = 0; i < 3; i++) {
+				C.beginPath()
+				C.arc(x + w * 1.6, floorY - h, w * 1.6, PI + .30 + i * .92, PI + .58 + i * .92)
+				C.stroke()
+			}
+		})
+		drawScattered(160, .26, 29, function(x, rand1, rand2) {
+			C.fillStyle = rand1 > .5 ? '#8fd8ff' : '#ffd75f'
+			C.beginPath()
+			C.arc(x, floorY - playH * .09, playH * (.045 + rand2 * .035), 0, 7)
+			C.fill()
+		})
+		drawScattered(140, .42, 31, function(x, rand1, rand2) {
+			C.fillStyle = '#ffa8d6cc'
+			C.beginPath()
+			C.arc(x, ceilY - playH * .02 + rand1 * playH * .08, playH * (.08 + rand2 * .05), 0, 7)
+			C.moveTo(x + playH * .07 + playH * (.06 + rand2 * .04), ceilY + rand1 * playH * .08)
+			C.arc(x + playH * .07, ceilY + rand1 * playH * .08, playH * (.06 + rand2 * .04), 0, 7)
+			C.fill()
+		})
+	} else if (worldNo == 3) {                                   // ---- Seabed ----
+		drawScattered(230, .06, 3, function(x, rand1) {                 // light shafts
+			C.globalAlpha = .10
+			C.fillStyle = '#bff0ff'
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.lineTo(x + playH * (.06 + rand1 * .05), ceilY)
+			C.lineTo(x + playH * (.22 + rand1 * .2), floorY)
+			C.lineTo(x + playH * (.10 + rand1 * .2), floorY)
+			C.closePath()
+			C.fill()
+			C.globalAlpha = 1
+		})
+		drawScattered(700, .16, 11, function(x, rand1) {                // wreck
+			h = playH * (.26 + rand1 * .10)
+			C.fillStyle = '#2b4450'
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.quadraticCurveTo(x + playH * .30, floorY - h * 1.5, x + playH * .62, floorY)
+			C.closePath()
+			C.fill()
+			C.strokeStyle = '#2b4450'
+			C.lineWidth = playH * .02
+			C.beginPath()
+			C.moveTo(x + playH * .34, floorY - h * .7)
+			C.lineTo(x + playH * .44, floorY - h * 1.6)
+			C.stroke()
+		})
+		drawScattered(190, .30, 19, function(x, rand1, rand2) {             // corals
+			h = playH * (.18 + rand1 * .16)
+			C.strokeStyle = rand2 > .5 ? '#ff8a6b' : '#ffb45f'
+			C.lineWidth = playH * .022
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x, floorY - h)
+			C.moveTo(x, floorY - h * .6)
+			C.lineTo(x - h * .4, floorY - h * .95)
+			C.moveTo(x, floorY - h * .45)
+			C.lineTo(x + h * .42, floorY - h * .85)
+			C.stroke()
+		})
+		drawScattered(175, .44, 23, function(x, rand1) {                // seaweed
+			h = playH * (.26 + rand1 * .22)
+			C.strokeStyle = '#2f8f6b'
+			C.lineWidth = playH * .018
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.quadraticCurveTo(x + playH * .07, floorY - h * .5, x - playH * .02, floorY - h)
+			C.stroke()
+		})
+		drawScattered(150, .5, 37, function(x, rand1, rand2) {               // bubbles
+			C.strokeStyle = '#dcf5ff80'
+			C.lineWidth = 2
+			C.beginPath()
+			C.arc(x, ceilY + playH * (.1 + rand1 * .8), playH * (.012 + rand2 * .018), 0, 7)
+			C.stroke()
+		})
+		drawPlanes(3, 760, .24, .62, 41, function(x, rand1, rand2, id) {     // the shoals, on three planes
+			y2 = ceilY + playH * (.16 + rand1 * .56)
+			C.fillStyle = 'hsl(44,' + (70 + depth * 22) + '%,' + (72 - depth * 16) + '%)'
+			for (i = 0; i < 4; i++) {
+				var fishX = x + i * playH * (.05 + depth * .04) + getHash(id * 71 + i * 29) * playH * .11
+				var fishY = y2 + (getHash(id * 97 + i * 53) - .5) * playH * .24
+				var fishR = playH * (.010 + depth * .014 + getHash(id * 131 + i * 17) * .012)
+				C.beginPath()
+				C.ellipse(fishX, fishY, fishR, fishR * .58, 0, 0, 7)
+				C.fill()
+				C.beginPath()
+				C.moveTo(fishX - fishR, fishY)
+				C.lineTo(fishX - fishR * 1.9, fishY - fishR * .65)
+				C.lineTo(fishX - fishR * 1.9, fishY + fishR * .65)
+				C.fill()
+			}
+		})
+	} else if (worldNo == 4) {                                   // ---- Desert ----
+		C.fillStyle = '#fff6d0'
+		C.beginPath()
+		C.arc(W * .30, ceilY + playH * .22, playH * .15, 0, 7)
+		C.fill()
+		drawScattered(420, .10, 5, function(x, rand1) {                 // pyramids
+			h = playH * (.34 + rand1 * .22)
+			C.fillStyle = '#d8a86a'
+			C.beginPath()
+			C.moveTo(x - h, floorY)
+			C.lineTo(x, floorY - h)
+			C.lineTo(x + h, floorY)
+			C.closePath()
+			C.fill()
+			C.fillStyle = '#c08f52'
+			C.beginPath()
+			C.moveTo(x, floorY - h)
+			C.lineTo(x + h, floorY)
+			C.lineTo(x + h * .15, floorY)
+			C.closePath()
+			C.fill()
+		})
+		drawScattered(300, .20, 13, function(x, rand1) {                // dunes
+			C.fillStyle = '#eec78d'
+			C.beginPath()
+			C.arc(x, floorY + playH * .14, playH * (.30 + rand1 * .22), PI, 0)
+			C.fill()
+		})
+		drawPlanes(4, 760, .15, .46, 23, function(x, rand1) {           // the cacti, on four planes
+			h = playH * (.18 + depth * .20 + rand1 * .16)
+			C.strokeStyle = 'hsl(112,' + (26 + depth * 14) + '%,' + (52 - depth * 20) + '%)'
+			C.lineWidth = playH * (.020 + depth * .028)
+			C.lineCap = 'round'
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x, floorY - h)
+			C.moveTo(x, floorY - h * .55)
+			C.lineTo(x - playH * .06, floorY - h * .55)
+			C.lineTo(x - playH * .06, floorY - h * .8)
+			C.moveTo(x, floorY - h * .72)
+			C.lineTo(x + playH * .055, floorY - h * .72)
+			C.lineTo(x + playH * .055, floorY - h * .92)
+			C.stroke()
+		})
+		drawScattered(380, .20, 47, function(x, rand1) {                // vultures
+			y2 = ceilY + playH * (.14 + rand1 * .16)
+			C.strokeStyle = '#4632288c'
+			C.lineWidth = 2.5
+			C.beginPath()
+			C.moveTo(x, y2)
+			C.quadraticCurveTo(x + 10, y2 - 8, x + 20, y2)
+			C.quadraticCurveTo(x + 30, y2 - 8, x + 40, y2)
+			C.stroke()
+		})
+	} else if (worldNo == 5) {                                   // ---- City ----
+		drawScattered(150, .13, 7, function(x, rand1, rand2, id) {
+			h = playH * (.34 + rand1 * .42)
+			w = playH * (.17 + rand2 * .11)
+			C.fillStyle = '#2b2750'
+			C.fillRect(x, floorY - h, w, h)
+			C.fillStyle = '#ffd98a'
+			for (i = 0; i < 3; i++) {
+				for (j = 0; j * playH * .14 < h - playH * .12; j++) {
+					if (getHash(id * 211 + i * 31 + j * 17) > .58) {
+						C.fillRect(x + w * .17 + i * w * .27, floorY - h + playH * .06 + j * playH * .14, w * .13, playH * .06)
+					}
+				}
+			}
+		})
+		drawScattered(280, .32, 19, function(x, rand1, rand2) {
+			h = playH * (.46 + rand1 * .34)
+			w = playH * (.24 + rand2 * .12)
+			C.fillStyle = '#191630'
+			C.fillRect(x, floorY - h, w, h)
+			C.fillStyle = '#ff5fa8'
+			C.fillRect(x + w * .2, floorY - h + playH * .07, w * .6, playH * .032)
+			C.fillStyle = '#5fd8ff'
+			C.fillRect(x + w * .3, floorY - h + playH * .16, w * .4, playH * .022)
+		})
+		drawScattered(170, .44, 37, function(x) {
+			C.strokeStyle = '#2e2a48'
+			C.lineWidth = 5
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x, floorY - playH * .28)
+			C.lineTo(x + playH * .07, floorY - playH * .31)
+			C.stroke()
+			C.fillStyle = '#ffde928c'
+			C.beginPath()
+			C.arc(x + playH * .08, floorY - playH * .31, playH * .035, 0, 7)
+			C.fill()
+		})
+		drawScattered(80, .44, 53, function(x) {
+			C.strokeStyle = '#2a2644'
+			C.lineWidth = 3
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.quadraticCurveTo(x + 40, ceilY + playH * .07, x + 80, ceilY)
+			C.stroke()
+		})
+	} else if (worldNo == 6) {                                   // ---- Icefield ----
+		drawScattered(200, .05, 7, function(x, rand1, rand2) {
+			C.globalAlpha = .20
+			C.strokeStyle = rand1 > .5 ? '#7dffc0' : '#b07dff'
+			C.lineWidth = playH * (.05 + rand2 * .07)
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.quadraticCurveTo(x + playH * .12, ceilY + playH * .24, x - playH * .06, ceilY + playH * .52)
+			C.stroke()
+			C.globalAlpha = 1
+		})
+		drawScattered(280, .16, 11, function(x, rand1) {
+			h = playH * (.26 + rand1 * .22)
+			C.fillStyle = '#cfe9f5'
+			C.beginPath()
+			C.moveTo(x - h * .65, floorY)
+			C.lineTo(x, floorY - h)
+			C.lineTo(x + h * .65, floorY)
+			C.closePath()
+			C.fill()
+			C.fillStyle = '#a4cbe2'
+			C.beginPath()
+			C.moveTo(x, floorY - h)
+			C.lineTo(x + h * .65, floorY)
+			C.lineTo(x + h * .18, floorY)
+			C.closePath()
+			C.fill()
+		})
+		drawPlanes(4, 580, .13, .44, 23, function(x, rand1) {           // the firs, on four planes
+			h = playH * (.20 + depth * .20 + rand1 * .16)
+			var baseY = floorY
+			C.fillStyle = 'hsl(166,' + (14 + depth * 12) + '%,' + (46 - depth * 20) + '%)'
+			C.fillRect(x - playH * .006 - depth * playH * .008, baseY - h * .20, playH * .012 + depth * playH * .016, h * .20)
+			C.fillStyle = 'hsl(196,' + (40 + depth * 20) + '%,' + (97 - depth * 8) + '%)'
+			C.beginPath()
+			C.moveTo(x - h * .24, baseY - h * .18)
+			C.lineTo(x, baseY - h)
+			C.lineTo(x + h * .24, baseY - h * .18)
+			C.closePath()
+			C.fill()
+		})
+		drawScattered(90, .40, 37, function(x, rand1) {
+			C.fillStyle = '#e2f4fb'
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.lineTo(x + playH * .035, ceilY)
+			C.lineTo(x + playH * .017, ceilY + playH * (.05 + rand1 * .09))
+			C.closePath()
+			C.fill()
+		})
+	} else if (worldNo == 7) {                                   // ---- Jungle ----
+		drawScattered(600, .12, 5, function(x, rand1) {                 // overgrown temple
+			h = playH * (.38 + rand1 * .16)
+			C.fillStyle = '#3f5a44'
+			for (i = 0; i < 4; i++) {
+				C.fillRect(x + i * playH * .05, floorY - h + i * h / 4, playH * (.34 - i * .06), h / 4 + 2)
+			}
+			C.fillStyle = '#2f4a36'
+			C.fillRect(x + playH * .13, floorY - h * .34, playH * .08, h * .34)
+		})
+		drawPlanes(3, 540, .18, .46, 17, function(x, rand1, rand2) {        // trunks, crowned with their leaves
+			h = playH * (.50 + depth * .38 + rand1 * .20)
+			w = playH * (.020 + depth * .026)
+			C.fillStyle = 'hsl(30,22%,' + (36 - depth * 15) + '%)'
+			C.fillRect(x, floorY - h, w, h)
+			var leafLen = playH * (.09 + depth * .09)
+			C.fillStyle = 'hsl(' + (104 + rand2 * 30) + ',' + (36 + depth * 14) + '%,' + (42 - depth * 17) + '%)'
+			for (i = 0; i < 5; i++) {                            // the crown starts at the top of the trunk
+				C.save()
+				C.translate(x + w / 2, floorY - h)
+				C.rotate(-2.2 + i * .58 + rand1 * .34)
+				C.beginPath()
+				C.moveTo(0, 0)
+				C.quadraticCurveTo(leafLen * .5, -leafLen * .30, leafLen, 0)
+				C.quadraticCurveTo(leafLen * .5, leafLen * .30, 0, 0)
+				C.fill()
+				C.restore()
+			}
+		})
+		drawPlanes(4, 290, .22, .52, 29, function(x, rand1, rand2) {        // ferns, planted on the ground
+			var frondLen = playH * (.13 + depth * .17 + rand1 * .08)
+			C.strokeStyle = 'hsl(' + (112 + rand2 * 24) + ',' + (40 + depth * 14) + '%,' + (44 - depth * 19) + '%)'
+			C.lineCap = 'round'
+			C.lineWidth = playH * (.007 + depth * .009)
+			for (i = 0; i < 7; i++) {
+				var spread = (i / 3 - 1)                         // from -1 to 1: how far this frond leans out
+				C.beginPath()
+				C.moveTo(x, floorY)
+				C.quadraticCurveTo(x + spread * frondLen * .55, floorY - frondLen * .95, x + spread * frondLen * 1.15, floorY - frondLen * .40)
+				C.stroke()
+			}
+		})
+		drawScattered(85, .46, 31, function(x, rand1, rand2) {              // vines and canopy
+			C.strokeStyle = '#3a6b34'
+			C.lineWidth = playH * .014
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.quadraticCurveTo(x + playH * .04, ceilY + playH * (.10 + rand1 * .14), x - playH * .01, ceilY + playH * (.18 + rand1 * .24))
+			C.stroke()
+			C.fillStyle = '#245c2c'
+			C.beginPath()
+			C.arc(x, ceilY - playH * .02 + rand2 * playH * .06, playH * (.07 + rand2 * .05), 0, 7)
+			C.fill()
+		})
+	} else if (worldNo == 8) {                                   // ---- Beach ----
+		C.fillStyle = '#ffe9a0'
+		C.beginPath()
+		C.arc(W * .72, ceilY + playH * .26, playH * .19, 0, 7)
+		C.fill()
+		C.fillStyle = '#2f8fbf'
+		C.fillRect(0, floorY - playH * .36, W, playH * .22)   // the sea stops at the shore
+		C.fillStyle = '#f0d9a4'
+		C.fillRect(0, floorY - playH * .14, W, playH * .14)   // the sand
+		drawScattered(100, .09, 3, function(x, rand1) {                              // glints on the water
+			C.fillStyle = '#fff2c459'
+			C.fillRect(x, floorY - playH * .34 + rand1 * playH * .17, playH * .10 + rand1 * playH * .10, 3)
+		})
+		drawScattered(75, .20, 111, function(x, rand1) {                             // foam line at the shore
+			C.fillStyle = '#fff9'
+			C.fillRect(x, floorY - playH * .145 + rand1 * playH * .012, playH * .06 + rand1 * playH * .05, 3)
+		})
+		drawScattered(280, .15, 29, function(x, rand1) {
+			C.fillStyle = '#ffffff8c'
+			C.beginPath()
+			C.arc(x, ceilY + playH * .10 + rand1 * playH * .07, playH * .07, 0, 7)
+			C.moveTo(x + playH * .135, ceilY + playH * .12 + rand1 * playH * .07)
+			C.arc(x + playH * .08, ceilY + playH * .12 + rand1 * playH * .07, playH * .055, 0, 7)
+			C.moveTo(x - playH * .02, ceilY + playH * .12 + rand1 * playH * .07)
+			C.arc(x - playH * .07, ceilY + playH * .12 + rand1 * playH * .07, playH * .05, 0, 7)
+			C.fill()
+		})
+		drawScattered(360, .19, 47, function(x, rand1) {
+			y2 = ceilY + playH * (.18 + rand1 * .16)
+			C.strokeStyle = '#3a3a5480'
+			C.lineWidth = 2.5
+			C.beginPath()
+			C.moveTo(x, y2)
+			C.quadraticCurveTo(x + 9, y2 - 7, x + 18, y2)
+			C.quadraticCurveTo(x + 27, y2 - 7, x + 36, y2)
+			C.stroke()
+		})
+		drawPlanes(4, 1100, .13, .44, 13, function(x, rand1, rand2) {        // the palms, on four planes
+			h = playH * (.28 + depth * .26 + rand1 * .20)
+			var baseY = floorY
+			var bend = .5 + depth * .6
+			C.strokeStyle = 'hsl(28,' + (34 + depth * 12) + '%,' + (52 - depth * 20) + '%)'
+			C.lineWidth = playH * (.014 + depth * .020)
+			C.beginPath()
+			C.moveTo(x, baseY)
+			C.quadraticCurveTo(x + playH * .06 * bend, baseY - h * .6, x + playH * .13 * bend, baseY - h)
+			C.stroke()
+			C.strokeStyle = 'hsl(148,' + (38 + depth * 16) + '%,' + (46 - depth * 16) + '%)'
+			C.lineWidth = playH * (.012 + depth * .016)
+			for (i = 0; i < 5; i++) {
+				w = M.cos(i * 1.25 - .5 + rand2)
+				C.beginPath()
+				C.moveTo(x + playH * .13 * bend, baseY - h)
+				C.quadraticCurveTo(x + playH * (.13 + w * .15) * bend, baseY - h - playH * .08 * bend, x + playH * (.13 + w * .25) * bend, baseY - h + playH * .05 * bend)
+				C.stroke()
+			}
+		})
+	} else if (worldNo == 9) {                                   // ---- Volcano ----
+		drawScattered(320, .09, 5, function(x, rand1) {
+			h = playH * (.40 + rand1 * .28)
+			C.fillStyle = '#3a1a14'
+			C.beginPath()
+			C.moveTo(x - h * .85, floorY)
+			C.lineTo(x, floorY - h)
+			C.lineTo(x + h * .85, floorY)
+			C.closePath()
+			C.fill()
+			C.fillStyle = '#ff782847'
+			for (i = 0; i < 3; i++) {
+				C.beginPath()
+				C.arc(x, floorY - h - playH * (.05 + i * .09), playH * (.04 + i * .028), 0, 7)
+				C.fill()
+			}
+		})
+		drawScattered(220, .28, 19, function(x, rand1) {
+			h = playH * (.20 + rand1 * .16)
+			C.fillStyle = '#2a1512'
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x + h * .55, floorY - h)
+			C.lineTo(x + h * 1.35, floorY)
+			C.closePath()
+			C.fill()
+			C.fillStyle = '#ff7a28'
+			C.fillRect(x + h * .48, floorY - h * .52, playH * .018, h * .52)
+		})
+		drawScattered(75, .40, 41, function(x, rand1) {
+			C.fillStyle = '#2a1512'
+			C.beginPath()
+			C.moveTo(x, ceilY)
+			C.lineTo(x + playH * .04, ceilY)
+			C.lineTo(x + playH * .02, ceilY + playH * (.05 + rand1 * .10))
+			C.closePath()
+			C.fill()
+		})
+		drawScattered(120, .55, 43, function(x, rand1) {
+			C.fillStyle = '#ff963c8c'
+			C.fillRect(x, ceilY + playH * (.05 + rand1 * .85), 2, 5)
+		})
+	} else if (worldNo == 10) {                                  // ---- Neon Grid ----
+		y2 = ceilY + playH * .52                                   // horizon line
+		C.fillStyle = '#ff3d81'                          // big striped sun
+		C.beginPath()
+		C.arc(W * .5, y2 - playH * .02, playH * .26, 0, 7)
+		C.fill()
+		C.fillStyle = sky                        // the sky gradient itself, so the cut is exact
+		for (i = 0; i < 7; i++) {
+			C.fillRect(W * .5 - playH * .3, y2 - playH * .24 + i * playH * .045, playH * .6, playH * .014 + i * .003 * playH)
+		}
+		C.fillStyle = world[1]
+		C.fillRect(0, y2, W, H - y2)
+		drawScattered(300, .14, 11, function(x, rand1) {                // wireframe mountains
+			h = playH * (.20 + rand1 * .16)
+			C.strokeStyle = '#78fff080'
+			C.lineWidth = 2
+			C.beginPath()
+			C.moveTo(x - h, y2)
+			C.lineTo(x, y2 - h)
+			C.lineTo(x + h, y2)
+			C.stroke()
+			C.beginPath()
+			C.moveTo(x, y2 - h)
+			C.lineTo(x, y2)
+			C.stroke()
+		})
+		C.strokeStyle = '#ff3d818c'
+		C.lineWidth = 2   // grid: vanishing lines
+		for (i = M.floor((X - W) / 90); i <= M.ceil((X + W) / 90); i++) {    // regular pitch, it is a grid
+			w = i * 90 - X
+			C.beginPath()
+			C.moveTo(W * .5, y2)
+			C.lineTo(W * .5 + (w - W * .5) * 4, H)
+			C.stroke()
+		}
+		for (i = 1; i < 9; i++) {                              // grid: horizontals
+			h = y2 + (H - y2) * i * i / 64
+			C.beginPath()
+			C.moveTo(0, h)
+			C.lineTo(W, h)
+			C.stroke()
+		}
+		C.strokeStyle = '#78fff059'
+		C.lineWidth = 3
+		C.beginPath()
+		C.moveTo(0, ceilY + playH * .06)
+		C.lineTo(W, ceilY + playH * .06)
+		C.stroke()
+	} else {                                            // ---- Orbital Station ----
+		drawScattered(55, .08, 3, function(x, rand1, rand2) {
+			C.fillStyle = 'rgba(255,255,255,' + (.25 + rand1 * .6) + ')'
+			C.fillRect(x, ceilY + rand2 * playH, 1 + rand1 * 2, 1 + rand1 * 2)
+		})
+		drawScattered(1500, .05, 59, function(x, rand1) {
+			C.fillStyle = '#6a4fd0'
+			C.beginPath()
+			C.arc(x, ceilY + playH * (.22 + rand1 * .2), playH * .20, 0, 7)
+			C.fill()
+			C.strokeStyle = '#cdb9ff80'
+			C.lineWidth = playH * .022
+			C.beginPath()
+			C.ellipse(x, ceilY + playH * (.22 + rand1 * .2), playH * .32, playH * .065, -.35, 0, 7)
+			C.stroke()
+		})
+		drawScattered(300, .26, 23, function(x, rand1, rand2) {
+			C.fillStyle = '#4a4460'
+			C.beginPath()
+			C.arc(x, ceilY + playH * (.12 + rand1 * .62), playH * (.025 + rand2 * .04), 0, 7)
+			C.fill()
+		})
+		drawPlanes(4, 850, .16, .48, 31, function(x, rand1) {           // the satellites, on four planes
+			y2 = ceilY + playH * (.14 + rand1 * .44)
+			var panel = .45 + depth * .75
+			C.fillStyle = 'hsl(218,' + (20 + depth * 12) + '%,' + (76 - depth * 20) + '%)'
+			C.fillRect(x, y2, playH * .05 * panel, playH * .032 * panel)
+			C.fillStyle = 'hsl(212,' + (50 + depth * 18) + '%,' + (60 - depth * 16) + '%)'
+			C.fillRect(x - playH * .062 * panel, y2 + playH * .006 * panel, playH * .056 * panel, playH * .02 * panel)
+			C.fillRect(x + playH * .052 * panel, y2 + playH * .006 * panel, playH * .056 * panel, playH * .02 * panel)
+		})
+	}
+}
+
+// Paints the ground and the ceiling of a world, and whatever grows on them:
+// grass, riveted plates, sand, ice. Drawn after the scenery, in front of it.
+//   worldNo  which world, indexing the worlds table
+function drawGround(worldNo) {
+	var E = worlds[worldNo]
+	C.fillStyle = E[2]
+	C.fillRect(0, floorY, W, H - floorY)
+	C.fillRect(0, 0, W, ceilY)
+	C.fillStyle = E[3]
+	C.fillRect(0, floorY, W, playH * .022)
+	C.fillRect(0, ceilY - playH * .022, W, playH * .022)
+	if (worldNo == 0) {
+		drawScattered(28, 1, 61, function(x) {                       // grass
+			C.fillStyle = '#74bb54'
+			C.beginPath()
+			C.moveTo(x, floorY + playH * .02)
+			C.lineTo(x + 4, floorY - playH * .03)
+			C.lineTo(x + 9, floorY + playH * .02)
+			C.fill()
+		})
+	} else if (worldNo == 1) {
+		drawScattered(64, 1, 67, function(x) {                  // riveted plate
+			C.strokeStyle = '#00000052'
+			C.lineWidth = 2
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x, H)
+			C.stroke()
+			C.fillStyle = '#6a617c'
+			C.beginPath()
+			C.arc(x + 32, floorY + playH * .05, 2.5, 0, 7)
+			C.fill()
+		})
+	} else if (worldNo == 2) {
+		drawScattered(46, 1, 79, function(x, rand1, rand2) {             // sugar beads
+			C.fillStyle = rand1 > .66 ? '#8fd8ff' : rand1 > .33 ? '#ffd75f' : '#fff'
+			C.beginPath()
+			C.arc(x, floorY + (H - floorY) * (.3 + rand2 * .35), 3.5, 0, 7)
+			C.fill()
+		})
+	} else if (worldNo == 3) {
+		drawScattered(70, 1, 101, function(x, rand1) {               // rippled sand
+			C.strokeStyle = '#ffffff38'
+			C.lineWidth = 2
+			C.beginPath()
+			C.moveTo(x, floorY + playH * .03)
+			C.quadraticCurveTo(x + 18, floorY + playH * (.05 + rand1 * .02), x + 36, floorY + playH * .03)
+			C.stroke()
+		})
+	} else if (worldNo == 4) {
+		drawScattered(60, 1, 103, function(x, rand1) {               // desert ripples
+			C.strokeStyle = '#c8965a80'
+			C.lineWidth = 2
+			C.beginPath()
+			C.moveTo(x, floorY + playH * .04)
+			C.quadraticCurveTo(x + 16, floorY + playH * (.02 + rand1 * .03), x + 32, floorY + playH * .04)
+			C.stroke()
+		})
+	} else if (worldNo == 5) {
+		drawScattered(96, 1, 71, function(x) {                  // road markings
+			C.fillStyle = '#ffffff42'
+			C.fillRect(x, floorY + (H - floorY) * .5, 46, 3)
+		})
+	} else if (worldNo == 6) {
+		drawScattered(70, 1, 83, function(x, rand1) {                // ice cracks
+			C.strokeStyle = '#8cbed799'
+			C.lineWidth = 2
+			C.beginPath()
+			C.moveTo(x, floorY + playH * .02)
+			C.lineTo(x + 18, floorY + (H - floorY) * (.4 + rand1 * .3))
+			C.lineTo(x + 34, floorY + playH * .03)
+			C.stroke()
+		})
+	} else if (worldNo == 7) {
+		drawScattered(44, 1, 107, function(x, rand1, rand2) {            // leaf litter
+			C.fillStyle = 'hsl(' + (78 + rand2 * 44) + ',30%,' + (21 + rand1 * 11) + '%)'
+			C.save()
+			C.translate(x, floorY + (H - floorY) * (.22 + rand1 * .5))
+			C.rotate(rand2 * 3)
+			C.beginPath()
+			C.ellipse(0, 0, 6, 2.5, 0, 0, 7)
+			C.fill()
+			C.restore()
+		})
+	} else if (worldNo == 8) {
+		drawScattered(130, 1, 73, function(x, rand1) {               // shells
+			C.fillStyle = '#ffffff8c'
+			C.beginPath()
+			C.arc(x, floorY + (H - floorY) * .42, 4 + rand1 * 3, PI, 0)
+			C.fill()
+		})
+	} else if (worldNo == 9) {
+		drawScattered(58, 1, 89, function(x, rand1) {                // glowing cracks
+			C.strokeStyle = '#ff6e1ebf'
+			C.lineWidth = 2.5
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x + 10, floorY + (H - floorY) * (.3 + rand1 * .4))
+			C.stroke()
+		})
+	} else if (worldNo == 10) {
+		drawScattered(90, 1, 109, function(x) {                // neon grid on the ground
+			C.strokeStyle = '#ff3d8199'
+			C.lineWidth = 2
+			C.beginPath()
+			C.moveTo(x, floorY)
+			C.lineTo(x - 30, H)
+			C.stroke()
+		})
+	} else {
+		drawScattered(80, 1, 97, function(x) {                          // light strips
+			C.fillStyle = '#78c8ff80'
+			C.fillRect(x, floorY + playH * .03, 30, 3)
+		})
+	}
+}
+
+// An electric barrier: two machined emitters and a bolt.
+// The zigzag is computed ONCE then stroked three times: otherwise each
+// pass follows its own path and the white core leaves its sheath.
+//   x1, y1, x2, y2  the two ends of the bar
+//   faded           true for the bolts drawn small on a stage card
+function drawBolt(x1, y1, x2, y2, faded) {
+	var i, k, t, px, py, r, P = [], l = M.hypot(x2 - x1, y2 - y1) || 1
+	var nx = -(y2 - y1) / l, ny = (x2 - x1) / l, am = uniSize * .12, f = .72 + M.random() * .28
+	for (i = 0; i <= 6; i++) {
+		t = i / 6
+		k = i && i < 6 ? (M.random() - .5) * am : 0
+		P.push(x1 + (x2 - x1) * t + nx * k, y1 + (y2 - y1) * t + ny * k)
+	}
+	C.lineCap = 'round'
+	C.lineJoin = 'round'
+	for (k = 0; k < 3; k++) {
+		C.strokeStyle = k > 1 ? '#fff' : k ? '#6fd8ff' : '#9a7dff'
+		C.lineWidth = k > 1 ? uniSize * .04 : k ? uniSize * .10 : uniSize * .30
+		C.globalAlpha = faded ? .22 : (k > 1 ? f : k ? .92 : .30)
+		C.beginPath()
+		C.moveTo(P[0], P[1])
+		for (i = 2; i < P.length; i += 2) {
+			C.lineTo(P[i], P[i + 1])
+		}
+		C.stroke()
+	}
+	C.globalAlpha = 1
+
+	// the emitters, lit from the top left and shaded bottom right,
+	// like the coins
+	r = uniSize * .21
+	for (i = 0; i < 2; i++) {
+		px = i ? x2 : x1
+		py = i ? y2 : y1
+		C.fillStyle = '#3a3550'
+		C.beginPath()
+		C.arc(px, py, r, 0, 7)
+		C.fill()
+		C.lineWidth = r * .30
+		C.strokeStyle = '#726ba0'
+		C.beginPath()
+		C.arc(px, py, r * .76, -2.7, -.8)
+		C.stroke()
+		C.strokeStyle = '#211e33'
+		C.beginPath()
+		C.arc(px, py, r * .76, .4, 2.3)
+		C.stroke()
+		if (!faded) {                                    // the glow, as a plain translucent circle
+			C.fillStyle = '#6fd8ff4c'
+			C.beginPath()
+			C.arc(px, py, r * .80, 0, 7)
+			C.fill()
+		}
+		C.fillStyle = faded ? '#4b6a80' : '#cdf4ff'
+		C.beginPath()
+		C.arc(px, py, r * .36, 0, 7)
+		C.fill()
+	}
+}
+
+// ---------- rendering ----------
+
+// A stage card shows its real scenery: drawScenery and drawGround are replayed
+// in a shrunken window, rather than keeping a thumbnail per world.
+//   stageNo  which stage the card shows
+function drawStageCard(stageNo) {
+	if (stageNo < 0 || stageNo > worlds.length) {
+		return
+	}
+	// size and opacity follow the distance to the centre, with no step
+	// every word on the card follows the height of the display, like the rest
+	var ts = M.max(15, H * .039)
+	var g = getStartTime(stageNo) > 0, k = stageNo % worlds.length, d = M.min(1, M.abs(stageNo - carPos))
+	var w = cardW * .86 * (1 - d * .22), h = w * H / W
+	var cx = W / 2 + (stageNo - carPos) * cardW, cy = H * .554, px = cx - w / 2, py = cy - h / 2, sx
+	if (cx < -w || cx > W + w) {
+		return
+	}
+	C.globalAlpha = 1 - d * .62
+	C.save()
+	C.beginPath()
+	C.roundRect(px, py, w, h, 9)
+	C.clip()
+	if (g) {
+		sx = X
+		X = stageNo * 2400   // each card shows a different spot
+		C.save()
+		C.translate(px, py)
+		C.scale(w / W, h / H)
+		drawScenery(k)
+		drawGround(k)
+		C.restore()
+		X = sx
+	} else {
+		C.fillStyle = '#191534'
+		C.fillRect(px, py, w, h)
+	}
+	C.restore()
+	C.strokeStyle = '#fff'
+	C.lineWidth = 3 - d * 1.4
+	C.beginPath()
+	C.roundRect(px, py, w, h, 9)
+	C.stroke()
+	C.textAlign = 'center'
+	C.fillStyle = g ? stageNo < worlds.length ? '#fff' : '#ff5a5a' : '#7d76a8'
+	C.font = 'bold ' + (ts | 0) + 'px sans-serif'
+	C.fillText(stageNo < worlds.length ? 'STAGE ' + (stageNo + 1) : 'ENDLESS', cx, py - ts * .55)
+	if (g) {
+		C.fillStyle = worlds[k][3]
+		C.font = 'bold ' + (ts * .85 | 0) + 'px sans-serif'
+		C.fillText(worlds[k][4], cx, py + h + ts * 1.1)
+		C.fillStyle = '#ffcf4d'
+		C.font = 'bold ' + (ts | 0) + 'px sans-serif'
+		C.fillText(getStartTime(stageNo).toFixed(0) + 's of fuel', cx, py + h + ts * 2.5)
+	}
+	C.globalAlpha = 1
+}
+
+// One coin: four rings drawn on top of one another, from the widest and palest
+// to the thinnest and brightest, which is what makes it read as gold rather
+// than as a circle. The title screen borrows it for the O of the name.
+//   cx, cy  where it goes
+//   size    the same unit as the unicorn: the ring is .19 of it
+//   squash  1 face on, towards 0 as it turns edge on
+//   cols    its four colours, which the double gem changes
+// One ring, seen turning about its vertical axis.
+//   spin  where it is in its turn; everything else follows from it
+// w is how wide it shows, from edge on to full face, and the turn itself is told
+// by shading: the side of the ring that is further from the eye goes dark, in a
+// gradient across it. For a ring turning this way, depth happens to be a plain
+// linear function of the distance from the middle, so a straight gradient is the
+// exact answer and not an approximation.
+// The gradient runs the whole way across, so the ring darkens by the same step
+// for every step of depth, on a scale that does not move: its middle is the
+// depth of the ring's own centre, its light end the nearest a point of the ring
+// can ever come, its dark end the furthest. A ring lying flat towards us has
+// every point at that centre, so it sits at the middle of the scale, and colour
+// is won only by a point actually coming closer than the centre, which is to say
+// by the ring turning.
+// Both ends pull away until the shading is gone at BOTH ends of the turn. Full
+// face, because every point of the ring is then the same distance away and there
+// is no depth left to tell. Edge on, because the two halves fall on top of each
+// other and only the near one, lit all over, is left to see. That is what makes
+// this hold together where marking a near half did not: the shaded side does
+// swap at each of those two moments, but by then there is no shading left to
+// swap, so nothing jumps. Both are half a turn apart, which is what sin of twice
+// the angle says. The .05 keeps that end at a finite distance.
+function drawCoin(cx, cy, size, spin, cols) {
+	var i, g, h, t = M.sin(spin * 2), r = size * .19, w = M.abs(M.cos(spin)) * .86 + .14,
+		u = r * w / (M.abs(t) + .05) * (t > 0 ? -1 : 1)
+	g = C.createLinearGradient(cx - u, cy, cx + u, cy)
+	g.addColorStop(0, cols[1])
+	g.addColorStop(1, cols[2])
+	h = C.createLinearGradient(cx - u, cy, cx + u, cy)
+	// the far end fades to the SAME colour, not to a transparent black: fading
+	// between two different colours is what turned the reflection grey halfway
+	h.addColorStop(0, cols[3] + '00')
+	h.addColorStop(1, cols[3])
+	for (i = 0; i < 4; i++) {
+		C.strokeStyle = i > 2 ? h : i == 2 ? g : cols[i]
+		C.lineWidth = size * [.25, .115, .085, .016][i]
+		C.beginPath()
+		C.ellipse(cx, cy, r * w, r, 0, 0, 7)
+		C.stroke()
+	}
+}
+
+// Endless mode: two worlds share the screen while the seam crosses it, the one
+// being left to the left of the line and the one being entered to the right.
+// Everything is drawn from the position in the world, so a clip is enough:
+// neither scenery function needs to know it is being cut in half.
+function paintSplit(paint, seam, left, right) {
+	C.save()
+	C.beginPath()
+	C.rect(0, 0, seam, H)
+	C.clip()
+	paint(left)
+	C.restore()
+	C.save()
+	C.beginPath()
+	C.rect(seam, 0, W - seam, H)
+	C.clip()
+	paint(right)
+	C.restore()
+}
+
+// Returns where the seam falls on screen, or -1 when it is off screen, and
+// leaves the two worlds to paint in seamSides.
+var seamSides = [0, 0]
+function seamAt() {
+	var s
+	if (!endless || stagePhase != 1) {
+		return -1
+	}
+	s = uniX + stageStartX + stageLen - X          // la frontiere devant elle
+	if (s < W) {
+		seamSides[0] = stage % worlds.length
+		seamSides[1] = (stage + 1) % worlds.length
+		return s
+	}
+	s = uniX + stageStartX - X                     // celle qu elle vient de franchir
+	if (seamFrom >= 0 && s > 0) {
+		seamSides[0] = seamFrom % worlds.length
+		seamSides[1] = stage % worlds.length
+		return s
+	}
+	seamFrom = -1
+	return -1
+}
+
+function paintWorld(paint, k) {
+	var s = seamAt()
+	if (s < 0) {
+		paint(k)
+		return
+	}
+	paintSplit(paint, s, seamSides[0], seamSides[1])
+}
+
+// Paints one whole frame: the world, the unicorn, the interface, and whichever
+// screen the current state calls for, title, stage card or score.
+function drawFrame() {
+	var i, e, g, q, x, y, t, j, CJ, k = stage % worlds.length
+
+	paintWorld(drawScenery, k)
+
+	C.save()
+	if (shake > 0) {
+		C.translate((M.random() - .5) * 18 * shake, (M.random() - .5) * 18 * shake)
+	}
+
+	if (trail.length > 3) {
+		C.lineCap = 'round'
+		C.lineJoin = 'round'
+		// The trail dies out into the sky instead of being cut off, the way it
+		// already does on the home screen. The fade is in the colour rather than
+		// in globalAlpha, so the far end really reaches nothing.
+		x = uniX + trail[0] - X                        // where the oldest point is
+		for (i = 0; i < 7; i++) {
+			g = C.createLinearGradient(x, 0, uniX, 0)
+			g.addColorStop(0, 'hsla(' + i * 44 + ',95%,62%,0)')
+			g.addColorStop(1, 'hsla(' + i * 44 + ',95%,62%,.5)')
+			C.strokeStyle = g
+			C.lineWidth = uniSize * .30 - i * uniSize * .035
+			C.beginPath()
+			C.moveTo(x, trail[1])
+			for (e = 2; e < trail.length; e += 2) {
+				C.lineTo(uniX + trail[e] - X, trail[e + 1])
+			}
+			C.stroke()
+		}
+	}
+
+	if (hold && state == 1) {
+		C.lineCap = 'round'
+		for (i = 0; i < 7; i++) {
+			C.strokeStyle = 'hsl(' + i * 44 + ',95%,62%)'
+			C.lineWidth = uniSize * .065
+			C.beginPath()
+			C.moveTo(uniDrawX - uniSize * .18 + i * uniSize * .05, Y + uniSize * .26)
+			C.lineTo(uniDrawX - uniSize * .27 + i * uniSize * .05, Y + uniSize * .30 + uniSize * (.26 + M.random() * .2))
+			C.stroke()
+		}
+	}
+
+	// doubled, the coins turn from gold to orange
+	CJ = gemTime[2] > 0 ? ['#ff82324c', '#a33b10', '#ff7a2b', '#ffd7b0'] : COIN
+	for (i = 0; i < coinList.length; i++) {
+		e = coinList[i]
+		x = uniX + e.x - X
+		if (x < -30 || x > W + 30) {
+			continue
+		}
+		// a golden ring seen face on, spinning about its vertical axis
+		drawCoin(x, e.y, uniSize, X * .008 + e.x * .055, CJ)
+	}
+
+	for (i = 0; i < gemList.length; i++) {
+		e = gemList[i]
+		x = uniX + e.x - X
+		if (x < -40 || x > W + 40) {
+			continue
+		}
+		if (e.k == 5) {
+			drawCoin(x, e.y, uniSize * 2.4, X * .008 + e.x * .055, BIGRING)
+			continue
+		}
+		t = M.sin(X * .02 + e.x * .03) * .3
+		C.save()
+		C.translate(x, e.y)
+		C.rotate(t)
+		C.globalAlpha = .26
+		C.fillStyle = gemColour[e.k]
+		C.beginPath()
+		C.arc(0, 0, uniSize * .46, 0, 7)
+		C.fill()
+		C.globalAlpha = 1
+		C.fillStyle = C.strokeStyle = gemColour[e.k]
+		C.lineCap = 'round'
+		C.lineJoin = 'round'
+		if (e.k == 0) {                                  // a shield
+			C.beginPath()
+			C.moveTo(0, -uniSize * .30)
+			C.lineTo(uniSize * .24, -uniSize * .19)
+			C.lineTo(uniSize * .24, uniSize * .04)
+			C.quadraticCurveTo(uniSize * .24, uniSize * .24, 0, uniSize * .33)
+			C.quadraticCurveTo(-uniSize * .24, uniSize * .24, -uniSize * .24, uniSize * .04)
+			C.lineTo(-uniSize * .24, -uniSize * .19)
+			C.closePath()
+			C.fill()
+			C.fillStyle = '#ffffff73'
+			C.beginPath()
+			C.moveTo(0, -uniSize * .24)
+			C.lineTo(uniSize * .17, -uniSize * .16)
+			C.lineTo(uniSize * .17, uniSize * .03)
+			C.quadraticCurveTo(uniSize * .17, uniSize * .16, 0, uniSize * .23)
+			C.closePath()
+			C.fill()
+		} else if (e.k == 1) {                             // a horseshoe magnet
+			C.lineWidth = uniSize * .16
+			C.lineCap = 'butt'
+			C.beginPath()
+			C.moveTo(-uniSize * .20, uniSize * .28)
+			C.lineTo(-uniSize * .20, 0)
+			C.arc(0, 0, uniSize * .20, PI, 0)
+			C.lineTo(uniSize * .20, uniSize * .28)
+			C.stroke()
+			C.fillStyle = '#f2f2ff'
+			C.fillRect(-uniSize * .28, uniSize * .16, uniSize * .16, uniSize * .13)
+			C.fillRect(uniSize * .12, uniSize * .16, uniSize * .16, uniSize * .13)
+		} else if (e.k == 2) {                             // coins counted double
+			C.font = 'bold ' + (uniSize * .46|0) + 'px sans-serif'
+			C.textAlign = 'center'
+			C.fillText('×2', 0, uniSize * .17)
+		} else if (e.k == 3) {                             // turbo, two chevrons
+			for (j = 0; j < 2; j++) {
+				C.beginPath()
+				C.moveTo(uniSize * (-.30 + j * .26), -uniSize * .26)
+				C.lineTo(uniSize * (-.04 + j * .26), 0)
+				C.lineTo(uniSize * (-.30 + j * .26), uniSize * .26)
+				C.lineTo(uniSize * (-.17 + j * .26), 0)
+				C.closePath()
+				C.fill()
+			}
+		} else if (e.k == 4) {                             // the gold rush, a radiating coin
+			C.beginPath()
+			C.arc(0, 0, uniSize * .18, 0, 7)
+			C.fill()
+			C.lineWidth = uniSize * .055
+			for (j = 0; j < 4; j++) {
+				g = j * 1.5708 + .39
+				C.beginPath()
+				C.moveTo(M.cos(g) * uniSize * .23, M.sin(g) * uniSize * .23)
+				C.lineTo(M.cos(g) * uniSize * .33, M.sin(g) * uniSize * .33)
+				C.stroke()
+			}
+		}
+		C.restore()
+	}
+
+	for (i = 0; i < zaps.length; i++) {
+		e = zaps[i]
+		x = uniX + e.x - X
+		if (x < -300 || x > W + 300) {
+			continue
+		}
+		q = getZapEnds(e)
+		drawBolt(uniX + q[0] - X, q[1], uniX + q[2] - X, q[3], invuln)
+	}
+
+	for (i = 0; i < hazards.length; i++) {
+		e = hazards[i]
+		x = uniX + e.x - X
+		if (x < -70 || x > W + 70) {
+			continue
+		}
+		if (e.t == 2) {                                // a current: blue it lifts, amber it pushes down
+			q = e.v < 0
+			C.fillStyle = q ? '#96e1ff21' : '#ffb96e21'
+			C.fillRect(x - e.w / 2, ceilY, e.w, playH)
+			C.strokeStyle = q ? '#c8f5ff80' : '#ffd49b80'
+			C.lineWidth = 4
+			C.lineCap = 'round'
+			for (j = 0; j < 7; j++) {
+				y = q ? floorY - ((now * .3 + j * 110) % playH) : ceilY + ((now * .3 + j * 110) % playH)
+				g = x - e.w / 2 + e.w * (j + .5) / 7
+				C.beginPath()
+				C.moveTo(g, y)
+				C.lineTo(g, y + e.v * playH * .13)
+				C.moveTo(g - 8, y + e.v * playH * .09)
+				C.lineTo(g, y + e.v * playH * .13)
+				C.lineTo(g + 8, y + e.v * playH * .09)
+				C.stroke()
+			}
+			continue
+		}
+		if (e.w > 0) {                                 // it shakes and warns before dropping
+			C.fillStyle = worlds[k][2]
+			C.beginPath()
+			C.arc(x + M.sin(now * .05) * uniSize * .08, e.y, uniSize * .21, 0, 7)
+			C.fill()
+			C.strokeStyle = 'rgba(255,90,90,' + (M.sin(now * .02) > 0 ? .9 : .3) + ')'
+			C.lineWidth = 4
+			C.beginPath()
+			C.moveTo(x - uniSize * .16, e.y + uniSize * .34)
+			C.lineTo(x, e.y + uniSize * .52)
+			C.lineTo(x + uniSize * .16, e.y + uniSize * .34)
+			C.stroke()
+			continue
+		}
+		C.fillStyle = worlds[k][2]                       // a falling block
+		C.beginPath()
+		C.arc(x, e.y, uniSize * .21, 0, 7)
+		C.fill()
+		C.fillStyle = '#ffffff38'
+		C.beginPath()
+		C.arc(x - uniSize * .07, e.y - uniSize * .07, uniSize * .09, 0, 7)
+		C.fill()
+	}
+
+	for (i = 0; i < missiles.length; i++) {
+		e = missiles[i]
+		x = uniX + e.x - X
+		if (e.t > 0) {                                   // the blinking warning marker
+			if (M.sin((1.2 - e.t) * 22) > 0) {
+				C.fillStyle = '#ff3b3b'
+				C.beginPath()
+				C.moveTo(W - 6, e.y)                     // sized on the band, like everything else
+				C.lineTo(W - ceilY * .64, e.y - ceilY * .36)
+				C.lineTo(W - ceilY * .64, e.y + ceilY * .36)
+				C.closePath()
+				C.fill()
+			}
+			continue
+		}
+		C.fillStyle = '#8f8aa8'                        // the body
+		C.beginPath()
+		C.roundRect(x - uniSize * .02, e.y - uniSize * .09, uniSize * .34, uniSize * .18, uniSize * .06)
+		C.fill()
+		C.fillStyle = '#ff4d4d'                        // the warhead
+		C.beginPath()
+		C.moveTo(x - uniSize * .22, e.y)
+		C.lineTo(x - uniSize * .02, e.y - uniSize * .09)
+		C.lineTo(x - uniSize * .02, e.y + uniSize * .09)
+		C.closePath()
+		C.fill()
+		C.fillStyle = '#6d6884'                        // the fins
+		C.beginPath()
+		C.moveTo(x + uniSize * .32, e.y - uniSize * .08)
+		C.lineTo(x + uniSize * .44, e.y - uniSize * .18)
+		C.lineTo(x + uniSize * .44, e.y + uniSize * .18)
+		C.lineTo(x + uniSize * .32, e.y + uniSize * .08)
+		C.closePath()
+		C.fill()
+		C.fillStyle = '#ffbe50d9'           // the flame
+		C.beginPath()
+		C.arc(x + uniSize * (.46 + M.random() * .12), e.y, uniSize * (.07 + M.random() * .04), 0, 7)
+		C.fill()
+	}
+
+	for (i = 0; i < sparks.length; i++) {
+		e = sparks[i]
+		x = uniX + e.x - X
+		if (e.k) {                                     // a shockwave opening and fading
+			C.strokeStyle = 'hsla(' + e.h + ',100%,72%,' + e.l + ')'
+			C.lineWidth = uniSize * (.010 + e.l * .021)
+			C.beginPath()
+			C.arc(x, e.y, (1 - e.l) * uniSize * (e.k > 1 ? .95 : .6), 0, 7)
+			C.stroke()
+		} else {
+			C.fillStyle = 'hsla(' + e.h + ',95%,66%,' + e.l + ')'
+			C.beginPath()
+			C.arc(x, e.y, uniSize * (.016 + e.l * .042), 0, 7)
+			C.fill()
+		}
+	}
+
+	if (invuln && state == 1) {                             // the halo says you are invulnerable
+		C.strokeStyle = gemColour[gemTime[0] > 0 ? 0 : 3]
+		C.globalAlpha = .45 + M.sin(X * .05) * .2
+		C.lineWidth = 3
+		C.beginPath()
+		C.arc(uniDrawX, Y, haloR + 11, 0, 7)
+		C.stroke()
+		C.globalAlpha = 1
+	}
+	if (!(hurtTime > 0 && M.sin(hurtTime * 42) < 0)) {
+		drawUnicorn(uniDrawX, Y, uniSize, tilt, legPhase)
+	}
+
+	C.restore()
+
+	paintWorld(drawGround, k)
+
+	// ---------- interface ----------
+	// The fuel left, centred at the top on a small dark panel so it reads over any
+	// sky. A figure rather than a bar: a fixed length could never carry an
+	// unbounded quantity, and the tenth of a second is exactly what you watch
+	// once it gets tight.
+	t = timeLeft.toFixed(1) + 's'
+	C.font = 'bold ' + (ceilY * .62|0) + 'px sans-serif'
+	q = C.measureText(t).width
+	C.fillStyle = '#000000a8'
+	C.beginPath()
+	C.roundRect(W / 2 - q / 2 - ceilY * .35, ceilY * .14, q + ceilY * .7, ceilY * .74, ceilY * .18)
+	C.fill()
+	C.textAlign = 'center'
+	C.fillStyle = timeLeft < 10 && M.sin(now * .012) > 0 ? '#f55' : '#fff'
+	C.fillText(t, W / 2, ceilY * .72)
+	C.textAlign = 'right'
+	C.fillStyle = '#fff'
+	C.font = 'bold ' + (ceilY * .55|0) + 'px sans-serif'
+	C.fillText(dist + ' m', W - ceilY * 1.3, ceilY * .74)
+	if (state == 1) {                                // the cross goes back to the title
+		C.strokeStyle = '#ffffff80'
+		C.lineWidth = ceilY * .07
+		C.lineCap = 'round'
+		C.beginPath()
+		C.moveTo(W - ceilY * .72, ceilY * .33)
+		C.lineTo(W - ceilY * .36, ceilY * .69)
+		C.moveTo(W - ceilY * .36, ceilY * .33)
+		C.lineTo(W - ceilY * .72, ceilY * .69)
+		C.stroke()
+	}
+	t = 0
+	for (i = 0; i < 5; i++) {
+		if (gemTime[i] > 0) {
+			t++
+		}
+	}
+	if (t) {
+		g = M.min(ceilY * 2.4, (W - ceilY * 4) / t - ceilY * .17)            // the gauges tighten when many are active
+		C.textAlign = 'center'
+		C.font = 'bold ' + (ceilY * .26|0) + 'px sans-serif'
+		y = 0
+		for (i = 0; i < 5; i++) {
+			if (gemTime[i] > 0) {
+				x = W / 2 + (y - (t - 1) / 2) * (g + ceilY * .17)
+				y++
+				C.fillStyle = '#000000a8'
+				C.beginPath()
+				C.roundRect(x - g / 2 - ceilY * .1, H - ceilY * .8, g + ceilY * .2, ceilY * .6, ceilY * .12)
+				C.fill()
+				C.fillStyle = gemColour[i]
+				C.fillText(['SHIELD', 'MAGNET', 'DOUBLE', 'TURBO', 'RUSH'][i], x, H - ceilY * .55)
+				C.fillRect(x - g / 2, H - ceilY * .38, g * M.min(1, gemTime[i] / gemDur[i]), ceilY * .13)
+			}
+		}
+	}
+
+	C.textAlign = 'center'
+
+	// ---- the fade to black and the stage title ----
+	if (state == 1 && stagePhase != 1) {
+		g = stagePhase == 3 ? M.min(1, phaseTime / .45) : stagePhase == 4 ? 1 : stagePhase == 0 ? M.max(0, 1 - phaseTime / .5) : 0
+		if (g > 0) {
+			C.fillStyle = 'rgba(0,0,0,' + g + ')'
+			C.fillRect(0, 0, W, H)
+		}
+		if (stagePhase == 4) {
+			C.fillStyle = endless ? '#ff5a5a' : '#fff'
+			C.font = 'bold ' + (H * .10|0) + 'px sans-serif'
+			C.fillText(stage == worlds.length ? 'ENDLESS MODE' : 'STAGE ' + (stage + 1), W / 2, H * .40)
+			C.fillStyle = worlds[k][3]
+			C.font = 'bold ' + (H * .065|0) + 'px sans-serif'
+			C.fillText(worlds[k][4], W / 2, H * .54)
+			if (endless) {
+				C.fillStyle = '#ffcf4d'
+				C.font = 'bold ' + (H * .045|0) + 'px sans-serif'
+				C.fillText('no more coins', W / 2, H * .70)
+			}
+		}
+	}
+
+	if (state == 0) {
+		drawHomeSky()                                 // the same place as the home screen
+		drawTitle(M.max(16, H * .08), H * .15)        // the same name, two thirds the size
+		q = M.round(carPos)                               // from the furthest to the nearest
+		for (j = 3; j > 0; j--) {
+			drawStageCard(q - j)
+			drawStageCard(q + j)
+		}
+		drawStageCard(q)
+		// The whole point of the game is how far you get, so the figure belongs on the
+		// screen where you decide to play, not only on the one before it.
+		if (best) {
+			C.fillStyle = '#c8bff0'
+			C.font = 'bold ' + (M.max(13, H * .042) | 0) + 'px sans-serif'
+			C.fillText('BEST ' + best + ' m', W / 2, H * .265)
+		}
+		drawWalker()
+	}
+
+	if (state == 2) {
+		C.fillStyle = '#0b0722cc'
+		C.fillRect(0, 0, W, H)
+		// Everything here is a multiple of one unit that follows the height of the
+		// display. It used to be fixed pixels, so on a phone held sideways the
+		// distance alone took a seventh of the screen.
+		q = M.max(15, H * .047)
+		y = H * .38
+		C.fillStyle = '#ff8a8a'
+		C.font = 'bold ' + (q | 0) + 'px sans-serif'
+		C.fillText('OUT OF FUEL', W / 2, y - q * 4.4)
+		C.fillStyle = '#c8bff0'
+		C.font = (q * .67 | 0) + 'px sans-serif'
+		C.fillText('coins are fuel, knocks spill it', W / 2, y - q * 3.27)
+		C.fillStyle = '#fff'
+		C.font = 'bold ' + (q * 2.27 | 0) + 'px sans-serif'
+		C.fillText(dist + ' m', W / 2, y)
+		C.fillStyle = '#ffcf4d'
+		C.font = 'bold ' + (q * 1.33 | 0) + 'px sans-serif'
+		C.fillText('stage ' + (stage + 1), W / 2, y + q * 2.13)
+		C.fillStyle = '#c8bff0'
+		C.font = (q | 0) + 'px sans-serif'
+		C.fillText('best ' + best + ' m', W / 2, y + q * 4.27)
+	}
+}
+
+// ---------- the home screen ----------
+
+// The first screen the game shows. It owes nothing to the run: every shape here
+// is computed from the clock alone, so there is no update step to write and
+// nothing to reset when we leave. A tap or any key opens the stage list.
+// The profile of one range of hills at the foot of the home screen.
+//   range  which one, 0 the furthest away
+//   x      where across the screen
+// Two waves of different lengths, so no range repeats itself across the width.
+function getRidgeY(range, x) {
+	return H * (.70 + range * .07) + M.sin(x * (.004 + range * .0016) + range * 2.1) * H * .035
+		+ M.sin(x * (.011 + range * .003) + range) * H * .016
+}
+
+// The sky that the home screen and the stage list share: a night gradient,
+// stars, aurora and the unicorns crossing. It stands on its own so that the
+// two screens are plainly the same place.
+function drawHomeSky() {
+	var i, j, t, x, y, g, a, s, d, q, vx, sw, sf, sv
+	t = now * .001
+
+	// the night sky, warmer towards the ground
+	g = C.createLinearGradient(0, 0, 0, H)
+	g.addColorStop(0, '#0a0524')
+	g.addColorStop(.6, '#2b1152')
+	g.addColorStop(1, '#5c1f5a')
+	C.fillStyle = g
+	C.fillRect(0, 0, W, H)
+
+	// the stars: hashed spots, so they never drift, each breathing on its own
+	C.fillStyle = '#fff'
+	for (i = 0; i < 60; i++) {
+		s = 1 + getHash(i + 7) * 1.8
+		C.globalAlpha = .25 + .6 * M.abs(M.sin(t * .9 + i * 1.7))
+		C.fillRect(getHash(i) * W, getHash(i + 99) * H * .72, s, s)
+	}
+
+	// three aurora curtains, each drifting at its own pace
+	for (i = 0; i < 3; i++) {
+		C.globalAlpha = .11
+		C.fillStyle = 'hsl(' + (t * 18 + i * 70) + ',90%,62%)'
+		C.beginPath()
+		C.moveTo(0, H)
+		for (x = 0; x <= W; x += W / 14) {
+			C.lineTo(x, H * (.20 + i * .07) + M.sin(x * .0042 + t * .55 + i * 1.3) * H * .08)
+		}
+		// the last step of the loop can fall a hair short of W: without this the
+		// curve is cut off in a straight diagonal at the right edge
+		C.lineTo(W, H * (.20 + i * .07) + M.sin(W * .0042 + t * .55 + i * 1.3) * H * .08)
+		C.lineTo(W, H)
+		C.fill()
+	}
+	C.globalAlpha = 1
+
+	// Four ranges of hills far below. A single black cut-out was tried and looked
+	// pasted on: the trick is that each range keeps the colour of the sky and
+	// only darkens a little, so they read as distance rather than as a hole.
+	C.lineCap = 'round'
+	for (i = 0; i < 4; i++) {
+		C.fillStyle = 'hsl(' + (300 - i * 9) + ',' + (44 - i * 4) + '%,' + (24 - i * 5) + '%)'
+		C.beginPath()
+		C.moveTo(0, H)
+		for (x = 0; x <= W; x += W / 24) {
+			C.lineTo(x, getRidgeY(i, x))
+		}
+		C.lineTo(W, getRidgeY(i, W))                  // the loop can fall short of W
+		C.lineTo(W, H)
+		C.fill()
+		// a breath of haze along the crest, or the edge reads as scissor work
+		C.globalAlpha = .07
+		C.strokeStyle = '#c9a6e8'
+		C.lineWidth = H * .03
+		C.beginPath()
+		C.moveTo(0, getRidgeY(i, 0))
+		for (x = W / 24; x <= W; x += W / 24) {
+			C.lineTo(x, getRidgeY(i, x))
+		}
+		C.lineTo(W, getRidgeY(i, W))
+		C.stroke()
+		C.globalAlpha = 1
+	}
+
+	// Embers drifting up off the ranges, the same warm colour as the windows so
+	// they read as rising from the villages. Where each one is comes from the
+	// clock and a hash, like everything else on this screen: nothing to update,
+	// nothing to reset when we leave.
+	C.fillStyle = '#ffb765'
+	for (i = 0; i < 30; i++) {
+		a = (t * .06 + getHash(i + 77)) % 1           // how far up its climb it is
+		x = getHash(i + 91) * W + M.sin(t * .7 + i) * H * .014
+		C.globalAlpha = (1 - a) * a * 2.6
+		C.beginPath()
+		C.arc(x, getRidgeY(i % 4, x) - a * H * .38, H * .003 + getHash(i) * H * .0028, 0, 7)
+		C.fill()
+	}
+	C.globalAlpha = 1
+
+	// windows lit along the two nearest ranges
+	C.fillStyle = '#ffcf8a'
+	for (i = 0; i < 26; i++) {
+		x = getHash(i + 51) * W
+		j = 2 + i % 2
+		C.globalAlpha = .2 + .8 * M.abs(M.sin(t * 1.6 + i * 2.3))
+		C.fillRect(x, getRidgeY(j, x) + H * .012 + getHash(i + 63) * H * .035, 2, 2)
+	}
+	C.globalAlpha = 1
+
+	// A shooting star now and then, so that something happens for whoever stays
+	// on this screen. One every seven seconds, from a spot the cycle number
+	// fixes, so it never comes twice from the same place.
+	a = t % 7
+	if (a < .9) {
+		q = M.floor(t / 7)
+		x = getHash(q) * W * .6 + a / .9 * W * .5
+		y = getHash(q + 5) * H * .3 + a / .9 * H * .22
+		C.globalAlpha = M.sin(a / .9 * PI) * .9
+		C.strokeStyle = '#fff'
+		C.lineCap = 'round'
+		C.lineWidth = H * .004
+		C.beginPath()
+		C.moveTo(x, y)
+		C.lineTo(x - W * .07, y - H * .031)
+		C.stroke()
+		C.globalAlpha = 1
+	}
+
+	// Four coins drifting far away, the same object as the one in the name and
+	// the ones you fly through. Dimmed, because they are meant to be distant.
+	for (i = 0; i < 4; i++) {
+		s = playH * (.09 + i * .022)
+		a = (t * (.017 + i * .005) + getHash(i + 33)) % 1
+		C.globalAlpha = .28
+		drawCoin(a * (W + s * 4) - s * 2,
+			H * (.2 + getHash(i + 41) * .34) + M.sin(t * .5 + i) * H * .02,
+			s, t * 1.3 + i, COIN)
+		C.globalAlpha = 1
+	}
+
+	// The unicorns crossing, the nearest one larger, faster and lower. She is
+	// drawn by the same routine as in the run, which reads three globals of its
+	// own: we lend them values and hand them back.
+	sw = wingPhase
+	sf = flyBlend
+	sv = vertSpeed
+	flyBlend = 1
+	vertSpeed = 0
+	for (i = 0; i < 3; i++) {
+		s = playH * (.11 + i * .05)
+		vx = (.07 + i * .028) * (W + s * 4)            // how fast she crosses, in pixels
+		// a crossing, then a pause off the right edge before she comes round again
+		a = (t * (.07 + i * .028) + i * .41) % 1.35
+		x = a * (W + s * 4) - s * 2
+		y = H * (.26 + i * .19) + M.sin(t * 1.1 + i * 2.2) * H * .045
+		wingPhase = t * 8.5 + i * 2
+		// The rainbow is the path she really flew: we walk back in time and put a
+		// point where she was then, so it bends exactly as she bent. The gradient
+		// runs the way she came from, so the far end fades out into the sky.
+		C.lineCap = 'round'
+		for (j = 0; j < 7; j++) {
+			g = C.createLinearGradient(x, 0, x - vx * 2.4, 0)
+			g.addColorStop(0, 'hsla(' + j * 44 + ',95%,62%,.9)')
+			g.addColorStop(.35, 'hsla(' + j * 44 + ',95%,62%,.42)')
+			g.addColorStop(.75, 'hsla(' + j * 44 + ',95%,62%,0)')
+			g.addColorStop(1, 'hsla(' + j * 44 + ',95%,62%,0)')
+			C.strokeStyle = g
+			C.lineWidth = s * .26 - j * s * .031
+			C.beginPath()
+			C.moveTo(x - s * .42, y + s * .06)
+			for (d = .15; d < 2.4; d += .15) {
+				C.lineTo(x - s * .42 - d * vx,
+					H * (.26 + i * .19) + M.sin((t - d) * 1.1 + i * 2.2) * H * .045 + s * .06)
+			}
+			C.stroke()
+		}
+		drawUnicorn(x, y, s, M.sin(t * 1.1 + i * 2.2) * .16, wingPhase)
+	}
+	wingPhase = sw
+	flyBlend = sf
+	vertSpeed = sv
+}
+
+// The six letters of the name, drawn as paths rather than as text. A tube of
+// neon is a single line bent into a shape: text can only be outlined, which
+// gives two lines per stem and no way to light just a stretch of one. As paths
+// they behave like the coin, which is why the coin looked right from the start.
+//   M move  L line  Q quadratic curve, values in hundredths of the cap height,
+//   the baseline at zero and the top at -100
+var MOT = [
+	'M62,-100L62,-28Q62,0,34,0Q10,0,10,-22',              // J
+	'M74,-100L12,-100L12,0L74,0M12,-52L62,-52',           // E
+	'M6,-100L78,-100M42,-100L42,0',                       // T
+	0,                                                     // O, which is a coin
+	'M12,-100L12,-32Q12,0,42,0Q72,0,72,-32L72,-100',      // U
+	'M6,-100L78,-100M42,-100L42,0'                        // T
+]
+var LARG = [.80, .92, .90, 1.24, .90, .90]
+// Les lettres sont ecrasees en hauteur sans toucher a leur largeur : plus elles
+// sont hautes et etroites, plus le O, qui est rond, jure a cote d elles.
+var HAUT = .84
+
+// Strokes whatever path is current as a tube of neon: the same line drawn from
+// the widest and palest to the thinnest and brightest, so the middle of the tube
+// is the lit part and its rim the dark one. It is the coin's recipe, and it is
+// what the name and the Play button have in common.
+//   h  the hue
+//   w  how thick the glass is
+function drawTube(h, w) {
+	C.lineCap = C.lineJoin = 'round'
+	C.shadowColor = 'hsl(' + h + ',100%,60%)'
+	C.shadowBlur = w * 1.6
+	C.globalAlpha = .18
+	C.strokeStyle = 'hsl(' + h + ',95%,62%)'
+	C.lineWidth = w * 1.6
+	C.stroke()
+	C.globalAlpha = 1
+	C.shadowBlur = 0
+	C.strokeStyle = 'hsl(' + h + ',95%,30%)'      // the glass at the rim
+	C.lineWidth = w
+	C.stroke()
+	C.strokeStyle = 'hsl(' + h + ',95%,52%)'      // the gas
+	C.lineWidth = w * .72
+	C.stroke()
+	C.strokeStyle = 'hsl(' + h + ',100%,74%)'     // the lit core, down the middle
+	C.lineWidth = w * .36
+	C.stroke()
+}
+
+// Lays one letter's path down, ready to be stroked.
+//   d     its description
+//   size  the height of a capital
+function drawGlyph(d, size) {
+	var i, v, seg = d.split(/(?=[MLQ])/)
+	C.beginPath()
+	for (i = 0; i < seg.length; i++) {
+		v = seg[i].slice(1).split(',')
+		v = [v[0] * size / 100, v[1] * size * HAUT / 100, v[2] * size / 100, v[3] * size * HAUT / 100]
+		if (seg[i][0] == 'M') {
+			C.moveTo(v[0], v[1])
+		} else if (seg[i][0] == 'L') {
+			C.lineTo(v[0], v[1])
+		} else {
+			C.quadraticCurveTo(v[0], v[1], v[2], v[3])
+		}
+	}
+}
+
+// The name. Each letter is a tube: the same path stroked several times, from the
+// widest and palest to the thinnest and brightest, so the middle of the tube is
+// the lit part and its rim the dark one. The last pass is the reflection on the
+// glass: a short dash on one stretch only, offset up and to the left, the same
+// thing as the little arc on the coin.
+//   size  the height of a capital
+//   atY   the baseline
+function drawTitle(size, atY) {
+	var i, x, y, h, q = 0, t = now * .001
+	for (i = 0; i < 6; i++) {
+		q += LARG[i] * size
+	}
+	x = W / 2 - q / 2
+	C.lineCap = C.lineJoin = 'round'
+	for (i = 0; i < 6; i++) {
+		y = atY + M.sin(t * 3 - i * .55) * size * .13
+		h = i * 40 + t * 55
+		if (MOT[i]) {
+			C.save()
+			C.translate(x, y)
+			drawGlyph(MOT[i], size)
+			drawTube(h, size * .29)
+			// The reflection runs the whole length of the tube, a hair above and
+			// to the left of its middle. A tube catches the light all along, not
+			// in patches: the short arc on the coin only looks like a patch
+			// because a ring closes on itself.
+			C.translate(-size * .028, -size * .034)
+			drawGlyph(MOT[i], size)
+			C.globalAlpha = .8
+			C.strokeStyle = '#fff'
+			C.lineWidth = size * .036
+			C.stroke()
+			C.globalAlpha = 1
+			C.restore()
+		} else {
+			drawCoin(x + LARG[i] * size / 2, y - size * HAUT / 2, size * HAUT * 2.6,
+				t * 2, COIN)
+		}
+		x += LARG[i] * size
+	}
+}
+
+// A unicorn trots along the bottom edge every half minute, on the home screen as
+// well as on the stage list: neither owes anything to the run, but neither should
+// be a still picture. flyBlend decides between folded legs and walking ones, so
+// we force it and hand it back.
+function drawWalker() {
+	var p = (now * .00007) % 2, f
+	if (p < 1) {
+		f = flyBlend
+		flyBlend = 0
+		drawUnicorn(p * (W + H * .4) - H * .2, H - H * .069, H * .14, 0, now * .0075)
+		flyBlend = f
+	}
+}
+
+// The home screen: the shared sky, then the name, the best run and the button.
+function drawHome() {
+	var t, y, a, bw, bh, bx, by
+	t = now * .001
+	drawHomeSky()
+	drawWalker()
+
+	y = H * .30
+	drawTitle(M.max(25, H * .124), y)
+
+	// The name is drawn as paths now, so nothing sets this any more and the two
+	// lines below would hang off to the left.
+	C.textAlign = 'center'
+	if (best) {
+		C.fillStyle = '#c8bff0'
+		C.font = 'bold ' + (M.max(13, H * .042) | 0) + 'px sans-serif'
+		C.fillText('BEST ' + best + ' m', W / 2, y + H * .10)
+	}
+
+	// The Play button. A tap anywhere does the same thing: the button is the
+	// invitation, not a target you have to find.
+	bw = M.max(140, W * .19)
+	bh = M.max(40, H * .105)
+	bx = W / 2 - bw / 2
+	by = H * .60
+	a = .5 + .5 * M.sin(t * 2.6)
+	// A capsule of neon, the same object as the name and the coin: a hollow
+	// tube, barely darkened inside so the word stays readable, with the glass
+	// catching the light along its top. It breathes on the pulse.
+	C.beginPath()
+	C.roundRect(bx, by, bw, bh, bh / 2)
+	C.fillStyle = '#0a221d99'
+	C.fill()
+	drawTube(158, bh * .15 + a * bh * .03)
+	C.globalAlpha = .6
+	C.strokeStyle = '#fff'
+	C.lineWidth = bh * .045
+	C.beginPath()
+	C.moveTo(bx + bh * .5, by - bh * .04)
+	C.lineTo(bx + bw - bh * .5, by - bh * .04)
+	C.stroke()
+	C.globalAlpha = 1
+	C.shadowColor = '#7dffd4'
+	C.shadowBlur = 10 + a * 14
+	C.fillStyle = '#e6fff6'
+	C.font = 'bold ' + (bh * .42 | 0) + 'px sans-serif'
+	C.fillText('PLAY', W / 2, by + bh * .62)
+	C.shadowBlur = 0
+
+	C.fillStyle = '#9b93c4'
+	C.font = (M.max(11, H * .032) | 0) + 'px sans-serif'
+	C.fillText('tap the screen or press any key', W / 2, H * .88)
+}
+
+// ---------- portrait screen ----------
+
+// The screen shown when the phone is held upright. The game is landscape only,
+// so rather than squeeze it we ask the player to turn the phone.
+function drawPortraitNotice() {
+	//var a = -PI / 2 * M.min(1, M.max(0, (M.sin(now * .0018) + .4) * 1.1)), 
+/*	var w = W * .16, h = w * 1.75
+	C.fillStyle = '#0b0722'
+	C.fillRect(0, 0, W, H)
+	C.save()
+	C.translate(W / 2, H * .42)
+	//C.rotate(a)
+	C.strokeStyle = '#fff'
+	C.lineWidth = 4
+	C.beginPath()
+	C.roundRect(-w / 2, -h / 2, w, h, w * .16)
+	C.stroke()
+	C.fillStyle = '#ffffff29'
+	C.beginPath()
+	C.roundRect(-w / 2 + 7, -h / 2 + 13, w - 14, h - 26, w * .06)
+	C.fill()
+	C.restore()
+*/
+
+	C.textAlign = 'center'
+	C.fillStyle = '#fff'
+	C.font = 'bold 20px sans-serif'
+	C.fillText('Rotate your phone', W / 2, H / 2)
+	C.fillStyle = '#c8bff0'
+	C.font = '15px sans-serif'
+	C.fillText('Jetout is played in landscape.', W / 2, H / 2 + 28)
+}
+
+// The animation loop. Measures the time gone by, advances the game, paints it,
+// then asks the browser for the next frame.
+//   nowMs  the timestamp the browser hands us, in milliseconds
+function runFrame(nowMs) {
+	var dt = M.min(.05, (nowMs - last) / 1000 || 0)
+	last = nowMs
+	now = nowMs
+	if (!dragging && state == 0) {
+		carPos += (carAim - carPos) * M.min(1, dt * 12)
+	}
+	if (port) {
+		hold = 0
+		if (thr) {
+			thr.gain.value = 0
+		}
+		drawPortraitNotice()
+	} else if (state == 4) {
+		hold = 0
+		drawHome()
+	} else {
+		updateGame(dt)
+		drawFrame()
+	}
+	scheduleMusic()
+	requestAnimationFrame(runFrame)
+}
+
+// ---------- input ----------
+
+var DE = document.documentElement
+
+// Goes fullscreen and locks the screen in landscape. Both are only granted
+// during a gesture, which is why this hangs off the first tap.
+function enterFullscreen() {
+	try {
+		if (DE.requestFullscreen) {
+			DE.requestFullscreen().catch(function() {})
+		}
+		if (screen.orientation && screen.orientation.lock) {
+			screen.orientation.lock('landscape').catch(function() {})
+		}
+	} catch (e) {}
+}
+
+c.onpointerdown = function(e) {
+	e.preventDefault()
+	c.setPointerCapture(e.pointerId)
+	initAudio()
+	if (port) {
+		return
+	}
+	// Chrome on Android covers the top of the screen with a swipe-to-exit
+	// banner for several seconds. So we go fullscreen on a tap that starts
+	// nothing: the banner sits over the title screen, not over the game.
+	if (state != 1 && state != 3 && DE.requestFullscreen && !document.fullscreenElement) {
+		enterFullscreen()
+		return
+	}
+	// on the home screen, anywhere at all opens the stage list
+	if (state == 4) {
+		state = 0
+		return
+	}
+	// on the title, a press opens a drag: nothing is decided until release
+	if (state == 0 && e.clientY < H - 46) {
+		dragging = 1
+		dragX0 = e.clientX
+		dragFrom = carPos
+		dragDist = 0
+		return
+	}
+	if (state == 1 && e.clientX > W - ceilY * 1.2 && e.clientY < ceilY * 1.25) {   // the cross: we quit
+		hold = 0
+		resetRun()
+		return
+	}
+	hold = 1
+	if (state == 1 || state == 3) {
+		return                 // during the fall, no restart
+	}
+	if (state == 2) {                                // the end screen goes back to the title
+		if (shake > .6) {
+			return
+		}
+		resetRun()
+		return
+	}
+	resetRun()
+	state = 1
+}
+c.onpointermove = function(e) {
+	if (dragging) {
+		carPos = dragFrom - (e.clientX - dragX0) / cardW
+		dragDist = M.max(dragDist, M.abs(e.clientX - dragX0))
+		if (carPos < 0) {
+			carPos = 0
+		}
+		if (carPos > worlds.length) {
+			carPos = worlds.length
+		}
+	}
+}
+c.onpointerup = c.onpointercancel = function() {
+	if (dragging) {
+		dragging = 0
+		carAim = M.max(0, M.min(worlds.length, M.round(carPos)))
+		if (dragDist < 9 && getStartTime(carAim) > 0) {                       // a tap, not a drag
+			resetRun(carAim)
+			state = 1
+		}
+	}
+	hold = 0
+}
+/*onwheel = function(e) {                           // the wheel scrolls through the stages
+	if (state == 0) {
+		carAim = M.max(0, M.min(worlds.length, M.round(carAim) + (e.deltaY > 0 ? 1 : -1)))
+	}
+}*/
+
+onkeydown = function(e) {
+	// On the home screen any key opens the stage list, and takes the chance to
+	// wake the sound and go fullscreen: a browser grants both only on a gesture.
+	if (state == 4 && !port) {
+		initAudio()
+		enterFullscreen()
+		state = 0
+		return
+	}
+	if (e.code == 'Escape' && !state) {                // from the list, back home
+		state = 4
+		return
+	}
+	// the arrow keys step through the stages, like the  drag
+	if (state == 0 && (e.code == 'ArrowLeft' || e.code == 'ArrowRight')) {
+		carAim = M.max(0, M.min(worlds.length, M.round(carAim) + (e.code == 'ArrowRight' ? 1 : -1)))
+		return
+	}
+	if (e.code == 'Escape' && state) {                 // we abandon the run
+		hold = 0
+		resetRun()
+		return
+	}
+	// Space, Enter and the up arrow all mean the same thing: get off the ground.
+	// slice(-5) catches Enter and NumpadEnter in one go.
+	if ((e.code == 'Space' || e.code.slice(-5) == 'Enter' || e.code == 'ArrowUp') && !port) {
+		initAudio()
+		enterFullscreen()
+		if (state == 1 || state == 3) {
+			hold = 1
+			return
+		}
+		if (e.code == 'ArrowUp') {
+			return                                     // in the air only, the list uses the arrows
+		}
+		if (state == 2) {                              // the end screen goes back to the list
+			resetRun()
+			return
+		}
+		// The stage the carousel is showing, not the first one. resetRun() with
+		// no argument opens on stage 1, which is why the space bar used to
+		// always start the forest whatever was on screen.
+		if (getStartTime(M.round(carAim)) > 0) {
+			resetRun(M.round(carAim))
+			state = 1
+			hold = 1
+		}
+	}
+}
+onkeyup = function() {
+	hold = 0
+}
+document.onfullscreenchange = function() {
+	if (!document.fullscreenElement && (state == 1 || state == 3)) {
+		hold = 0
+		resetRun()
+	}
+}
+
+onresize = function() {
+	layoutScreen()
+	if (!port) {
+		if (Y > floorY - uniSize * .42) {
+			Y = floorY - uniSize * .42
+		}
+		if (Y < ceilY + uniSize * .56) {
+			Y = ceilY + uniSize * .56
+		}
+	}
+}
+
+// The Android Back button is what everyone tries first to leave a
+// screen: we catch it to return to the title instead of leaving the page.
+// From the title we let it through, or we would trap the player.
+history.pushState(0, '')
+onpopstate = function() {
+	if (state == 1 || state == 3) {
+		history.pushState(0, '')
+		hold = 0
+		resetRun()
+	}
+}
+
+layoutScreen()
+resetRun()
+state = 4                          // the game opens on the home screen
+requestAnimationFrame(runFrame)
+</script>
+</html>

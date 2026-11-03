@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>The Last Unicorn</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0a12;overflow:hidden;touch-action:none}
+  canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<!-- Classic scripts, not modules: type="module" is a CORS fetch and browsers block it
+     on file://. These load fine straight from disk, and share one global scope, which
+     is also exactly what the build concatenates. Order = dependency order. -->
+<script>// Every tunable lives here, so drawing and collision can never derive SLICE/GAP separately and
+// drift apart.
+//
+// Classic script, not a module: top-level const is script-scoped and visible to every later
+// script. The build wraps the concatenation in one IIFE, making these locals the minifier can
+// mangle.
+
+const TAU = Math.PI * 2;
+
+const SEGMENTS = 6;
+const SLICE = TAU / SEGMENTS;        // logical 60 deg - used for collision
+const GAP = (5 * TAU) / 360;         // visual 5 deg - never used for collision
+
+// Index is the colour id: meteor.c indexes this and compares against a segment index.
+//
+// Measured in CIEDE2000, where ~25 is the floor for small fast-moving patches. Orange/yellow and
+// red/orange were the tight pairs at 26 and 25; pure yellow instead of gold, plus a little more
+// chroma in the orange, takes both to 30 without moving the other four or costing colour-blind
+// players anything.
+const COLORS = ['#ff2d2d', '#f7950a', '#fff106', '#22dd66', '#2299ff', '#a833ff'];
+
+// Layout, as fractions of U = min(viewport w, h).
+const SHIELD_F = 0.3;                // shield radius / U
+const RING_F = 0.07;                 // ring thickness / shield radius
+const SPAWN_F = 0.7;                 // NOMINAL spawn radius: sets flight time, not
+                                     // position - meteors spawn on the viewport edge
+
+// Nearly free above 3.6, and not below it: meteor speed is min(SPEED_CAP, curve) and SPEED_CAP
+// derives from ROT_SPEED, so at 3.4 the last level was rail-limited at 1.5487 and extra ring
+// speed came straight back as faster meteors. From 3.6 the curve binds instead and the last
+// level sits at 1.5664 whether this is 3.7, 3.8 or 4.0.
+//
+// The cost is overshoot: a slice passes in 0.283 s rather than 0.308. The impact telegraph is
+// one slice of rotation, so it shortens with this.
+const ROT_SPEED = 3.7;               // rad/sec
+const MAX_DT = 0.05;                 // clamp after tab switch
+
+// Meteors. Distances and speeds are in U-units so they survive a resize: a meteor travels
+// SPAWN_F -> SHIELD_F = 0.4 U, so ~1.8 s of flight at base speed.
+const METEOR_SPEED = 0.22;           // U per second
+const METEOR_R = 0.018;              // meteor radius / U
+const TRAIL = 0.05;                  // trail length / U
+const SPAWN_INT = 1.6;               // base spawn gap; the difficulty curve overrides it live
+const FLASH_T = 0.3;                 // resolution flash duration, seconds
+const REACT = 0.25;                  // reaction budget the difficulty curve must leave
+
+// Scoring and failure.
+const HP0 = 5;
+const SCORE_BASE = 10;
+const SHAKE_T = 0.35;                // damage shake duration, seconds
+const SHAKE_MAG = 0.022;             // peak shake offset / U
+const HEART_F = 0.03;                // heart half-size / U - large, because hearts are the one
+                                     // HUD element read at a glance
+const OVER_LOCK = 0.6;               // seconds before GAME OVER accepts a restart press
+
+// Perfect blocks, debris and rainbow mode.
+const PERFECT = (12 * TAU) / 360;    // half-width of the dead-centre window, radians
+const SCORE_PERFECT = 25;
+const PART_N = 5;                    // debris pieces per block
+const PART_T = 0.45;                 // debris lifetime, seconds
+const PART_V = 0.3;                  // debris speed, U/sec
+const PART_DRAG = 3;                 // debris slowdown, e-foldings per second
+const METER_BLOCK = 0.05;            // rainbow meter gained per block
+const METER_PERFECT = 0.1;
+const METER_MISS = 0.25;             // and lost per hit
+const RAINBOW_T = 3;                 // seconds of rainbow mode
+const GRACE_T = 2;                   // empty sky after it, to re-read the ring
+const RAIN_SPIN = 15;                // palette steps per second while the mode runs
+
+// Starfield. Three depth bands; the near one is brightest, largest and drifts fastest.
+//
+// STAR_C has a measured ceiling, not a taste: the near band is 2.83:1 against the background,
+// just under the 2.95:1 of #5a5a72, the dimmest text the game draws. Brighter than the dimmest
+// UI element is a background competing with the meteors (red is 5.32:1).
+const STAR_N = 96;                   // divisible by 3, so the bands are even. A rotating disc
+                                     // has to reach the corner, so about a third are off screen
+                                     // at any moment
+const STAR_SPIN = 0.012;             // rad/sec for the FAR band; near is 3x
+const STAR_C = ['#56567c', '#3e3e5c', '#2b2b42'];
+
+// Tier bed. Two octaves under the block notes and quiet enough to stay beneath them.
+const BED_T = 0.5;                   // seconds per bed note
+const BED_VOL = 0.055;               // against 0.22 for a block
+const BED_REF = 3;                   // voices the bed is normalised to: what tier 2, and so
+                                     // free play, already sounded like
+
+// Feel and feedback.
+const HITSTOP = 0.06;                // frozen seconds on a perfect block
+const HAPTIC_MS = 30;                // damage buzz, milliseconds, where there is a motor
+const BEAT_T = 1;                    // seconds between last-heart pulses
+const COMBO_STEP = 5;                // blocks per step up the pentatonic ladder
+const COMBO_TOP = 20;                // combo at which the rise stops climbing
+// What a combo past COMBO_TOP buys, since the multiplier and the pitch have both capped there:
+// the sky turns faster, reaching 1 + SKY_BOOST times its rate at twice COMBO_TOP and holding.
+// Behind the player, which is the only place the game can escalate without competing with a
+// meteor - and the reason it has a ceiling at all.
+const SKY_BOOST = 2;                 // extra sky rotations per second at a full combo
+
+// The campaign. A level is an index into the difficulty curve, not a table of data: LEVELS and
+// the per-level difficulty are derived in patterns.js, where the curve's own knots live.
+const PER_TIER = 3;                  // levels per pattern tier -> LEVELS 12 (four tiers)
+const LEVEL_LEN = 12;                // meteors resolved to clear a level
+const CURVE_END = 120;               // curve-seconds where the last tier's band closes
+</script>
+<script>// Seeded xorshift32. The same seed replays the same waves exactly.
+let rSeed = 1;
+
+function srand(s) {
+  rSeed = (s >>> 0) || 1; // 0 is a fixed point of xorshift, so never allow it
+}
+
+function rnd() {
+  rSeed ^= rSeed << 13;
+  rSeed ^= rSeed >>> 17;
+  rSeed ^= rSeed << 5;
+  return (rSeed >>> 0) / 4294967296;
+}
+
+const rndInt = (n) => (rnd() * n) | 0;
+</script>
+<script>// Pure angle maths, no DOM. Depends on config.js.
+
+// Negatives only. The unconditional ((a % TAU) + TAU) % TAU form is lossy for values already in
+// range: TAU/6 comes back a few ULPs short and truncates one slice down, landing exactly on the
+// segment boundaries meteors resolve against.
+const wrap = (a) => {
+  const m = a % TAU;
+  return m < 0 ? (m + TAU) % TAU : m;
+};
+
+// Segment i spans logical [rot + i*SLICE, rot + (i+1)*SLICE).
+function segAt(angle, rot) {
+  const rel = wrap(angle - rot);
+  const seg = (rel / SLICE) | 0;
+  // rel can land exactly on TAU through float rounding. Clamp, not modulo: the last segment is
+  // the right answer there, and folding would return the first.
+  return seg > 5 ? 5 : seg;
+}
+
+// The ring rotation that centres colour c on world angle a: the exact rot a meteor {a, c}
+// demands. The patterns and the scheduler both reason in these terms, which is what makes
+// "is this wave reachable" arithmetic.
+const aimAt = (a, c) => wrap(a - (c + 0.5) * SLICE);
+
+// Shortest rotation between two ring positions. Always 0..PI.
+function angDist(x, y) {
+  const d = wrap(y - x);
+  return d > Math.PI ? TAU - d : d;
+}
+
+// Distance from centre to viewport edge along bearing a, in U-units. Meteors spawn just outside
+// this rather than on a fixed circle, which would sit inside the screen on the long axis
+// (meteors pop into existence) or far outside it on the short one (invisible for half the
+// flight).
+function edgeAt(a, hw, hh) {
+  const c = Math.abs(Math.cos(a));
+  const s = Math.abs(Math.sin(a));
+  return Math.min(c ? hw / c : 1e9, s ? hh / s : 1e9);
+}
+</script>
+<script>// The difficulty curve, the solvability rail, the wave generators, and the campaign's
+// level -> difficulty mapping. Depends on config.js.
+//
+// The speed table is KNOTS, not steps: each value is the speed at the start of its band and the
+// curve interpolates between them. Past the last knot it eases asymptotically toward a limit,
+// because an uncapped ramp turns the late game into a coin flip.
+const CURVE_T = [0, 20, 45, 75];
+// 1.45 is the smallest last knot that makes flight time fall at EVERY level; at 1.35 four
+// consecutive levels flew at one speed and differed only in spawn gap. The cost is that the last
+// level rides SPEED_CAP exactly rather than sitting under it.
+const CURVE_S = [1, 1.15, 1.35, 1.45]; // speed, x base
+// There is no interval curve. The spawn interval is derived from RATE, below the pattern pool.
+const SPEED_TOP = 1.9; // asymptote of the post-75 s tail
+// The hard floor under the derived interval, and the last thing standing between an authored
+// rate and an unplayable one.
+const INT_FLOOR = 0.71;
+const TAIL_T = 45; // e-folding time of that tail, seconds
+
+// --- Solvability rail -------------------------------------------------------------
+// Worst case, a meteor arrives needing half a revolution: PI rad at ROT_SPEED. Anything faster
+// is unfair rather than hard, so the curve is clamped by this rather than by hand-picked numbers
+// - retune ROT_SPEED or the geometry and it moves with them. The scheduler extends the same idea
+// from single meteors to whole waves.
+//
+// TRAVEL is nominal, since a meteor's real distance follows the viewport edge: it exists to turn
+// speed multipliers into the flight TIME every rail is written in.
+const TRAVEL = SPAWN_F - SHIELD_F;
+const ROT_HALF = Math.PI / ROT_SPEED; // worst-case rotation time
+// Flight must cover the rotation plus a beat to read the color and commit.
+const SPEED_CAP = TRAVEL / ((ROT_HALF + REACT) * METEOR_SPEED);
+// No blanket ROT_HALF floor is needed, because the floor is per wave: the scheduler measures the
+// rotation each wave demands and holds it back that long, which frees the interval to be a
+// pacing target.
+const INT_MIN = INT_FLOOR;
+
+// Piecewise-linear through the knots, then an exponential ease toward `cap`.
+function curve(t, knots, cap) {
+  const n = CURVE_T.length - 1;
+  if (t >= CURVE_T[n]) {
+    return (
+      knots[n] + (cap - knots[n]) * (1 - Math.exp(-(t - CURVE_T[n]) / TAIL_T))
+    );
+  }
+  let i = 0;
+  while (t >= CURVE_T[i + 1]) i++;
+  const f = (t - CURVE_T[i]) / (CURVE_T[i + 1] - CURVE_T[i]);
+  return knots[i] + (knots[i + 1] - knots[i]) * f;
+}
+
+const speedAt = (t) =>
+  METEOR_SPEED * Math.min(SPEED_CAP, curve(t, CURVE_S, SPEED_TOP));
+
+// This must never drop below what the ring physically needs, which is what SPEED_CAP enforces.
+const flightAt = (t) => TRAVEL / speedAt(t);
+
+// Walks CURVE_T rather than restating 20/45/75: those ARE the knots, and the campaign's levels
+// are built on the same array, so a knot moving must move the tier with it.
+function tierAt(t) {
+  let k = 0;
+  while (k + 1 < CURVE_T.length && t >= CURVE_T[k + 1]) k++;
+  return k;
+}
+
+// --- The campaign -----------------------------------------------------------------
+// A level does not get its own difficulty system: one tier per CURVE_T knot, PER_TIER levels per
+// tier, each level at its own position inside its tier's band. That makes
+// `tierAt(diffAt(lv)) === (lv / PER_TIER) | 0` true by construction rather than by a constant
+// tuned until it lined up.
+const LEVELS = CURVE_T.length * PER_TIER;
+
+// Must be total, not just defined over the campaign: the frame that wins has already incremented
+// past the last level when the tier bed reads diffAt(g.level), and an undefined knot there is a
+// silent NaN.
+function diffAt(lv) {
+  if (lv >= LEVELS) lv = LEVELS - 1; // clamp the level, not the tier: clamping the
+  const k = (lv / PER_TIER) | 0; // tier leaves lv % PER_TIER free and oscillates
+  const a = CURVE_T[k];
+  const b = k + 1 < CURVE_T.length ? CURVE_T[k + 1] : CURVE_END;
+  return a + ((b - a) * (lv % PER_TIER)) / PER_TIER;
+}
+
+// --- Patterns ---------------------------------------------------------------------
+// Each returns a wave: meteors as {t, a, c}, t the arrival offset in seconds, t=0 first. Every
+// meteor in a wave flies at the same speed, so an arrival offset is also a spawn offset - which
+// is what keeps the solvability arithmetic exact, and why there is deliberately no per-meteor
+// speed.
+
+const STEP_T = SLICE / ROT_SPEED; // time to turn exactly one slice
+const SEQ_REACT = 0.1; // mid-wave the player is already in rhythm
+const MIN_ARRIVAL_GAP = STEP_T + SEQ_REACT; // the rail every wave must clear
+const SEQ_GAP = MIN_ARRIVAL_GAP * 1.2; // what the sequence patterns actually use
+
+const single = () => [{ t: 0, a: rnd() * TAU, c: rndInt(SEGMENTS) }];
+
+// Two at once. The slice offset applies to the angle AND the colour, which is what makes one
+// ring position block both; shift only one and the wave is unwinnable.
+function pair(k) {
+  const a = rnd() * TAU;
+  const c = rndInt(SEGMENTS);
+  return [
+    { t: 0, a, c },
+    { t: 0, a: a + k * SLICE, c: (c + k) % SEGMENTS },
+  ];
+}
+const double = () => pair(1 + rndInt(SEGMENTS - 1));
+const opposite = () => pair(SEGMENTS / 2); // the k = 3 case: dead opposite bearings
+
+// Three one slice apart, same colour: step the ring one slice per beat, always the same way.
+function clockwiseSeq() {
+  const a = rnd() * TAU;
+  const c = rndInt(SEGMENTS);
+  return [0, 1, 2].map((i) => ({ t: i * SEQ_GAP, a: a + i * SLICE, c }));
+}
+
+// Three from one bearing in consecutive colours: the same step per beat, driven by colour
+// instead of angle, so it sweeps the other way.
+function rainbowSeq() {
+  const a = rnd() * TAU;
+  const c = rndInt(SEGMENTS);
+  return [0, 1, 2].map((i) => ({ t: i * SEQ_GAP, a, c: (c + i) % SEGMENTS }));
+}
+
+// Three at once from evenly spaced bearings. Looks like the hardest thing in the game; is one
+// ring position.
+function burst() {
+  const a = rnd() * TAU;
+  const c = rndInt(SEGMENTS);
+  return [0, 1, 2].map((i) => ({
+    t: 0,
+    a: a + i * 2 * SLICE,
+    c: (c + i * 2) % SEGMENTS,
+  }));
+}
+
+// Ordered by unlocking level, so a level's live set is a contiguous run and picking one is an
+// index into a window rather than a filter.
+const PATS = [single, double, opposite, clockwiseSeq, rainbowSeq, burst];
+//                lv 1  2  3  4  5  6  7  8  9 10 11 12
+const PAT_LO = [0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2]; // window floor, inclusive
+const PAT_N = [1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6]; // and ceiling, exclusive
+
+// Clamped, like everything indexed by level: the winning frame has already incremented past it.
+const pickPattern = (lv) => {
+  if (lv >= LEVELS) lv = LEVELS - 1;
+  return PATS[PAT_LO[lv] + rndInt(PAT_N[lv] - PAT_LO[lv])];
+};
+
+// An interval is seconds between WAVES, which nobody plays; what a player feels is METEORS PER
+// SECOND, the interval divided by the mean wave size. Authoring the interval therefore let any
+// change to the pattern pool move the felt difficulty as a side effect - it cost 14-18 % at four
+// levels once, with nothing in the code objecting. Author the rate, derive the interval.
+
+// A literal, not `PATS.map(p => p().length)`: every generator draws from the seeded stream, so
+// measuring the pool at load would shift every wave in the game. Nothing can verify this at
+// runtime for the same reason, so a new pattern means an entry here in the same edit.
+const PAT_SZ = [1, 2, 2, 3, 3, 3]; // meteors per wave, one entry per PATS entry
+
+// Derived from the window, so a level that changes what it draws changes this with it.
+const MEAN_W = PAT_LO.map((lo, lv) => {
+  let s = 0;
+  for (let i = lo; i < PAT_N[lv]; i++) s += PAT_SZ[i];
+  return s / (PAT_N[lv] - lo);
+});
+
+// Meteors per second, one authored target per level. THE difficulty dial - everything else about
+// pacing derives from it.
+//
+// A geometric ladder, 15.3 % per level: a difficulty step is felt as a RATIO, not a difference,
+// so +0.1 meteors/sec is a third harder at level 1 and a rounding error at level 12. Endpoints
+// are inherited - 0.63 has always opened the game, 2.98 has always finished it.
+const RATE = [
+  0.63, 0.72, 0.83, 0.96, 1.1, 1.27, 1.47, 1.69, 1.95, 2.24, 2.59, 2.98,
+];
+
+// Takes the LEVEL, not a difficulty scalar
+// NOT monotone, and must not be assumed to be. Levels 2-5 have a LONGER gap than level 1,
+// because they unlock bigger waves faster than the rate rises, so the same climb arrives as
+// fewer, fatter waves. The invariant is that RATE rises every level; the interval is downstream.
+function intervalFor(lv) {
+  if (lv >= LEVELS) lv = LEVELS - 1;
+  return Math.max(INT_MIN, MEAN_W[lv] / RATE[lv]);
+}
+</script>
+<script>// Keyboard and touch rotation, plus a generic "press" for start / restart / audio unlock.
+const iKeys = { l: false, r: false };
+// Active pointers, id -> side (0 left, 1 right). Tracked per id rather than as a single
+// flag so a second finger cannot leave the first one stuck on when it lifts.
+const iPtr = {};
+let iPress = null;
+let iTap = null;
+
+function onPress(fn) { iPress = fn; }
+// Mute needs a target on a phone, and the top edge is the only strip safe to take: the score,
+// level readout and hearts already live there, and nobody holds a phone by its top edge to turn
+// a ring at the centre.
+function onTap(fn) { iTap = fn; }
+const inTapZone = (e) => e.clientY < innerHeight * 0.09;
+
+function initInput() {
+  const set = (e, v) => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') iKeys.l = v;
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') iKeys.r = v;
+    else return;
+    e.preventDefault();
+  };
+  const side = (e) => { iPtr[e.pointerId] = e.clientX > innerWidth / 2 ? 1 : 0; };
+  const drop = (e) => { delete iPtr[e.pointerId]; };
+
+  addEventListener('keydown', (e) => { set(e, true); if (iPress) iPress(); });
+  addEventListener('keyup', (e) => set(e, false));
+
+  addEventListener('pointerdown', (e) => {
+    // Consumed, not passed on: this must neither start the game nor grab a rotation half.
+    if (iTap && inTapZone(e)) { iTap(); return; }
+    side(e);
+    if (iPress) iPress();
+  });
+  // Dragging across the midline switches direction - what a player who overshoots tries first.
+  addEventListener('pointermove', (e) => { if (e.pointerId in iPtr) side(e); });
+  addEventListener('pointerup', drop);
+  addEventListener('pointercancel', drop);
+
+  // Held keys and touches stay stuck if the window loses focus mid-press.
+  addEventListener('blur', () => {
+    iKeys.l = iKeys.r = false;
+    for (const k in iPtr) delete iPtr[k];
+  });
+}
+
+// Screen angles increase clockwise, so Right = +1.
+function dir() {
+  let l = iKeys.l ? 1 : 0;
+  let r = iKeys.r ? 1 : 0;
+  for (const k in iPtr) { if (iPtr[k]) r = 1; else l = 1; }
+  return r - l;
+}
+</script>
+<script>// Procedural Web Audio: one oscillator and one gain envelope per sound, no buffers or assets.
+// Depends on config.js.
+//
+// Browsers create the context suspended until a user gesture and can suspend it again after a
+// tab is backgrounded, so initAudio() runs on every press rather than once at boot. If it cannot
+// be created at all, aCtx becomes 0 and every sound quietly does nothing.
+let aCtx;
+// Every sound goes through blip(), so mute is one flag in one place. Not a volume: muted creates
+// no oscillators at all, rather than trusting a gain value to be right.
+let aMute = 0;
+const setMute = (m) => { aMute = m ? 1 : 0; };
+
+function initAudio() {
+  if (aCtx === 0) return;                 // tried once, not available
+  try {
+    if (!aCtx) aCtx = new (AudioContext || webkitAudioContext)();
+    if (aCtx.state === 'suspended') aCtx.resume();
+  } catch (e) { aCtx = 0; }
+}
+
+// `at` offsets the note into the future - how a chord or arpeggio is built with no scheduler.
+function blip(freq, dur, type, vol, at) {
+  if (!aCtx || aMute) return;
+  const t = aCtx.currentTime + (at || 0);
+  const o = aCtx.createOscillator();
+  const gn = aCtx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  // Exponential decay to near-silence rather than a hard stop, which would click.
+  gn.gain.setValueAtTime(vol, t);
+  gn.gain.exponentialRampToValueAtTime(1e-4, t + dur);
+  o.connect(gn);
+  gn.connect(aCtx.destination);
+  o.start(t);
+  o.stop(t + dur);
+}
+
+// One note per shield colour, so blocking a rainbow sequence plays a run up the scale. Major
+// pentatonic, so no pair of blocks can sound wrong together.
+const NOTES = [523, 587, 659, 784, 880, 1047];
+
+// The sixth entry is the octave of the first, so stepping the index and doubling every fifth
+// step walks the same scale upward forever - which is what keeps the no-clash promise at any
+// combo.
+const note = (i) => NOTES[i % 5] * (1 << ((i / 5) | 0));
+
+// Climbs with the streak, falls back the moment it breaks. Capped at COMBO_TOP so a long streak
+// ends up bright rather than shrill.
+const sndBlock = (c, n) =>
+  blip(note(c + ((Math.min(n, COMBO_TOP) / COMBO_STEP) | 0)), 0.12, 'sine', 0.22);
+// A dead-centre block rings its own note an octave up, on top of the block itself.
+const sndPerfect = (c) => blip(NOTES[c] * 2, 0.18, 'sine', 0.16);
+// Not tied to the colour: a fixed chime is recognisable without looking.
+const sndTier = () => blip(NOTES[5] * 2, 0.24, 'triangle', 0.12);
+const sndHit = () => blip(80, 0.35, 'square', 0.25);
+// One heart left. Low and quiet, on its own clock, so the danger is audible without looking.
+const sndBeat = () => blip(55, 0.2, 'sine', 0.16);
+// A slow arpeggio two octaves under the blocks, gaining a voice per tier so the tiers sound as
+// different as they play. Voices and walk are both scale steps, so it stays inside the pentatonic
+// and cannot clash with whatever the player hits.
+//
+// Each voice enters a fraction of a beat after the one below: a single low note every half second
+// at tier 0, a four-note figure by tier 3 - denser without being louder.
+const BED_W = [0, 2, 4, 2];          // the walk, in scale steps
+
+// Normalised to constant output, or four voices at a fixed volume would be four times the power
+// of one and the last tier would sit ~6 dB over the first.
+//
+// Amplitude goes as the SQUARE ROOT of the voice count, not the count: these are different
+// pitches, so they sum in power rather than amplitude, and dividing by the count would overshoot
+// and leave a thick tier quieter than a thin one.
+function sndBed(i, tier) {
+  const vol = BED_VOL * Math.sqrt(BED_REF / (tier + 1));
+  for (let v = 0; v <= tier; v++) {
+    blip(note(BED_W[i % 4] + v * 2) / 4, BED_T * 0.9, 'triangle', vol, v * BED_T * 0.22);
+  }
+}
+
+// Rainbow mode opening: the whole palette in one rising arpeggio.
+function sndRainbow() {
+  for (let i = 0; i < SEGMENTS; i++) blip(NOTES[i], 0.3, 'triangle', 0.16, i * 0.06);
+}
+</script>
+<script>// Spawn, integrate, resolve. Polar and resolution-independent: d is in U-units, so a
+// mid-flight resize does not teleport anything. Depends on config.js, geom.js, rng.js.
+
+// Spawned just off the viewport edge on its own bearing, with speed solved so that every meteor
+// - long axis or short - flies for exactly `f` seconds. Both rails are written in flight time, so
+// holding it constant is what makes them hold on a phone as well as a monitor.
+function spawnMeteor(g, a, c, f) {
+  // Patterns build angles by adding whole slices, so wrap once here and every consumer
+  // downstream - drawing, resolution, the flash - can assume 0..TAU.
+  a = wrap(a);
+  const e = edgeAt(a, view.hw, view.hh);
+  // Speed is solved over the VISIBLE stretch, edge to shield, so `f` is the time the player gets
+  // to look at the meteor. The extra METEOR_R is pre-roll that keeps the whole disc off-screen
+  // until it crosses the boundary, so nothing winks into existence inside the playfield.
+  //
+  // `r` means this meteor is judged by the rules in force when it launched: rainbow mode's last
+  // arrivals are still in the air when it ends, and changing the rules under them mid-flight
+  // lands exactly where the player has no time to react.
+  g.mets.push({
+    a, d: e + METEOR_R, c, s: (e - SHIELD_F) / (f || flightAt(0)), r: g.rain > 0,
+  });
+}
+
+// The wave scheduler. Patterns only declare what arrives and when; this is the one place that
+// turns them into meteors. Each keeps the speed it was born with, so the curve never
+// retroactively accelerates one in flight.
+function spawnTick(g, dt) {
+  // The breather after rainbow mode: nothing scheduled, nothing released, while the player
+  // re-reads the ring. On the way out the rail re-anchors to where the ring actually IS - in
+  // rainbow mode there was no reason to hold it where the last wave left it, so `aim` is stale.
+  if (g.grace > 0) {
+    if ((g.grace -= dt) <= 0) { g.aim = g.rot; g.up = 0; }
+    return;
+  }
+
+  // Release whatever the running wave has come due for.
+  for (let i = g.queue.length - 1; i >= 0; i--) {
+    const q = g.queue[i];
+    if ((q.t -= dt) <= 0) {
+      spawnMeteor(g, q.a, q.c, q.f);
+      g.queue.splice(i, 1);
+    }
+  }
+
+  g.spawnT -= dt;
+  if (g.spawnT > 0) return;
+
+  // Difficulty comes from the level, never the clock. One scalar, so every rail below keeps its
+  // meaning.
+  const d = diffAt(g.level);
+  const w = pickPattern(g.level)();
+  const f = flightAt(d);
+  const gap = intervalFor(g.level);
+
+  // The ring may have to travel from where the last wave left it to where this one wants it. The
+  // gap already waited covers part of that trip; hold the wave back for the rest, so a tight
+  // interval never becomes an unreachable meteor. The interval only falls as levels go up, so
+  // this understates what was actually waited - erring toward more room, never less.
+  const lead = Math.max(0, angDist(g.aim, aimAt(w[0].a, w[0].c)) / ROT_SPEED + REACT - gap);
+
+  let dur = 0;
+  for (const m of w) {
+    g.queue.push({ t: m.t + lead, a: m.a, c: m.c, f });
+    if (m.t > dur) dur = m.t;
+  }
+  const last = w[w.length - 1];
+  g.aim = aimAt(last.a, last.c);
+  // Accumulate rather than assign, so cadence cannot drift with frame rate.
+  g.spawnT += dur + lead + gap;
+}
+
+// Combo multiplier, capped at x4. Reads the combo after the increment, so the fifth
+// consecutive block is the one that pays x2.
+const mult = (combo) => (combo >= 20 ? 4 : combo >= 10 ? 3 : combo >= 5 ? 2 : 1);
+
+function resolveMeteor(g, m) {
+  // Levels advance on meteors RESOLVED, not blocked: counting only blocks would hand a struggling
+  // player a longer level at the same difficulty.
+  g.cleared++;
+  const seg = segAt(m.a, g.rot);
+  const rain = g.rain > 0 || m.r;          // rainbow mode: every colour matches
+  const ok = rain || seg === m.c;
+  // "Dead centre of the slice" and "the ring is exactly where this meteor wants it" are the same
+  // statement, so perfect is just the distance from aimAt - no second piece of geometry to drift.
+  const perfect = ok && (rain || angDist(g.rot, aimAt(m.a, m.c)) <= PERFECT);
+  g.flash = { t: FLASH_T, ok, perfect, a: m.a, c: ok ? m.c : seg };
+  shatter(g, m.a, ok ? m.c : -1, perfect);
+
+  if (ok) {
+    g.blocked++;
+    const before = mult(g.combo);
+    g.combo++;
+    if (g.combo > g.maxC) g.maxC = g.combo;
+    g.score += (perfect ? SCORE_PERFECT : SCORE_BASE) * mult(g.combo);
+    sndBlock(m.c, g.combo);
+    // Hit-stop. main.js skips the frame outright rather than scaling dt, so it reads as impact
+    // rather than stutter. Never in rainbow mode, where every block is perfect: a freeze would
+    // mark nothing and they arrive fast enough to compound into a slideshow.
+    if (perfect) { g.perfects++; g.lvP++; if (!rain) g.stop = HITSTOP; sndPerfect(m.c); }
+    if (mult(g.combo) > before) sndTier();
+    // The meter cannot refill during rainbow mode, or it would sustain itself forever.
+    if (!rain) {
+      g.meter += perfect ? METER_PERFECT : METER_BLOCK;
+      if (g.meter >= 1) { g.meter = 0; g.rain = RAINBOW_T; sndRainbow(); }
+    }
+  } else {
+    g.missed++;
+    g.combo = 0;
+    // Free play keeps every consequence of a miss EXCEPT the heart: shake, sound, buzz, broken
+    // combo and drained meter all stay, because those are how a miss tells you it happened. Only
+    // the heart is spared, and with it gameOver, which is reached through hp and nowhere else.
+    if (!g.free) g.hp--;
+    g.shake = SHAKE_T;
+    g.meter = Math.max(0, g.meter - METER_MISS);
+    sndHit();
+    // Three ways this fails: `navigator` absent entirely (a bare mention throws), no vibrate at
+    // all (iOS Safari), or present and refusing by throwing rather than returning false. One
+    // try/catch covers all three, and it has to - this sits upstream of gameOver(), so an
+    // exception here would drop the heart and then never end the run.
+    try { navigator.vibrate(HAPTIC_MS); } catch (e) { /* no motor, or not permitted */ }
+    if (g.hp <= 0) gameOver(g);
+  }
+}
+
+// Debris off the point of impact, positioned in U-units so a resize mid-burst does not fling it
+// across the screen.
+//
+// Math.random, never rnd(): the seeded stream IS the day's campaign, and the draws taken here
+// depend on how the player is doing - a perfect throws twice the debris. Scenery on the wave
+// generator makes two players on the same day diverge the moment they play differently.
+function shatter(g, a, c, big) {
+  const n = big ? PART_N * 2 : PART_N;
+  for (let i = 0; i < n; i++) {
+    const dir = a + (Math.random() - 0.5) * 1.4;
+    const v = PART_V * (0.4 + Math.random());
+    g.parts.push({
+      x: Math.cos(a) * SHIELD_F,
+      y: Math.sin(a) * SHIELD_F,
+      vx: Math.cos(dir) * v,
+      vy: Math.sin(dir) * v,
+      t: PART_T,
+      c,
+    });
+  }
+}
+
+function updateParts(g, dt) {
+  // Exponential drag integrated exactly, not stepped: velocity decays by k, and the distance
+  // covered while it decayed is (1 - k) / PART_DRAG. Stepping sends debris visibly further on a
+  // slow machine than a fast one.
+  const k = Math.exp(-PART_DRAG * dt);
+  const d = (1 - k) / PART_DRAG;
+  for (let i = g.parts.length - 1; i >= 0; i--) {
+    const p = g.parts[i];
+    p.x += p.vx * d;
+    p.y += p.vy * d;
+    p.vx *= k;
+    p.vy *= k;
+    if ((p.t -= dt) <= 0) g.parts.splice(i, 1);
+  }
+}
+
+// Resolution is a threshold CROSSING, not an overlap band: a meteor moving inward crosses
+// d <= SHIELD_F exactly once however large the frame step, so nothing can tunnel through.
+function updateMeteors(g, dt) {
+  for (let i = g.mets.length - 1; i >= 0; i--) {
+    const m = g.mets[i];
+    m.d -= m.s * dt;
+    if (m.d <= SHIELD_F) {
+      resolveMeteor(g, m);
+      g.mets.splice(i, 1);
+    }
+  }
+}
+</script>
+<script>// Canvas drawing. Depends on config.js, geom.js, rng.js.
+
+function text(ctx, s, x, y, size, color, align) {
+  ctx.font = `${Math.round(size)}px monospace`;
+  ctx.textAlign = align || 'left';
+  ctx.fillStyle = color;
+  ctx.fillText(s, x, y);
+}
+
+// One clock for everything rainbow mode recolours - ring, meter, label, the unicorn's mane. Four
+// copies of this expression would be four chances for one to be retuned alone.
+const spinAt = (t) => (t * RAIN_SPIN) | 0;
+
+// Label placement inside the ring is a lens problem, not a spacing one: clear width is
+// 2*sqrt(rIn^2 - y^2), which narrows fast - 0.43 U at 0.185 U below centre, 0.22 U at 0.262 U.
+// Anything wider than the lens at its own baseline crosses the ring. Short status lines go
+// inside; anything long goes here, clear of the outer edge, where the full viewport is free.
+const UNDER = SHIELD_F * (1 + RING_F / 2) + 0.024;
+
+// The one row for "what is happening right now" - rainbow mode, the level break and the restart
+// prompt all sit on it, so there is one place to look and one constant keeping them together.
+const STATUS_Y = 0.175;
+// What each level is FOR, shown on the break card that announces it. Levels 2-6 each introduce
+// exactly one shape, 7 and 9 are named for what the sliding floor takes AWAY, and the rest say
+// FASTER because that is the honest identity of a consolidation level. Nothing checks this
+// against PAT_LO/PAT_N any more, so the two tables change in the same edit.
+//
+// Indexed by level, so entry 0 is unreachable - there is no break card before level 1 - and it
+// stays anyway, because a table off by one from its index is this project's worst class of bug.
+const LV_NAME = [
+  'THE SINGLE', 'THE DOUBLE', 'OPPOSITES', 'THE SWEEP', 'THE MIRROR', 'THE BURST',
+  'NO MORE SINGLES', 'FASTER', 'THE HARD FOUR', 'FASTER', 'FASTER', 'LAST STAND',
+];
+
+// The story, one beat per level, under the level name on the break card that announces it. The
+// premise is on the title: the rainbow broke, the shield is the last whole one, and a matched
+// colour is a piece going back to its band - which is why the sky can run out of pieces.
+//
+// Indexed like LV_NAME, entry 0 included and unreachable: the title's premise line is level 1's
+// beat. Sentence case, because every other line on these cards is the game reporting on the
+// player and this is the only one talking to them.
+const LV_STORY = [
+  'The first piece falls.',
+  'The sky cracks twice.',
+  'It gives way on both sides.',
+  'A whole band, coming down.',
+  'The same band, unwinding.',
+  'All six let go at once.',
+  'Nothing falls alone after this.',
+  'Half the night gone.',
+  'Only the hard colours left.',
+  'The shield has held this far.',
+  'Almost morning.',
+  'Hold until morning, and the sky is whole.',
+];
+
+// Ambient starfield, drawn under everything. Two properties, both deliberate:
+//
+// It never uses rnd(), because the seeded stream is the day's campaign and scenery drawing from
+// it changes which meteors arrive. Positions come from a hash of the star's index: no state, same
+// sky every frame.
+//
+// It rotates rather than drifts, the one motion that agrees with a game about turning a ring -
+// anything travelling inward would compete with the meteors. The near band turns at 0.036 rad/s
+// against the ring's 3.7, which reads as depth rather than as movement.
+const starH = (i) => Math.abs((Math.sin(i * 12.9898) * 43758.5453) % 1);
+
+function drawStars(ctx, g, v) {
+  // Out to the corner, so a rotating field covers a wide viewport; starting outside the ring, so
+  // the played area stays clean.
+  const lo = SHIELD_F * 1.4 * v.u;
+  const hi = Math.hypot(v.hw, v.hh) * v.u;
+  for (let i = 0; i < STAR_N; i++) {
+    const band = i % 3;
+    // sqrt, not a straight lerp: area grows with r², so spacing radius evenly would pile
+    // the field up around the hole and leave the corners bare.
+    const r = Math.sqrt(lo * lo + starH(i) * (hi * hi - lo * lo));
+    const a = starH(i + 97) * TAU + (g.amb + g.spin) * STAR_SPIN * (3 - band);
+    const s = v.u * 0.0013 * (3 - band);
+    ctx.fillStyle = STAR_C[band];
+    ctx.fillRect(v.cx + r * Math.cos(a) - s / 2, v.cy + r * Math.sin(a) - s / 2, s, s);
+  }
+}
+
+// Segment i's drawn arc, derived from SLICE and GAP and nowhere else. The ring and the telegraph
+// both path through here, so a warning cannot light a different arc from the one on screen.
+const segArc = (ctx, v, rot, i) =>
+  ctx.arc(v.cx, v.cy, v.shieldR,
+    rot + i * SLICE + GAP / 2, rot + (i + 1) * SLICE - GAP / 2);
+
+function drawRing(ctx, g, v) {
+  // In rainbow mode the segments cycle the palette: the same six colours at a moving offset,
+  // which reads instantly as "the rules changed".
+  const spin = g.rain > 0 ? spinAt(g.time) : 0;
+  ctx.lineWidth = v.ringW;
+  ctx.lineCap = 'butt';
+  for (let i = 0; i < SEGMENTS; i++) {
+    ctx.strokeStyle = COLORS[(i + spin) % SEGMENTS];
+    ctx.beginPath();
+    segArc(ctx, v, g.rot, i);
+    ctx.stroke();
+  }
+}
+
+// Exactly one slice of rotation, so the warning can rescue a one-slice misread and nothing more -
+// the difference between a last look and a crutch. Derived, so it follows ROT_SPEED.
+const TELE_T = STEP_T;
+
+// Impact telegraph. Through the last TELE_T of a meteor's flight, if the ring as it stands would
+// take the hit, the threatened segment pulses white - already the game's damage colour.
+//
+// It adds no information, since both colours are on screen for the whole approach; it adds
+// salience in the last beat, and only to a player who is currently wrong. It is a readout of
+// segAt, the same lookup that decides the outcome, so it cannot promise what resolution denies.
+function drawTelegraph(ctx, g, v) {
+  if (g.rain > 0) return;              // nothing can be wrong while every colour matches
+  ctx.strokeStyle = '#fff';
+  ctx.lineCap = 'butt';
+  for (const m of g.mets) {
+    const seg = segAt(m.a, g.rot);
+    // m.r: launched under rainbow rules, so it blocks whatever the ring says.
+    if (m.r || seg === m.c) continue;
+    const t = (m.d - SHIELD_F) / m.s;
+    if (t > TELE_T) continue;
+    const k = 1 - t / TELE_T;          // 0 as the warning opens, 1 at the moment of impact
+    ctx.globalAlpha = 0.18 + 0.5 * k;
+    ctx.lineWidth = v.ringW * (1 + k);
+    ctx.beginPath();
+    segArc(ctx, v, g.rot, seg);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// The rainbow meter: a thin arc just inside the ring, with no HUD of its own.
+function drawMeter(ctx, g, v) {
+  // Three things share the arc - the meter filling, rainbow mode draining, the breather after it
+  // draining. They never overlap, so it is still one place to look.
+  const k = g.rain > 0 ? g.rain / RAINBOW_T : g.grace > 0 ? g.grace / GRACE_T : g.meter;
+  if (k <= 0) return;
+  // White, not a dim grey: the arc is thin on a near-black field. Only rainbow mode gets colour,
+  // so colour on this arc means the mode is live and white means it is counting.
+  ctx.strokeStyle = g.rain > 0 ? COLORS[spinAt(g.time) % SEGMENTS] : '#eef';
+  ctx.lineWidth = v.ringW * 0.4;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.arc(v.cx, v.cy, v.shieldR - v.ringW, -TAU / 4, -TAU / 4 + k * TAU);
+  ctx.stroke();
+}
+
+function drawParts(ctx, g, v) {
+  for (const p of g.parts) {
+    const k = p.t / PART_T;
+    ctx.globalAlpha = k;
+    ctx.fillStyle = p.c < 0 ? '#fff' : COLORS[p.c];
+    ctx.beginPath();
+    ctx.arc(v.cx + p.x * v.u, v.cy + p.y * v.u, METEOR_R * v.u * 0.4 * k, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Vertical offset that optically centres the drawing, in head-radii. Its origin is the middle of
+// the head and the horn, ears and mane are all above that, so drawn at the ring's centre the
+// shape sits high. 0.269 is the area-weighted centroid of the filled paths; the bounding box says
+// 0.69, which over-weights a thin horn tip and pushes the head visibly low. Re-measure after any
+// change to the mane, horn or ears.
+const UNI_Y = 0.269;
+
+// Drawn in its own unit space - translate to the centre, scale by R, every number below in
+// head-radii - and mirrored about the vertical, so the two halves cannot drift apart.
+function drawUnicorn(ctx, g, v) {
+  const R = v.u * 0.062;
+  const t = g.time;
+  // The ambient clock, which unlike `time` keeps running once play stops, so the unicorn is alive
+  // on the title and end cards too.
+  const a = g.amb;
+  const won = g.st === 3;
+  // In rainbow mode the mane cycles with the shield on the same offset and clock, so they read as
+  // one costume change - which is why this stays on `time` rather than `amb`. Winning cycles it
+  // too, on the ambient clock, since there is no ring left to stay in step with.
+  const off = g.rain > 0 ? spinAt(t) : won ? spinAt(a) : 0;
+
+  // The eyes track whatever is closest to hitting us - the cheapest way to make the unicorn look
+  // like it is paying attention.
+  let near = 1e9;
+  let na = 0;
+  for (const m of g.mets) if (m.d < near) { near = m.d; na = m.a; }
+  const gx = near < 1e9 ? Math.cos(na) * 0.09 : 0;
+  const gy = near < 1e9 ? Math.sin(na) * 0.09 : 0;
+
+  // Reactions, both off the flash timer already running - no new state, no new clock. A miss
+  // shoves the unicorn away from the bearing it was struck from, a perfect pops it upward, and
+  // ordinary blocks do nothing: they are most of the game, and a character that jumps at every
+  // one has stopped reacting and started animating. Both freeze mid-pose during hit-stop.
+  let rx = 0;
+  let ry = 0;
+  const f = g.flash;
+  if (won) {
+    // A rear, not a new rig: the upward offset a perfect block already pops, held open and
+    // rocking instead of decaying. Sized against measured clearance rather than against the pop,
+    // which stops at 0.45 R only because mid-play a unicorn lunging at the ring reads as a
+    // meteor. Idle ink reaches 76 px of the 174 px to the ring; this peaks at 109 px.
+    ry = -0.7 - Math.sin(a * 2.2) * 0.25;
+  } else if (f) {
+    const k = f.t / FLASH_T;
+    if (!f.ok) {
+      rx = -Math.cos(f.a) * k * 0.35;
+      ry = -Math.sin(f.a) * k * 0.35;
+    } else if (f.perfect) {
+      ry = -k * 0.45;
+    }
+  }
+
+  ctx.save();
+  ctx.translate(v.cx + rx * R, v.cy + (UNI_Y + Math.sin(a * 2) * 0.05 + ry) * R);   // idle bob
+  // Applied before the scale, so it rotates the character rather than shearing it.
+  if (won) ctx.rotate(Math.sin(a * 2.2) * 0.18);
+  ctx.scale(R, R);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // Mane and ears go first, so the head fill hides their roots.
+  for (let s = 1; s >= -1; s -= 2) {
+    ctx.save();
+    ctx.scale(s, 1);
+    for (let j = 0; j < 3; j++) {
+      // Shield order round the head: red, orange, yellow down one side, purple, blue, green down
+      // the other.
+      ctx.fillStyle = COLORS[((s > 0 ? j : 5 - j) + off) % SEGMENTS];
+      const y = -1 + j * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(0.25, y);
+      ctx.quadraticCurveTo(1.55, y - 0.12, 1.35 + j * 0.15, y + 1);
+      ctx.quadraticCurveTo(1, y + 0.5, 0.25, y + 0.4);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#eef';
+    ctx.beginPath();
+    ctx.moveTo(0.24, -0.86);
+    ctx.quadraticCurveTo(0.66, -1.78, 0.9, -0.82);
+    ctx.quadraticCurveTo(0.62, -0.62, 0.24, -0.86);
+    ctx.fill();
+    ctx.fillStyle = '#ffd3e4';
+    ctx.beginPath();
+    ctx.moveTo(0.36, -0.86);
+    ctx.quadraticCurveTo(0.63, -1.45, 0.76, -0.86);
+    ctx.quadraticCurveTo(0.58, -0.74, 0.36, -0.86);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Head.
+  ctx.fillStyle = '#eef';
+  ctx.beginPath();
+  ctx.moveTo(0, -1.02);
+  ctx.bezierCurveTo(0.62, -1.02, 0.95, -0.72, 0.95, -0.28);
+  ctx.bezierCurveTo(0.95, 0.14, 0.74, 0.34, 0.55, 0.56);
+  ctx.bezierCurveTo(0.44, 0.76, 0.32, 0.92, 0, 0.92);
+  ctx.bezierCurveTo(-0.32, 0.92, -0.44, 0.76, -0.55, 0.56);
+  ctx.bezierCurveTo(-0.74, 0.34, -0.95, 0.14, -0.95, -0.28);
+  ctx.bezierCurveTo(-0.95, -0.72, -0.62, -1.02, 0, -1.02);
+  ctx.fill();
+
+  // Muzzle.
+  ctx.fillStyle = '#ffdceb';
+  ctx.beginPath();
+  ctx.ellipse(0, 0.52, 0.33, 0.25, 0, 0, TAU);
+  ctx.fill();
+
+  // Horn: a tapered blade with three ridges, in the same gold the HUD uses.
+  ctx.fillStyle = '#ffd400';
+  ctx.beginPath();
+  ctx.moveTo(-0.19, -0.92);
+  ctx.lineTo(0, -2.3);
+  ctx.lineTo(0.19, -0.92);
+  ctx.fill();
+  ctx.fillStyle = '#ffef9c';
+  ctx.beginPath();
+  ctx.moveTo(-0.19, -0.92);
+  ctx.lineTo(0, -2.3);
+  ctx.lineTo(-0.04, -0.92);
+  ctx.fill();
+
+  // Eyes and nostrils, mirrored like the mane.
+  const blink = t % 4 > 3.9;
+  for (let s = 1; s >= -1; s -= 2) {
+    ctx.save();
+    ctx.scale(s, 1);
+    ctx.fillStyle = '#1a1a2e';
+    if (blink) {
+      ctx.strokeStyle = '#1a1a2e';
+      ctx.lineWidth = 0.06;
+      ctx.beginPath();
+      ctx.moveTo(0.28, -0.24);
+      ctx.lineTo(0.56, -0.24);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.ellipse(0.42 + gx * s, -0.26 + gy, 0.13, 0.17, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.ellipse(0.46 + gx * s, -0.32 + gy, 0.05, 0.06, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#e8a8c0';
+    ctx.beginPath();
+    ctx.ellipse(0.13, 0.53, 0.042, 0.058, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawMeteors(ctx, g, v) {
+  const r = METEOR_R * v.u;
+  for (const m of g.mets) {
+    const co = Math.cos(m.a);
+    const si = Math.sin(m.a);
+    const x = v.cx + m.d * v.u * co;
+    const y = v.cy + m.d * v.u * si;
+
+    // Length follows the meteor's real speed: one crossing the long axis moves faster to arrive
+    // on time, and a fixed trail would look wrong on it.
+    const tl = TRAIL * v.u * (m.s / METEOR_SPEED);
+    ctx.strokeStyle = COLORS[m.c];
+    ctx.globalAlpha = 0.45;
+    ctx.lineWidth = r * 0.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + tl * co, y + tl * si);
+    ctx.stroke();
+
+    // A kite with its point leading, long axis along the direction of travel. Two numbers are
+    // load-bearing:
+    //
+    // The point sits exactly r ahead of centre, so the frame where the shard visually touches the
+    // ring is still the frame the threshold crossing resolves it. A shape arriving before its own
+    // collision is drawing and collision disagreeing, in a new costume.
+    //
+    // The diagonals hold the filled area: a kite is d1*d2/2, so 3.4r * 1.85r / 2 = 3.15 r^2
+    // against a circle's pi*r^2. Colour at distance falls off with filled area and the palette is
+    // already at its measured floor, so the silhouette is free but the area is not.
+    const w = r * 0.925;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = COLORS[m.c];
+    ctx.beginPath();
+    ctx.moveTo(x - r * co, y - r * si);          // the point, leading
+    ctx.lineTo(x + w * si, y - w * co);          // shoulders, at the old circle's waist
+    ctx.lineTo(x + r * 2.4 * co, y + r * 2.4 * si);
+    ctx.lineTo(x - w * si, y + w * co);
+    ctx.fill();
+  }
+}
+
+// Brief mark at the point of resolution: the blocking colour on a block, a white flare on a
+// miss.
+function drawFlash(ctx, g, v) {
+  const f = g.flash;
+  if (!f) return;
+  const k = f.t / FLASH_T;
+  ctx.globalAlpha = k;
+  ctx.strokeStyle = f.ok ? COLORS[f.c] : '#fff';
+  ctx.lineWidth = v.ringW * (f.ok ? 1.8 : 2.6);
+  ctx.lineCap = 'round';
+  const spread = (f.ok ? 0.12 : 0.3) * (1 + (1 - k) * 2);
+  ctx.beginPath();
+  ctx.arc(v.cx, v.cy, v.shieldR, f.a - spread, f.a + spread);
+  ctx.stroke();
+  // A white halo that expands as it fades, so a perfect is visible in peripheral vision - you
+  // should never have to read the score to know you nailed it.
+  if (f.perfect) {
+    ctx.globalAlpha = k * 0.8;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = v.ringW * 0.5;
+    ctx.beginPath();
+    ctx.arc(v.cx, v.cy, v.shieldR + v.ringW * (1 - k) * 3, f.a - spread * 0.7, f.a + spread * 0.7);
+    ctx.stroke();
+  }
+
+  // Impact ripple: the ring is a hoop and a block plucks it. Two short waves leave the point of
+  // impact in opposite directions, inside the flash timer already running.
+  //
+  // The SHAPE is what distinguishes it. Three things happen on this ring and none may be mistaken
+  // for another: the flash is a fixed point, the telegraph is a whole segment sitting still, and
+  // this travels. Colour alone would not separate them at a glance, and a glance is all they get.
+  //
+  // Blocks only - a miss already has the flare, the debris and the shake. This exists to give the
+  // ordinary, frequent, correct thing some physical presence.
+  if (f.ok) {
+    const travel = (1 - k) * SLICE * 2;      // two segments before it dies - derived
+    ctx.globalAlpha = k * (f.perfect ? 0.7 : 0.5);
+    ctx.lineWidth = v.ringW * (f.perfect ? 0.6 : 0.4);
+    ctx.strokeStyle = COLORS[f.c];
+    for (let s = -1; s <= 1; s += 2) {
+      ctx.beginPath();
+      ctx.arc(v.cx, v.cy, v.shieldR, f.a + s * travel - 0.07, f.a + s * travel + 0.07);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawHeart(ctx, x, y, s) {
+  ctx.beginPath();
+  ctx.arc(x - s * 0.42, y - s * 0.18, s * 0.48, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + s * 0.42, y - s * 0.18, s * 0.48, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.86, y + s * 0.06);
+  ctx.lineTo(x, y + s);
+  ctx.lineTo(x + s * 0.86, y + s * 0.06);
+  ctx.fill();
+}
+
+function drawHud(ctx, g, v) {
+  const pad = v.u * 0.035;
+  // Second half of a level break: the card stops reporting and starts announcing. Read once here,
+  // because the readout at the foot of this function has to agree with it.
+  const fwd = g.up && g.grace <= GRACE_T / 2;
+  text(ctx, g.score, pad, pad + v.u * 0.04, v.u * 0.055, '#eef');
+  // Out of the way, but present: a player who hit M by accident needs to know why it went quiet.
+  if (g.mute) text(ctx, 'MUTED', pad, v.h - pad, v.u * 0.022, '#5a5a72');
+
+  if (g.combo > 1) {
+    const m = mult(g.combo);
+    // Past COMBO_TOP the multiplier and the pitch have both capped, so the readout keeps growing
+    // where they stop - on the sky's ramp and capped with it, so the two read as one reward.
+    // Grows downward into empty screen; the only thing below is MUTED at the foot of the page.
+    const over = Math.min(1, Math.max(0, (g.combo - COMBO_TOP) / COMBO_TOP));
+    text(ctx, `${g.combo} COMBO${m > 1 ? `  x${m}` : ''}`,
+      pad, pad + v.u * 0.082, v.u * 0.028 * (1 + over * 0.35), m > 1 ? '#ffd400' : '#8a8aa8');
+  }
+
+  // Rainbow mode is brief and turns up rarely, so it cannot assume the player remembers what it
+  // is: it names itself and says what it does, on the status row, clear of the unicorn.
+  if (g.rain > 0) {
+    text(ctx, 'RAINBOW MODE', v.cx, v.cy + v.u * STATUS_Y, v.u * 0.034,
+      COLORS[spinAt(g.time) % SEGMENTS], 'center');
+    text(ctx, 'EVERY COLOR BLOCKS', v.cx, v.cy + v.u * 0.213, v.u * 0.022, '#8a8aa8', 'center');
+  } else if (g.up) {
+    // Same row, same job. `up` rather than an inference from grace, which would be correct today
+    // and wrong the first time rainbow mode ends on a level boundary.
+    //
+    // The break is two seconds with two jobs, done in order rather than at once: the first second
+    // settles what finished, the second announces what is next. The swap is itself the signal
+    // that a level changed, and the last thing on screen before the sky refills is the name of
+    // the one about to start.
+    if (!fwd) {
+      text(ctx, `LEVEL ${g.level} COMPLETE`, v.cx, v.cy + v.u * STATUS_Y, v.u * 0.034, '#eef', 'center');
+      text(ctx, 'HEARTS RESTORED', v.cx, v.cy + v.u * 0.213, v.u * 0.022, '#8a8aa8', 'center');
+      // What the level was worth. "NO HITS" states a fact rather than conferring a status: a
+      // medal is a separate, persisted idea and this must not become a worse version of one.
+      text(ctx, `${g.lvS[0]} BLOCKED   ${g.lvS[1]} PERFECT${g.lvS[2] ? '' : '   NO HITS'}`,
+        v.cx, v.cy + v.u * UNDER, v.u * 0.022, '#5a5a72', 'center');
+    } else {
+      // Gold, the win card's colour: the only other line that hands the player something rather
+      // than reporting on them.
+      text(ctx, `LEVEL ${g.level + 1}`, v.cx, v.cy + v.u * STATUS_Y, v.u * 0.034, '#ffd400', 'center');
+      text(ctx, LV_NAME[g.level], v.cx, v.cy + v.u * 0.213, v.u * 0.022, '#8a8aa8', 'center');
+      // Below the ring, where the reporting half puts its scoreline: a sentence is longer than
+      // the lens allows anywhere inside it.
+      text(ctx, LV_STORY[g.level], v.cx, v.cy + v.u * UNDER, v.u * 0.022, '#5a5a72', 'center');
+    }
+  }
+
+  // Which level, and how far into it. 1-based on screen, 0-based in the state.
+  //
+  // The rule is that this agrees with the card underneath it: never 4/12 next to "LEVEL 3
+  // COMPLETE". So it holds through the first half of the break and ticks over with the card at
+  // the halfway mark, rather than when play resumes.
+  text(ctx, g.free ? 'FREE PLAY' : `LEVEL ${g.level + (g.up && !fwd ? 0 : 1)}/${LEVELS}`,
+    v.cx, pad + v.u * 0.03, v.u * 0.032, '#8a8aa8', 'center');
+  // In free play the denominator would be a lie, so the slot carries a running total instead.
+  text(ctx, g.free ? `${g.cleared}` : `${g.up && !fwd ? LEVEL_LEN : g.cleared}/${LEVEL_LEN}`,
+    v.cx, pad + v.u * 0.065, v.u * 0.026, '#4c4c66', 'center');
+
+  // 2.25 x the half-size, not the 2.6 three hearts used: a five-heart row is 0.32 U wide
+  // and the level readout is centred right beside it on a portrait phone.
+  // No hearts in free play: permanently full reads as a promise the mode is not making.
+  const s = v.u * HEART_F;
+  if (!g.free) {
+    for (let i = 0; i < HP0; i++) {
+      ctx.fillStyle = i < g.hp ? '#ff3b6b' : '#2a2a3c';
+      drawHeart(ctx, v.w - pad - (HP0 - 1 - i) * s * 2.25 - s, pad + s, s);
+    }
+  }
+}
+
+function drawOverlay(ctx, g, v) {
+  ctx.fillStyle = 'rgba(10,10,18,0.72)';
+  ctx.fillRect(0, 0, v.w, v.h);
+  const cx = v.cx;
+  const cy = v.cy;
+
+  if (g.st === 0) {
+    // Inside the ring: what the game is, the one number worth bragging about, and how to start.
+    // All short, all in the wide part of the lens.
+    //
+    // 0.056: at 16 characters this is the widest string on the card, and 0.059 is the most that
+    // clears the ring.
+    text(ctx, 'THE LAST UNICORN', cx, cy - v.u * 0.06, v.u * 0.056, '#eef', 'center');
+    // Two lines, not one: at 41 characters the whole tagline only clears the ring at 0.023 U,
+    // which is hint type. Broken 2/1 it keeps 0.028 and breaks where the phrase already does.
+    text(ctx, 'One Shield. One Unicorn.', cx, cy - v.u * 0.018, v.u * 0.028, '#8a8aa8', 'center');
+    text(ctx, 'One Last Chance.', cx, cy + v.u * 0.02, v.u * 0.028, '#8a8aa8', 'center');
+    if (g.best) text(ctx, `BEST ${g.best}`, cx, cy + v.u * 0.09, v.u * 0.03, '#ffd400', 'center');
+    // 0.034, matching the restart prompt: the two cards' "press to go" lines are the same size.
+    text(ctx, 'TAP OR PRESS ANY KEY', cx, cy + v.u * 0.155, v.u * 0.034, '#eef', 'center');
+
+    // Controls go at the foot of the page: they are reference, read once, and the ring is the
+    // narrowest part of the layout and the only part with something moving behind it. Anchored to
+    // the viewport rather than the ring, so they sit at the bottom of a tall phone.
+    // 0.045 is the most bottom margin available, and the premise line below the ring is what
+    // caps it: at 0.05 the footer climbs into it on a landscape screen. On a phone with a home
+    // indicator 0.045 U is about 18 px where the gesture bar wants roughly 34, so if this ever
+    // has to grow, the premise line is what has to move first.
+    const fy = v.h - v.u * 0.045;
+    text(ctx, '← A    D →', cx, fy - v.u * 0.085, v.u * 0.038, '#8a8aa8', 'center');
+    text(ctx, 'or hold a side of the screen', cx, fy - v.u * 0.048, v.u * 0.024, '#8a8aa8', 'center');
+    text(ctx, 'M MUTE  ·  P PAUSE  ·  TAP TOP EDGE TO MUTE',
+      cx, fy - v.u * 0.014, v.u * 0.018, '#5a5a72', 'center');
+    // The premise, below the ring, the slot every other story line uses. One line: the tagline
+    // says what the game is, this says why there is a shield around a unicorn. Level 1 has no
+    // break card, so this is also where LV_STORY[0] would have gone.
+    text(ctx, 'The rainbow broke. You are holding the last one.',
+      cx, cy + v.u * UNDER, v.u * 0.022, '#5a5a72', 'center');
+  } else {
+    // Won and lost share a card: same rows, same places, so only the news changes. Gold heading
+    // for a finished campaign, red for a run that ended early.
+    const won = g.st === 3;
+    text(ctx, won ? 'CAMPAIGN COMPLETE' : 'GAME OVER',
+      cx, cy - v.u * 0.05, v.u * (won ? 0.052 : 0.07), won ? '#ffd400' : '#ff3b6b', 'center');
+    text(ctx, `SCORE ${g.score}`, cx, cy + v.u * 0.02, v.u * 0.045, '#eef', 'center');
+    // Time only on the end card: a live clock makes the ramp something you read instead of feel.
+    // How far and how long.
+    text(ctx, won
+      ? `ALL ${LEVELS} LEVELS   ${g.time.toFixed(1)}s`
+      : `LEVEL ${g.level + 1}/${LEVELS}   ${g.time.toFixed(1)}s`,
+      cx, cy + v.u * 0.068, v.u * 0.028, '#8a8aa8', 'center');
+    // Beside the best score, and only once a campaign has been finished - an empty label on a
+    // first loss is noise. A campaign is a fixed 12 levels and 144 meteors, so the clock is
+    // comparable rather than a survival time.
+    text(ctx, g.bestT ? `BEST ${g.best}   FASTEST ${g.bestT.toFixed(1)}s` : `BEST ${g.best}`,
+      cx, cy + v.u * 0.115, v.u * 0.03, '#ffd400', 'center');
+    if (g.overT <= 0) {
+      text(ctx, won ? 'PRESS TO PLAY AGAIN' : 'PRESS TO RESTART',
+        cx, cy + v.u * STATUS_Y, v.u * 0.034, '#eef', 'center');
+      // Restart and continue go to different places and the card has to say so. It cannot ride on
+      // the prompt itself: at 29 characters "PRESS TO RESTART FROM LEVEL 1" is half again wider
+      // than the lens allows at this height, so the destination goes underneath in small type.
+      if (!won) {
+        text(ctx, 'FROM LEVEL 1',
+          cx, cy + v.u * 0.212, v.u * 0.022, '#5a5a72', 'center');
+      } else {
+        // The payoff, in the slot a loss spends on where restart goes - free on a win for the
+        // same reason there is nothing to continue from. Twelve beats said the sky was coming
+        // apart, so the win has to answer them.
+        text(ctx, 'THE SKY IS WHOLE', cx, cy + v.u * 0.212, v.u * 0.022, '#8a8aa8', 'center');
+      }
+    }
+
+    // What the run was made of, below the ring where a line can be as long as it needs to be.
+    // Score alone says the number went up; this says whether you went out to a handful of misses
+    // or bled slowly, and whether you were blocking cleanly or scraping.
+    //
+    // Continues live here with the other statistics. Inside the ring the worst case overflowed by
+    // 5 px, and a headline that only breaks after 88 continues is still one that breaks.
+    text(ctx, `${g.blocked} BLOCKED   ${g.perfects} PERFECT   ${g.missed} MISSED`
+      + (g.cont ? `   ${g.cont} CONTINUES` : ''),
+      cx, cy + v.u * UNDER, v.u * 0.024, '#8a8aa8', 'center');
+    const shots = g.blocked + g.missed;
+    // Stated, not implied: a player whose best did not move needs the reason next to the run it
+    // applies to, not in a rule they never read.
+    text(ctx, `LONGEST COMBO ${g.maxC}   ${shots ? Math.round(g.blocked / shots * 100) : 0}% ACCURACY`
+      + (g.cont ? '   NOT RECORDED' : ''),
+      cx, cy + v.u * (UNDER + 0.036), v.u * 0.024, '#5a5a72', 'center');
+
+    // The two ways on from here, at the foot of the page like the title's controls and behind the
+    // same lock as the restart prompt, so neither can be taken by the press that ended the run.
+    // Continue only after a loss: there is nothing to continue from once the campaign is done.
+    if (g.overT <= 0) {
+      const fy = v.h - v.u * 0.045;
+      if (!won) {
+        text(ctx, `C   CONTINUE FROM LEVEL ${g.level + 1}`,
+          cx, fy - v.u * 0.036, v.u * 0.022, '#eef', 'center');
+      }
+      text(ctx, 'F   FREE PLAY - NO HEARTS, NO GAME OVER',
+        cx, fy, v.u * 0.022, '#8a8aa8', 'center');
+    }
+  }
+}
+
+function draw(ctx, g, v) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, v.w, v.h);
+
+  // Screen shake on damage: offset the whole playfield, not the HUD or overlays.
+  // Math.random for the same reason shatter() uses it, and more so: this runs once per shaken
+  // FRAME, about forty draws for a single hit at 60 fps.
+  if (g.shake > 0) {
+    const k = (g.shake / SHAKE_T) * SHAKE_MAG * v.u;
+    ctx.setTransform(1, 0, 0, 1,
+      (Math.random() - 0.5) * 2 * k, (Math.random() - 0.5) * 2 * k);
+  }
+
+  drawStars(ctx, g, v);
+  drawRing(ctx, g, v);
+  drawTelegraph(ctx, g, v);
+  drawMeter(ctx, g, v);
+  drawFlash(ctx, g, v);
+  drawUnicorn(ctx, g, v);
+  drawMeteors(ctx, g, v);
+  drawParts(ctx, g, v);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (g.st === 1) drawHud(ctx, g, v);
+  else drawOverlay(ctx, g, v);
+
+  // Drawn last and over everything including the HUD: the scrim is what makes pausing useless for
+  // reading the wave, so nothing may be left legible on top of it.
+  if (g.pause) {
+    // Fully opaque, not a dark tint: a 93 % scrim still passes a bright meteor at about 1.15:1,
+    // and faintly readable is exactly what this must not be.
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(0, 0, v.w, v.h);
+    // Ring and unicorn come back on top, so a pause shows where you left the ring and none of
+    // what is flying at it.
+    drawRing(ctx, g, v);
+    drawUnicorn(ctx, g, v);
+    text(ctx, 'PAUSED', v.cx, v.cy - v.u * 0.21, v.u * 0.06, '#eef', 'center');
+    text(ctx, 'P TO RESUME', v.cx, v.cy + v.u * 0.23, v.u * 0.026, '#8a8aa8', 'center');
+    text(ctx, 'Q TO QUIT', v.cx, v.cy + v.u * 0.268, v.u * 0.024, '#5a5a72', 'center');
+  }
+}
+</script>
+<script>// Bootstrap, game state machine, main loop. Loads last; depends on every other file.
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// Virtual layout in U-units, recomputed on resize.
+const view = { w: 0, h: 0, u: 0, hw: 0, hh: 0, cx: 0, cy: 0, shieldR: 0, ringW: 0 };
+
+const g = {
+  st: 0,         // 0 TITLE | 1 PLAYING | 2 OVER | 3 WON
+  rot: 0,
+  time: 0,
+  mets: [],
+  queue: [],       // meteors a pattern has scheduled but not yet released
+  parts: [],       // debris from blocked and missed meteors
+  aim: 0,          // ring position the last scheduled wave leaves the player in
+  spawnT: 0,
+  hp: HP0,
+  score: 0,
+  combo: 0,
+  best: 0,
+  blocked: 0,
+  missed: 0,
+  perfects: 0,
+  meter: 0,        // rainbow meter, 0..1
+  rain: 0,         // seconds of rainbow mode remaining
+  grace: 0,        // seconds of empty sky owed after rainbow mode
+  pause: 0,        // player-initiated, mid-level only
+  mute: 0,         // mirrored into audio.js, persisted
+  amb: 0,          // ambient seconds; unlike `time` it runs on the title and end cards
+  spin: 0,         // extra sky rotation the combo has earned, in seconds-equivalent
+  bed: 0,          // countdown to the next bed note
+  bedI: 0,         // which step of the bed's walk comes next
+  lvP: 0,          // perfects so far in the level being played
+  lvS: [0, 0, 0],  // what the finished level was worth: blocks, perfects, hits taken
+  level: 0,        // 0..LEVELS-1; the campaign's only difficulty input
+  cleared: 0,      // meteors resolved so far in this level
+  up: 0,           // this break is a level break, not the rainbow breather
+  flash: null,
+  shake: 0,
+  overT: 0,
+  stop: 0,         // frozen seconds owed to a perfect block
+  beat: 0,         // countdown to the next last-heart pulse
+  bestT: 0,        // fastest finished campaign, seconds
+  maxC: 0,         // longest combo of the run, for the end screen
+  free: 0,         // free play: past the campaign, and nothing can end the run
+  cont: 0,         // continues taken; any run with one cannot set a record
+};
+
+// Mute and pause are settings rather than play, so they live here and not in input.js.
+//
+// Pause is guarded to st === 1 deliberately: on the title any key starts the game, M included,
+// which is right - a player who pressed M wanted the run to begin quietly.
+function toggleMute() {
+  g.mute = g.mute ? 0 : 1;
+  setMute(g.mute);
+  try { localStorage.rbMute = g.mute; } catch (e) { /* no persistence available */ }
+}
+addEventListener('keydown', (e) => {
+  const k = e.key;
+  if (k === 'm' || k === 'M') toggleMute();
+  else if (g.st === 1 && (k === 'p' || k === 'P' || k === 'Escape')) g.pause = g.pause ? 0 : 1;
+  // Free play is offered from an end card, once the same lock that guards restart is up.
+  else if (g.st > 1 && g.overT <= 0 && (k === 'f' || k === 'F')) freePlay();
+  // Only from a loss. There is nothing to continue from after a finished campaign.
+  else if (g.st === 2 && g.overT <= 0 && (k === 'c' || k === 'C')) continueRun();
+  // Quitting lives behind the pause, which is where a player already goes to stop, and is the
+  // only way out of free play. OVER_LOCK for the same reason the end cards use it: this listener
+  // is registered before initInput(), so without it the keydown that quits reaches press() a
+  // moment later, sees the title, and starts a fresh run on the way out.
+  else if (g.pause && (k === 'q' || k === 'Q')) { g.pause = 0; g.st = 0; g.overT = OVER_LOCK; }
+});
+
+// localStorage THROWS on some file:// origins rather than returning null, and the game has to
+// open from disk, so both directions are guarded. Failure costs one session's high score.
+function loadNum(k) {
+  try { return +localStorage[k] || 0; } catch (e) { return 0; }
+}
+function saveBest() {
+  try {
+    localStorage.rbBest = g.best;
+    localStorage.rbTime = g.bestT;
+  } catch (e) { /* no persistence available */ }
+}
+
+// One campaign a day, the same one for everybody - the generator is seeded and the campaign is a
+// pure function of the level index, so the seed was all that stood between a personal run and a
+// comparable one. Local date, not UTC: "today" means the player's today. A retry is the same
+// campaign, which is what makes it learnable.
+function daySeed() {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+// Re-seeded at every level, not once per run, so a level's waves depend on the day and the level
+// index alone. Otherwise the shared campaign survives only while two players play identically:
+// rainbow mode holds a level boundary open and generates extra waves, and from there the two are
+// drawing from different points in the stream. The stride keeps consecutive days from
+// overlapping, since +1 on a YYYYMMDD seed is tomorrow.
+const levelSeed = (lv) => daySeed() + lv * 7919;
+
+function reset() {
+  g.st = 1;
+  g.rot = 0;
+  g.time = 0;
+  g.mets.length = 0;
+  g.queue.length = 0;
+  g.parts.length = 0;
+  g.aim = 0;        // the ring starts at rot 0, so the first wave is measured from there
+  g.spawnT = 0.8;   // first meteor comes early so the game reads immediately
+  g.hp = HP0;
+  g.score = 0;
+  g.combo = 0;
+  g.blocked = 0;
+  g.maxC = 0;
+  g.free = 0;
+  g.cont = 0;
+  g.missed = 0;
+  g.perfects = 0;
+  g.meter = 0;
+  g.rain = 0;
+  g.grace = 0;
+  g.level = 0;
+  g.cleared = 0;
+  g.up = 0;
+  g.flash = null;
+  g.shake = 0;
+  g.stop = 0;
+  g.beat = 0;
+  g.pause = 0;
+  g.lvP = 0;
+  g.spin = 0;      // earned, so a new run starts the sky at its ordinary rate
+  g.bed = 0;
+  g.bedI = 0;
+  srand(levelSeed(g.level));
+}
+
+// A continued run keeps its score on screen and stays off the scoreboard, the same rule free play
+// follows: BEST has to mean one campaign played through in one piece.
+function gameOver(s) {
+  s.st = 2;
+  s.overT = OVER_LOCK;
+  if (!s.cont && s.score > s.best) { s.best = s.score; saveBest(); }
+}
+
+// Continue: the level you died on, from the top, hearts back. Not the campaign and not the wave
+// you died to - a level is the unit the game teaches and re-seeds by, so it is the only restart
+// that lands somewhere the player recognises. The clock keeps running; a continued campaign
+// really did take longer.
+function continueRun() {
+  g.st = 1;
+  g.hp = HP0;
+  g.cont++;
+  g.cleared = 0;
+  g.lvP = 0;
+  g.combo = 0;
+  g.meter = 0;
+  g.rain = 0;
+  g.mets.length = 0;
+  g.queue.length = 0;
+  g.flash = null;
+  g.shake = 0;
+  // A level break's breather without `up`: two quiet seconds, and no card congratulating you on
+  // dying.
+  g.grace = GRACE_T;
+  srand(levelSeed(g.level));
+}
+
+// Mirrors gameOver, so the win card inherits the restart lock and the debris still in the air -
+// the block that won finishes on screen.
+function win(s) {
+  s.st = 3;
+  s.overT = OVER_LOCK;
+  // A clear time only exists for a finished campaign, so this is the one place it can be recorded.
+  if (s.cont) return;
+  if (!s.bestT || s.time < s.bestT) s.bestT = s.time;
+  if (s.score > s.best) s.best = s.score;
+  saveBest();
+}
+
+function resize() {
+  const w = innerWidth;
+  const h = innerHeight;
+  cv.width = w;
+  cv.height = h;
+  view.w = w;
+  view.h = h;
+  view.u = Math.min(w, h);
+  // Half-extents in U-units. The short axis is always exactly 0.5; the long one grows with
+  // the aspect ratio. Meteors spawn on this rectangle, not on a circle.
+  view.hw = w / (2 * view.u);
+  view.hh = h / (2 * view.u);
+  view.cx = w / 2;
+  view.cy = h / 2;
+  view.shieldR = SHIELD_F * view.u;
+  view.ringW = RING_F * view.shieldR;
+}
+
+let prev = 0;
+function loop(t) {
+  // Clamp so a backgrounded tab does not produce one enormous catch-up step.
+  const dt = Math.min((t - prev) / 1000, MAX_DT);
+  prev = t;
+
+  // Hit-stop: a real skipped frame, not a scaled dt. `prev` has already moved, so the frame after
+  // the freeze is an ordinary one and nothing pays the pause back as a lurch. Ring, meteors and
+  // debris all stop together, which is what makes it read as impact.
+  if (g.stop > 0) {
+    g.stop -= dt;
+    draw(ctx, g, view);
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // Rotation stays live in every state, so the title screen is already the tutorial. Wrapped
+  // every frame so rot never grows unbounded.
+  g.rot = wrap(g.rot + dir() * ROT_SPEED * dt);
+
+  // Paused: nothing moves, and the overlay hides the sky. Freezing with the wave visible would
+  // make pause a way to study an incoming pattern, so the meteors sit behind the scrim.
+  if (g.pause) {
+    draw(ctx, g, view);
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // Both ACCUMULATE rather than being assigned, so a change of rate never jumps the thing it
+  // drives. `amb` runs in every state, which `time` deliberately does not - it stops with play,
+  // which would freeze the sky and the unicorn on the title and end cards. Both sit below the
+  // pause and hit-stop returns, so a freeze is still a freeze.
+  g.amb += dt;
+  // What a combo past COMBO_TOP is worth. Clamped at twice COMBO_TOP so the sky has a top speed
+  // and never ends up competing with a meteor.
+  if (g.st === 1) {
+    g.spin += dt * SKY_BOOST * Math.min(1, Math.max(0, (g.combo - COMBO_TOP) / COMBO_TOP));
+    g.time += dt;
+    // Rainbow mode ends into a breather rather than just stopping: the colours it was cycling
+    // land somewhere new, and matching against a ring you have not read yet taxes the reward.
+    // Anything queued but not launched is dropped, or a wave would land half-built.
+    if (g.rain > 0 && (g.rain -= dt) <= 0) {
+      g.rain = 0;
+      g.grace = GRACE_T;
+      g.queue.length = 0;
+    }
+    // A level ends on its LEVEL_LEN-th resolved meteor, but never mid-rainbow-mode: the count
+    // keeps counting and the transition waits rather than cutting the reward short.
+    //
+    // Free play has no levels to break between, so `cleared` is a running total and the game
+    // never stops. A break card offering HEARTS RESTORED in a mode with no hearts would be the
+    // machinery showing through.
+    if (!g.free && g.cleared >= LEVEL_LEN && g.rain <= 0) {
+      // Captured here because every counter it is made of is about to be reset underneath it.
+      // Blocks need no counter of their own: every resolution was a block or a miss, and a miss
+      // costs exactly one heart.
+      const lost = HP0 - g.hp;
+      g.lvS = [g.cleared - lost, g.lvP, lost];
+      g.lvP = 0;
+      g.cleared = 0;
+      // Drop what is queued so no wave lands half-built. What is already in the air keeps flying
+      // and still resolves - it launched under rules that have not changed, since the ring keeps
+      // its colours across a level boundary.
+      g.queue.length = 0;
+      // Free play has no last level to win, so the boundary just advances the rung.
+      if (++g.level >= LEVELS && !g.free) win(g);
+      else { g.grace = GRACE_T; g.up = 1; g.hp = HP0; srand(levelSeed(g.level)); }
+    }
+    // The bed keeps its own time, like the last-heart pulse below it. Both stop dead during
+    // hit-stop because the loop returns first, which is correct - music playing through a freeze
+    // would stop it reading as one.
+    if ((g.bed -= dt) <= 0) {
+      g.bed = BED_T;
+      sndBed(g.bedI++, tierAt(diffAt(g.level)));
+    }
+    // Down to the last heart. On its own clock rather than a frame count, so it keeps time at any
+    // frame rate.
+    if (g.hp === 1) {
+      if ((g.beat -= dt) <= 0) { g.beat = BEAT_T; sndBeat(); }
+    } else {
+      g.beat = 0;   // fires immediately the next time it matters
+    }
+    spawnTick(g, dt);
+    updateMeteors(g, dt);
+  } else if (g.st !== 1 && g.overT > 0) {
+    g.overT -= dt;
+  }
+  // Debris keeps moving after the run ends, rather than freezing mid-air as the last heart goes.
+  if (g.st) updateParts(g, dt);
+  if (g.flash && (g.flash.t -= dt) <= 0) g.flash = null;
+  if (g.shake > 0) g.shake = Math.max(0, g.shake - dt);
+
+  draw(ctx, g, view);
+  requestAnimationFrame(loop);
+}
+
+// Offered on both end cards, not just the win: the mode most useful to a stuck player should not
+// be behind the thing they cannot do.
+//
+// Fixed at the campaign's midpoint and held there, derived so it follows LEVELS. It has no
+// failure state, so an escalating version would climb until it was unplayable and then stay
+// there.
+function freePlay() {
+  reset();
+  g.free = 1;
+  g.level = (LEVELS / 2) | 0;
+  srand(levelSeed(g.level));
+}
+
+function press() {
+  // Any press is a user gesture, which is the only moment audio is allowed to start.
+  initAudio();
+  // The lock stops the keypress that ended the run from instantly restarting it.
+  if (g.overT <= 0 && (g.st === 0 || g.st > 1)) reset();
+}
+
+addEventListener('resize', resize);
+resize();
+initInput();
+onPress(press);
+srand(levelSeed(0));
+g.mute = loadNum('rbMute');
+setMute(g.mute);
+onTap(toggleMute);
+g.best = loadNum('rbBest');
+g.bestT = loadNum('rbTime');
+requestAnimationFrame((t) => { prev = t; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>

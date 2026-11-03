@@ -1,0 +1,1680 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Star Hopper: Glitch - A Galactic Journey Game in 13kb</title>
+	<style>body {
+    background-color: #000;
+    font-family: Verdana, sans-serif;
+    padding: 0; margin: 0;
+    text-align: center;
+    color: #cc8;
+}
+#body {
+    position: relative;
+}
+#s {
+    background: #060506;
+    margin: 0;
+    box-sizing: border-box;
+}
+#splash {
+	position: absolute;
+	top: 1em;
+	width: 90%;
+	margin: 0 5%;
+	font-size: 500%;
+	text-align: center;
+}
+#splash .sh {
+	width: 60%;
+	margin: 0 20%;
+	margin-right: -0.25em;
+	letter-spacing: -0.1em;
+	transform: scale(1.4,1);
+	font-size: 105%;
+	text-shadow: 0 0 0.25em rgba(255,255,255,0.5);
+}
+#splash .glitch {
+	display: block;
+	color: #e7a;
+	text-transform: uppercase;
+    font-size: 150%;
+    opacity: 0.5;
+    letter-spacing: -0.14em;
+    transform:scale(1,1.2);
+    text-shadow: 0 0 0.25em rgba(0,0,0,0.5);
+}
+#splash i {
+	position: relative;
+	top: 0.15em;
+	display: inline-block;
+	font-style: normal;
+	color: #f44;
+	opacity: 0.75;
+	margin-top: 0.3em;
+	text-shadow: 0 0 0.25em rgba(255,255,255,0.25);
+}
+#splash .subtitle {
+	color: #ccc;
+	display: block; 
+	margin-top: 8em;
+	font-size: 40%;
+	opacity: 0.7;
+}
+#splash .version {
+	color: #ccc;
+	font-size: 40%;
+	opacity: 0.7;
+}
+.dialog {
+	position: absolute;
+	top: 10%;
+	width: 60%;
+	max-width: 1000px;
+	/* max-height: 700px; */
+	box-sizing: border-box;
+	padding: 2em 5em;
+	margin: 0 20%;
+	display: none;
+	border-radius: 10em;
+	line-height: 1.5em;
+	background-color: rgba(11,10,12,0.85);
+	border: solid 1px #cc8;
+	overflow-y: auto;
+}
+.col {
+	float: left;
+	width: 40%;
+	text-align: left;
+}
+.col1 {
+	width: 60%;
+}
+.cont {
+	clear: both;
+}
+#enter {
+	display: block;
+	color: white;
+	text-decoration: none;
+	padding: 1em;
+	border-radius: 1em;
+	background-color: rgba(255,255,255,0.1);
+}
+b {
+	color: #fff;
+}
+#hud {
+	display: none;
+	text-shadow: 0 0.1em 0.1em rgba(0,0,0,0.5);
+}
+.hud > * {
+	position: absolute;
+	font-size: 16px;
+	letter-spacing: 4px;
+}
+#hud-system-name {
+	font-size: 200%;
+	letter-spacing: 10px;
+	top: 2.5em;
+	left: 0;
+	width: 60%;
+	margin: 0 20%;
+	text-align: center;
+}
+#hud-system-name:before {
+	content: "System";
+	letter-spacing: 4px;
+	text-transform: uppercase;
+	display: block;
+	font-size: 50%;
+	opacity: 0.5;
+}
+#hud-messages {
+	top: 10em;
+	left: 0;
+	width: 60%;
+	margin: 1em 20%;
+	padding: 0;
+	list-style: none;
+	text-align: center;
+	font-style: italic;
+}
+#hud-stats {
+	right: 1.5em;
+	top: 1.5em;
+	margin: 0;
+	padding: 0;
+	text-align: right;
+	opacity: 0.8;
+	line-height: 2em;
+}
+#hud-inv {
+	width: 100%;
+	left: 0em;
+	bottom: 1.5em;
+	margin: 0;
+	padding: 0;
+	opacity: 0.8;
+}
+#hud-inv > li {
+	display: inline-block;
+	padding: 0.5em;
+	border: solid 1px rgba(255,255,255,0.05);
+}</style>
+</head>
+<body>
+
+<div id="body">
+	<canvas id="s"></canvas>
+	<div id="intro" class="dialog">
+		<p>
+			You are a test pilot testing a new ship equipped with an experimental FTL "Star-Hopper" drive.
+			Due to an unforeseen engineering error, you've accidentally made a GLITCH JUMP, and have
+			ended up in an entirely new galaxy, very far from your home.
+		</p>
+		<p>
+			Picking up some ancient satellite signals, you've been able to locate an inhabited planet
+			to set a course to. Perhaps the intelligent race can help you find a way home, and if not,
+			this may have to be your new home.
+		</p>
+		<p>
+			There will be many systems to explore on your trek to this new world. On each planet you
+			will be able to mine for fuel to power your jump drive. Once you have 100 fuel, you can jump to 
+			the next system. Avoid running into suns if you want to stay alive.
+		</p>
+		<div class="col col1">
+			Do:
+			<ul>
+				<li>Fly around (arrows or WASD)</li>
+				<li>Land on planets and mine (M or spacebar)</li>
+				<li>Jump to a new system on your journey (J)</li>
+				<li>Other things: N to toggle engines, R to repair, O to toggle sensors, P to pause, + or - to zoom, ESC to see this again</li>
+			</ul>
+		</div>
+		<div class="col">
+			Don't:
+			<ul>
+				<li>Run into the sun</li>
+				<li>Let your hull drop to 0%</li>
+			</ul>
+		</div>
+		<p class="cont">
+			Good luck!
+		</p>
+        <p>
+            <a href="#" id="enter">Hit [Enter] to Begin</a>
+        </p>		
+	</div>
+	<div id="hud" class="hud">
+		<div id="hud-system-name"></div>
+		<div id="hud-stats">
+			Jump Fuel: <span id="jump-fuel-amount">_</span>/100
+			<br />Hull: <span id="hull-amount">_</span>%
+		</div>
+		<ul id="hud-inv">
+			<li>
+				<b>+</b>
+			</li>
+			<li>
+				<b>-</b>
+			</li>
+			<li>
+				E<b>n</b>gine
+			</li>
+			<li>
+				<b>M</b>ine
+			</li>
+			<li>
+				<b>J</b>ump
+			</li>
+			<li>
+				<b>R</b>epair
+			</li>
+			<li>
+				Sens<b>o</b>r
+			</li>
+		</ul>		
+		<ul id="hud-messages"></ul>
+	</div>
+	<div id="splash">
+		<div class="sh">Star Hopper:</div>
+		<div class="glitch">Gl<i>i</i>t<i>c</i>h J<i>u</i>mp</div>
+		<div class="subtitle">A Galactic Adventure in 13kb</div>
+		<div class="version">v1.0 for js13kgames.com</div>
+	</div>
+	<div id="victory" class="dialog">
+		<h1>VICTORY</h1>
+		<p>You've discovered Terra and landed safely on this new planet. Hopefully the inhabitants are peaceful!</p>
+	</div>
+	<div id="gameover" class="dialog">
+		<h1>GAME OVER</h1>
+		<p>Your ship has been destroyed!</p>
+		<p>Play again by reloading the page (hit F5 in most browsers).</p>
+	</div>
+
+</div>
+
+<script>var rand = function(n){ return Math.random() * n; };
+var randInt = function(n){ return Math.floor(rand(n)) + 1; }
+var randAround = function(n){
+	var a = rand(n);
+	var b = rand(n);
+	return (a-b);
+};</script>
+<script>// Coordinate class
+function Coords(x,y){
+	this.x = x;
+	this.y = y;
+	this.check(); 
+}
+Coords.prototype.getCopy = function () {
+	var coord = this;
+	return new Coords(coord.x, coord.y);
+};
+Coords.prototype.set = function(coord){
+	coord.check();
+	this.x = coord.x;
+	this.y = coord.y;
+}
+Coords.prototype.add = function(coord){
+	coord.check();
+	this.x += coord.x;
+	this.y += coord.y;
+	return this;
+}
+Coords.prototype.multiply = function(n){
+	this.x *= n;
+	this.y *= n;
+	return this;
+}
+Coords.prototype.getMultiply = function(n){
+	var x = this.x * n;
+	var y = this.y * n;
+	return new Coords(x, y);
+}
+Coords.prototype.getDot = function(coord){
+	coord.check();
+	// A dot B = ||A|| ||B|| cos theta ?
+	// this.getMagnitude() * coord.getMagnitude()    ???
+	return ((this.x * coord.x) + (this.y * coord.y));
+}
+Coords.prototype.clear = function(){
+	this.x = 0;
+	this.y = 0;
+	return this;
+}
+Coords.prototype.setTangent = function(){
+	var x = this.x;
+	this.x = this.y;
+	this.y = x;
+	return this;
+}
+Coords.prototype.setPolar = function(r, theta){
+	// theta is expected in radians
+	this.x = r * Math.cos(theta);
+	this.y = r * Math.sin(theta);
+}
+Coords.prototype.getDistance = function(coord){
+	coord.check();
+	return Math.sqrt(
+		Math.pow( (this.x - coord.x), 2)
+		+ Math.pow( (this.y - coord.y), 2)
+	);
+}
+Coords.prototype.getUnitVector = function(coord){
+	coord.check();
+	var x = 0, y = 0;
+	var d = Math.abs(this.getDistance(coord));
+	if (this.x != coord.x) {
+		var dx = coord.x - this.x;
+		x =  dx / d;
+	}
+	if (this.y != coord.y) { 
+		var dy = coord.y - this.y;
+		y = dy / d;
+	}
+	return new Coords(x, y);
+}
+Coords.prototype.getMagnitude = function(){
+	return Math.sqrt(
+		Math.pow(this.x, 2)
+		+ Math.pow(this.y, 2)
+	);
+}
+Coords.prototype.isEqual = function(coord){
+	return (this.x == coord.x && this.y == coord.y);
+}
+Coords.prototype.isEqualInteger = function(coord){
+	return (Math.round(this.x) == Math.round(coord.x) && Math.round(this.y) == Math.round(coord.y));
+}
+Coords.prototype.check = function(){
+	if (typeof this.x !== "number" || isNaN(this.x)) {
+		console.error("Bad coord.x", this.x);
+		this.x = 0;
+	}
+	if (typeof this.y !== "number" || isNaN(this.y)) {
+		console.error("Bad coord.y", this.y);
+		this.y = 0;
+	}
+	return this;    
+}</script>
+<script>//==== Generic Physical Object (Planetoid/Sun)
+
+function Obj(opt) {
+	if (typeof opt !== 'object') { 
+		opt = {name: '', x: 0, y: 0, r: 100}; 
+	}
+	if (typeof opt.x !== 'number') { opt.x = 0; }
+	if (typeof opt.y !== 'number') { opt.y = 0; }
+	this.name = opt.name;
+	this.pos 	= new Coords(opt.x, opt.y);
+	this.vel 	= new Coords(0,0);
+	this.acc 	= new Coords(0,0);
+	this.force 	= new Coords(0,0);
+	this.impulse = new Coords(0,0);
+
+	this.radius = opt.r;
+
+	this.fireArea = 0;
+	this.earthArea = 0;
+	this.airArea = 0;
+	this.waterArea = 0;
+	this.fireSize = 0;
+	this.earthSize = 0;
+	this.waterSize = 0;
+	this.airSize = 0;
+
+	this.structure = 0; // hit points
+	this.mass = 0;
+	this.color = { r: 80, g: 70, b: 50 };
+	this.isMassAbsorbing = false;
+	this.isPlasma = false;
+	this.isImmovable = false;
+	this.isEdgeLooping = false;
+	this.isEdgeBound = false;
+	this.elasticity 	= 0.9;
+	this.groundFriction = 0.5;
+	this.waterFriction 	= 0.9;
+	this.airFriction 	= 0.95;
+	this.plasmaFriction = 0.9;
+	this.illumination = 0;
+	this.luminosity = 0;
+	this.density = 1;
+	this.heat = 0;
+	this.collisionHeat = 0;
+	this.isFrozen = false;
+	this.isBoiling = false;
+	this.colliding = [];
+	this.isGrounded = false;
+	this.life = 0;
+	this.evolution = 0; // 0-100%
+
+	this.trail = [];
+	this.maxTrail = 12;
+}
+Obj.prototype.hotThreshold = 900;
+Obj.prototype.absorbEarthRate = 0.01;
+Obj.prototype.absorbWaterRate = 0.2;
+Obj.prototype.absorbAirRate = 0.4;
+Obj.prototype.bigG = 0.5;
+
+Obj.prototype.absorbEarth = function(b){
+	if (this.isMassAbsorbing && b.isMassAbsorbing) {
+		var a = this.absorbEarthRate;
+		if (this.isPlasma) a *= 10;
+		else a *= (this.mass/b.mass);
+		a = Math.min(b.earthArea, a)
+		this.earthArea += a;
+		b.earthArea -= a;
+	}
+}
+Obj.prototype.absorbWater = function(b){   
+	if (b.waterArea > 0) {
+		var a = (b.isFrozen) ? this.absorbEarthRate : this.absorbWaterRate;
+		a *= (this.mass/b.mass);
+		a = Math.min(b.waterArea, a);
+		this.waterArea += a;
+		b.waterArea -= a;
+	}
+}
+Obj.prototype.absorbAir = function(b){   
+	if (b.airArea > 0) {
+		var a = this.absorbAirRate * (this.mass/b.mass);
+		a = Math.min(b.airArea, a);
+		this.airArea += a;
+		b.airArea -= a;
+	}
+}
+Obj.prototype.setup = function(){
+	this.setMass();
+	this.setRadiusSizes();
+	this.structure = this.mass;
+}
+Obj.prototype.setMass = function(){
+	this.mass = ((this.fireArea + this.earthArea) * this.density)
+		+ (this.waterArea / 2)
+		+ (this.airArea / 4);
+	return this;
+}
+Obj.prototype.setAreaBySize = function(area, s){
+	this[area + "Area"] = Math.PI * Math.pow(s, 2);
+}
+Obj.prototype.setRadiusSizes = function(){
+	var o=this;
+	o.fireSize = Math.sqrt(o.fireArea / Math.PI);
+	var a = this.fireArea + o.earthArea;
+	o.earthSize = Math.sqrt(a / Math.PI);
+	if (o.waterArea > 0) {
+		a += o.waterArea;
+		o.waterSize = Math.sqrt(a / Math.PI);
+	} else {
+		o.waterSize = 0;
+	}
+	if (o.airArea > 0) {
+		a += o.airArea;
+		o.airSize = Math.sqrt(a / Math.PI);
+	} else {
+		o.airSize = 0;
+	}
+	if (typeof o.radius === 'undefined') {
+		o.radius = o.earthSize;
+	}
+	return this;
+}
+Obj.prototype.setNewCollisionVels = function(o2, elasticity){
+	// http://www.gamasutra.com/view/feature/131424/pool_hall_lessons_fast_accurate_.php?page=3
+	var o1 = this;
+	if (o1.mass <= 0 || o2.mass <= 0) {
+		return false;
+	}
+	//console.log(o1.name, o2.name);
+	//console.log("original", o1.vel.x, o1.vel.y, o2.vel.x, o2.vel.y);
+	//console.log("momentum before", (o1.mass * o1.vel.getMagnitude()) + (o2.mass * o2.vel.getMagnitude()));
+	var p = (o1.mass * o1.vel.getMagnitude()) + (o2.mass * o2.vel.getMagnitude());
+	var n = o1.pos.getUnitVector(o2.pos);
+	//console.log("n = ", n);
+	var a1 = o1.vel.getDot(n);
+	var a2 = o2.vel.getDot(n);
+	var optimizedP = (2 * (a1 - a2)) / (o1.mass + o2.mass);
+	o1.vel.add( n.getMultiply(-1 * optimizedP * o2.mass) );
+	o1.vel.multiply(elasticity);
+	o2.vel.add( n.getMultiply(optimizedP * o1.mass) );
+	o1.vel.multiply(elasticity);
+	//var pNew = (o1.mass * o1.vel.getMagnitude()) + (o2.mass * o2.vel.getMagnitude());
+	//console.log(pNew - p);
+	//if (pNew > p) {
+		 //console.log(o1.name, o2.name, "pNew > p", pNew, p);
+	//}else console.log(o1.name, o2.name, "pNew <= p", pNew, p);
+	//console.log("after", newV1.x, newV1.y, newV2.x, newV2.y);
+	//console.log("momentum after", (o1.mass * o1.vel.getMagnitude()) + (o2.mass * o2.vel.getMagnitude()));
+	return true;
+}
+Obj.prototype.physicsOneObject = function(b){
+	var o=this;
+	if (b.mass > 0) {
+		var r = o.pos.getDistance(b.pos);
+		var mm, lm; // More Massive, Less Massive
+		var edgeToEdgeDistance = r - o.earthSize - b.earthSize;
+		var waterToWaterDistance = r - o.waterSize - b.waterSize;
+		var airToAirDistance = r - o.airSize - b.airSize;
+		var L = 3000;
+			
+		// Calculate illumination
+		if (b.isPlasma && edgeToEdgeDistance <= L) {
+			var lum = 1 - (edgeToEdgeDistance / L);
+			o.illumination += lum;
+			o.heat += (lum * 1000);
+		}
+		
+		// Get the absorder (mm = more massive) 
+		// and the absorbee (lm = less massive)
+		if ((o.mass >= b.mass && !b.isPlasma) || (o.isPlasma && !b.isPlasma)) {
+			mm = o;
+			lm = b;
+		} else {
+			mm = b;
+			lm = o;
+		}
+		
+		//if (o.isShip) console.log(Math.round(edgeToEdgeDistance) )
+
+		if (Math.round(edgeToEdgeDistance) <= 0) {    // Earth Collision! No gravity
+ 
+			mm.absorbEarth(lm);
+			mm.absorbWater(lm);
+			mm.absorbAir(lm);
+			
+			// Collision overlap issues
+			o.collisionHeat += 10;
+			o.colliding.push(b);
+			
+			var pushBack = (edgeToEdgeDistance / 1);
+			if (b.isPlasma || o.isPlasma) {
+				o.vel.multiply(o.plasmaFriction);
+				// Plasma damage (TODO: make separate function for this)
+				o.structure -= 1.5;
+			} else {
+				
+				if (o.mass <= b.mass) {
+					o.pos.add( o.pos.getUnitVector(b.pos).multiply(pushBack) );
+				} else {
+					b.pos.add( b.pos.getUnitVector(o.pos).multiply(pushBack) );           
+				}
+				o.setMass().setRadiusSizes();
+
+				o.setNewCollisionVels(b, o.elasticity);
+				o.applyFriction(b, "ground");
+			}
+			// Damage to life
+			o.damageLife(o.life/100);
+			b.damageLife(b.life/100);
+			//o.applyGravityForce(b);
+			
+		} else {                					// Not collided, do gravity
+
+			o.applyGravityForce(b);
+
+			if (Math.round(waterToWaterDistance) <= 0) {
+				o.applyFriction(b, "water");
+				mm.absorbWater(lm);
+				mm.absorbAir(lm);
+			} else if (Math.round(airToAirDistance) <= 0) {
+				o.applyFriction(b, "air");
+				mm.absorbAir(lm);
+			}
+		}
+	} 
+}
+Obj.prototype.applyGravityForce = function(o2) {
+	var o1=this;
+	// Apply gravity forces: F = G (m1 m2) / r^2
+	// http://en.wikipedia.org/wiki/Newton's_law_of_universal_gravitation#Vector_form
+	//console.log("Forces on", o1.name, " due to ", o2.name);
+	var r = o1.pos.getDistance(o2.pos);
+	var rv = o1.pos.getUnitVector(o2.pos);
+	//console.log("unit vector", JSON.stringify(rv));
+	
+	var Gmm = o1.bigG * o1.mass * o2.mass;
+	var rSquared = Math.pow(r, 2);
+	var n = (rSquared == 0) ? 0 : (Gmm/rSquared);
+	rv.multiply(n);
+	//console.log(JSON.stringify(rv));
+	o1.force.add(rv);
+	//console.log("physics", i, b, o1.bigG, o1.mass, o2.mass);
+	//console.log(rSquared, rv, fm);
+}
+Obj.prototype.applyFriction = function(o2, type){
+	var o1=this;
+	o1.vel.multiply((o1[type + "Friction"] + o2[type + "Friction"])/2);
+}
+Obj.prototype.physics = function(nearbyEnts){
+	var o=this;
+	var ne;
+	// time = 1
+	o.setMass().setRadiusSizes();
+	o.colliding = [];
+	
+	// Cool off
+	if (o.collisionHeat > 0) o.collisionHeat -= 10;
+	
+	if (o.isPlasma) {		// Stay hot if plasma
+		o.heat = 1000;
+		o.illumination = 1;
+	} else {
+		o.heat = 0;
+		o.illumination = 0;
+	}
+	
+	for(var i = 0; i < nearbyEnts.length; i++) {
+		ne = nearbyEnts[i];
+		o.physicsOneObject(ne);
+	}
+	
+	if (o.illumination > 1) {
+		o.illumination = 1;
+	}
+	if (o.heat > o.hotThreshold) {
+		o.isFrozen = false;
+		o.isBoiling = true;        
+		var a = Math.min(o.waterArea, 10);
+		o.waterArea -= a;
+		o.airArea += a;
+		var a = Math.min(o.waterArea, 2);
+		o.airArea -= a;
+
+		o.damageLife(100);
+	} else if (o.heat <= 0) {
+		o.isFrozen = true;
+		o.isBoiling = false;        
+	} else {
+		o.isFrozen = false;
+		o.isBoiling = false;
+	}
+
+	if (o.isImmovable) {
+		o.force.clear();
+		o.acc.clear();
+		o.vel.clear();
+	} else if (o.mass > 0) {
+		// Friction to slow down suns
+		//if (o.isPlasma) o.vel.multiply(0.99);
+		// Standard physics...
+		o.force.add(o.impulse);
+		var forceAcc = new Coords((o.force.x / o.mass), (o.force.y / o.mass));
+		o.acc.add(forceAcc);
+		o.vel.add(o.acc);
+		o.pos.add(o.vel);
+		o.acc.clear();
+		o.force.clear();
+	} else {
+		//console.log(o.name + " has mass zero");
+	}
+	
+	o.isGrounded = (o.colliding.length > 0 && o.vel.getMagnitude() < 0.5) ? true : false;
+	//if (o.isShip) console.log(o.colliding, o.vel.getMagnitude(), o.isGrounded);
+}
+Obj.prototype.damageLife = function(a){
+	var o=this;
+	if (o.life > 0) {
+		o.life -= Math.min(o.life, rand(a));
+	}
+	if (this.life <= 0) {
+		o.life = 0;
+		o.evolution -= 1;
+		if (o.evolution < 0) o.evolution = 0;
+	}
+}
+Obj.prototype.checkLife = function(){
+	var o=this;
+	if (o.earthArea > 1000 && o.waterArea > 1000 
+		&& o.airArea > 1000 && o.heat > 0) 
+	{
+		if (o.evolution < 100) {
+			o.evolution++;
+		} else {
+			o.life += rand(5);
+		}
+		
+	} else {
+		o.damageLife(5);
+	}
+}
+Obj.prototype.getColorString = function(type){
+	var o = this;
+	var lum = Math.max(o.illumination, 0.35);
+	var c = [];
+	switch (type){
+		case "earth":
+		case "fire":      c = [o.color.r, o.color.g, o.color.b];  break;
+		case "water":     c = [0,100,255]; break;
+		case "air":       c = [230,200,240]; break;
+	}
+	if (o.isFrozen) {
+		if (type == "water") { c = [200,200,255]; }
+	} else if (o.isBoiling) {
+		var heatOver = (o.heat - o.hotThreshold);
+		c[0] += (heatOver / 2);
+	}
+	if (o.collisionHeat > 0) c[0] += 50;
+	var cStr = "rgb(" 
+		+ Math.min(Math.floor(c[0] * lum), 255)
+		+ "," + Math.min(Math.floor(c[1] * lum), 255)
+		+ "," + Math.min(Math.floor(c[2] * lum), 255)
+		+ ")";
+	//console.log(c);
+	return cStr;
+}
+
+Obj.prototype.setTrail = function(){
+	this.trail.push(this.pos.getCopy());
+	if (this.trail.length > this.maxTrail) {
+		this.trail.splice(0, 1);
+	}
+}
+
+//Obj.prototype.draw = function(ctx, zoom, offset){
+	// TODO
+//}
+
+Obj.prototype.drawTrail = function(ctx, zoom, offset){
+	var o=this;
+	ctx.save();
+	ctx.beginPath();
+	ctx.globalAlpha = 0.1;
+	ctx.fillStyle = "#aaa";
+	function drawTrailItem(i){
+		var x = o.trail[i].x * zoom + offset.x;
+		var y = o.trail[i].y * zoom + offset.y;
+		var a = (o.maxTrail - i);
+		var r = o.radius;
+		r = r * ( a == 0 ? 0.1 : (0.9 / a + 0.1) );
+		r = r * zoom;
+		//if (o.isShip) console.log(o.radius, (o.maxTrail - i), o.maxTrail, i, " = ", r);
+		ctx.beginPath();
+		ctx.arc(x, y, r, 0, PI2, true);
+		ctx.closePath();
+		ctx.fill();
+	}
+	for (var i=0; i < o.trail.length-1; i++) {
+		drawTrailItem(i);
+	}
+	ctx.closePath();
+	ctx.fill();
+	ctx.restore();
+}
+
+</script>
+<script>////////////////////////////////////////////////////////
+
+function Galaxy(rings){
+	this.rings = rings;
+	this.systems = [];
+	this.generate();
+};
+Galaxy.prototype.generate = function(){
+	var n = 7;
+	for (var i = (this.rings.length - 1); i >= 0; i--) {
+		n++;
+		if (n > 8) { n = 1; }
+		this.systems.push(new System(this, this.rings[i], n));
+	}
+};
+
+function System(galaxy, ring, octant){
+	this.galaxy = galaxy;
+	this.name = ring + '-' + octant;
+	this.ring = ring;
+	this.radius = 4000 + randInt(4000);
+	this.center = new Coords(0, 0);
+	this.sun = null;
+	this.planets = [];
+	this.generate();
+};
+System.prototype.generate = function(){
+	var o=this;
+	var scale = o.radius / 2;
+	var p = (o.ring == "Z") ? 2 : randInt(10);
+	var romanNumerals = ["I","II","III","IV","V","VI","VII","VII","IX","X"];
+	var planet;
+	var totalJumpFuel = 100 + randInt(80);
+	var R = size() * 2;
+	var theta, coords;
+	function x(){ 
+		var x = scale * 0.5;
+		return rand(x * 2) - x;
+	}
+	function size(){ return (rand(scale/20) + 10); }
+	o.sun = new Sun({ name: o.name + ' sun', x: 0, y: 0, r: R });
+	for(var i=0; i < p; i++){
+		R += (rand(scale/p) + scale/50);
+		theta = rand(PI2);
+		coords = new Coords(0,0);
+		coords.setPolar(R, theta);
+		planet = new Planet({ name: o.name + '-' + romanNumerals[i], x: coords.x, y: coords.y, r: size() });
+		planet.jumpFuel = Math.ceil(totalJumpFuel / p);
+		console.log(planet.name, Math.ceil(totalJumpFuel / p), R);
+		o.planets.push(planet);	
+	}
+};
+
+function Sun(opt) {
+	Obj.call(this, opt);
+	this.isImmovable = true;
+	this.isEdgeBound = true;
+	this.isPlasma = true;
+	this.isMassAbsorbing = true;
+	this.color.r = 255;
+	this.color.g = 150;
+	this.generate();
+	this.fireArea = this.earthArea;
+};
+Sun.prototype = new Obj();
+Sun.prototype.generate = function(){
+	this.setAreaBySize("earth", this.radius);
+	this.setup();
+}
+
+function Planet(opt) {
+	Obj.call(this, opt);
+	this.isImmovable = true;
+	this.isEdgeBound = true;
+	this.isMassAbsorbing = true;
+	this.color = {r: 100, g: 100, b: 100};
+	this.jumpFuel = 0;
+	this.generate();
+}
+Planet.prototype = new Obj();
+Planet.prototype.generate = function(){
+	this.setAreaBySize("earth", this.radius);
+	this.setup();
+}
+function Ship(opt) {
+	opt = {name: "ship", x: 0, y: 0};
+	Obj.call(this, opt);
+	this.isShip = true;
+	this.isEdgeBound = true;
+	this.jumpFuel = 100;
+	this.isElementScanOn = false;
+	this.isThermoScanOn = false;
+	this.isEngineOn = true;
+	//this.isRepairsOn = false;
+};
+// http://stackoverflow.com/a/15192747 ??
+//Ship.prototype = Object.create(Obj);
+//Ship.prototype.constructor = Ship;
+Ship.prototype = new Obj();
+Ship.prototype.propulsion = function(dir){
+	if (!this.isEngineOn) { return false; }
+	dir.multiply(600 + this.mass/2);
+	//console.log(dir);
+	this.force.add(dir);
+}
+Ship.prototype.toggleEngine = function(){
+	this.isEngineOn = !this.isEngineOn;
+	//if (this.isEngineOn) { this.isRepairsOn = false; }
+	return (this.isEngineOn) ? 'Engine On' : 'Engine Off';
+}
+/*
+Ship.prototype.autoSystems = function(){
+	
+}
+Ship.prototype.toggleRepairs = function(){
+	if (this.isEngineOn) { return "Cannot activate Repair Bots while Engines are On"; }
+	this.isRepairsOn = !this.isRepairsOn;
+	return (this.isRepairsOn) ? "Repairs On" : "Repairs Off";
+}
+*/
+Ship.prototype.draw = function(ctx, zoom, offset){
+	var x = this.pos.x * zoom + offset.x;
+	var y = this.pos.y * zoom + offset.y;
+	var r = this.radius * zoom;
+	var rBig = r * 1.5;
+	var rSmall = r * 0.8;
+	var c = ctx;
+	this.drawTrail(c, zoom, offset);
+
+	c.save();
+	/*
+	c.fillStyle = "#ff0";
+	c.globalAlpha = 0.5;
+	c.beginPath();
+	c.arc(x, y, r, 0, PI2, true);
+	//c.quadraticCurveTo(x, y + rSmall, x - rSmall, y);
+	c.closePath();
+	c.stroke();
+	*/
+
+	c.globalAlpha = 1.0;
+	c.fillStyle = "#f44";
+	
+	c.lineWidth = r * 0.05;
+	c.beginPath();
+	//c.moveTo(x, y - r);
+	c.moveTo(x, y + (r*0.1));
+	c.lineTo(x + rBig, y);
+	//c.lineTo(x + r/2, y + rSmall);
+	//c.lineTo(x - r/2, y + rSmall);
+	c.bezierCurveTo(	x + r * 0.5, y + r * 1.1, x - r * 0.5, y + r * 1.1, 	x - rBig, y); 
+	c.lineTo(x - rBig, y);
+	c.closePath();
+	c.fill();
+	//c.stroke();
+
+	// Pilot
+	c.save();
+	c.fillStyle = "#fff";
+	c.globalAlpha = 1.0;
+	c.beginPath();
+	var u = (r * 0.2);
+	c.moveTo(x - u, y + u);
+	c.quadraticCurveTo(	x - u * 2.5, y + u * 0.6, 				x - u * 1.5, y); // left cheek
+	
+	c.bezierCurveTo(	x - u * 3.2, y - u * 4, 	x - u * 1.31, y - u * 4.1, 	x - u, y - u * 0.2); // left ear
+	
+	c.quadraticCurveTo(	x, y - u * 0.4, 						x + u, y - u * 0.2); // head
+
+	c.bezierCurveTo(	x + u * 1.31, y - u * 4.1, 	x + u * 3.2, y - u * 4, 	x + u * 1.5, y); // right ear
+	c.quadraticCurveTo(	x + u * 2.5, y + u * 0.6, 				x + u, y + u); // right cheek
+	c.quadraticCurveTo(	x, y + u * 1.4, 							x - u, y + u); // chin
+	c.closePath();
+	c.fill();
+	c.fillStyle = "#000";
+	c.beginPath();
+	c.arc(x - u * 0.9, y + u * 0.4, u * 0.3, 0, Math.PI, true);
+	c.arc(x + u * 0.9, y + u * 0.4, u * 0.3, 0, Math.PI, true);
+	//c.arc(x, y + u * 0.5, u * 0.8, Math.PI, PI2, true);
+	c.closePath();
+	c.fill();
+	c.restore();
+
+	c.fillStyle = "#aff";
+	c.strokeStyle = "#366";
+	c.globalAlpha = 0.5;
+	c.beginPath();
+	c.arc(x, y - u * 0.2, r * 0.5, 0, PI2, true);
+	//c.arc(x, y + u * 0.5, u * 0.8, Math.PI, PI2, true);
+	c.closePath();
+	c.fill();
+	c.stroke();
+
+
+	c.fillStyle = "#cfc";
+	c.strokeStyle = "#f44";
+	c.lineWidth = r * 0.2;
+	c.globalAlpha = 0.25;
+	c.beginPath();
+	c.moveTo(x - r, y);
+	c.bezierCurveTo(x - u * 3, y - (r * 1.3), x + u * 3, y - (r * 1.3), x + r, y);
+	c.quadraticCurveTo(x, y + rSmall, x - r, y);
+	c.closePath();
+	c.fill();
+	c.globalAlpha = 1.0;
+	c.stroke();
+
+	c.restore();
+}
+Ship.prototype.harvestPlanet = function(planet){
+	if (typeof planet !== 'object') {
+		if (this.colliding.length > 0) {
+			planet = this.colliding[0];
+		} else {
+			return "Not grounded on a planet";
+		}
+	}
+	var f = Math.min(10, planet.jumpFuel);
+	if (f == 0) {
+		return "No fuel left on this planet";
+	} else if (isNaN(f)) {
+		return "No fuel";
+	}
+	planet.jumpFuel -= f;
+	this.jumpFuel += f;
+	return "Harvesting +" + f + " Fuel";
+}
+Ship.prototype.repair = function(){
+	if (this.isEngineOn) {
+		return "Cannot repair while engine is on";
+	} else {
+		var rep = randInt(9) + 1;
+		this.structure += rep;
+		this.structure = Math.min(this.structure, this.mass);
+		return "Repairing +" + rep + " Hull";
+	}
+}
+
+
+</script>
+<script>// Requires rand.js, Coords.js, Galaxy.js
+
+// Globals
+var PI2 = Math.PI*2;
+
+g = {
+	galaxy: null,
+	maxEnts: 240,
+	ents: [],
+	stars: [],
+	bgStars: [],
+	particles: [],
+	terra: null,
+	intId: 0,
+	iteration: 0,
+	endIter: 53000000,
+	timeBetweenIntervals: 30,
+	intId2: 0,
+	timeBetweenIntervals2: 1000,
+	size: null, // screen size
+	halfSize: null,
+	player: null,
+	canvasElt: null,
+	introElt: null,
+	hudElt: null,
+	isWon: false,
+	isObjectInfoOn: false,
+	isSplash: true,
+	playerSystemIndex: 0,
+	zoomLevel: 5,
+	HOME: "Terra",
+	ZOOM_LEVELS: [0.05, 0.1, 0.2, 0.3, 0.5, 1, 2, 3, 5, 8, 13, 21, 34],
+	gebi: function(x){
+		return document.getElementById(x);
+	}
+};
+g.getCurrentSystem = function(){
+	return this.galaxy.systems[this.playerSystemIndex];
+}
+g.draw = function(){
+	var o=this;
+	var c=ctx;
+	c.save();
+	c.clearRect(0,0,o.size.x,o.size.y);
+	//c.fillRect(0,0,100,100);
+	//c.beginPath();
+	var sys = o.getCurrentSystem();
+	var star, p, ent;
+	var i, el = o.ents.length;
+	var r = 0, g = 0, b = 0;;
+	var x, y;
+	var nearestSun = null;
+	var sunCount = 0;
+	var zoom = o.getZoomMultiplier();
+	//console.log(o.player.pos.x);
+	var offsetX = -1 * o.player.pos.x * zoom + o.halfSize.x,
+		offsetY = -1 * o.player.pos.y * zoom + o.halfSize.y,
+		sOX = -0.3 * o.player.pos.x * zoom + o.halfSize.x,
+		sOY = -0.3 * o.player.pos.y * zoom + o.halfSize.y,
+		bgSOX = -0.1 * o.player.pos.x * zoom + o.halfSize.x,
+		bgSOY = -0.1 * o.player.pos.y * zoom + o.halfSize.y;
+	var offset = new Coords(offsetX, offsetY);
+	// Draw background stars
+	c.shadowOffsetX = 0;
+	c.shadowOffsetY = 0;
+	
+	for(i = 0; i < o.stars.length; i++) {
+		o.drawStar(o.stars[i], sOX, sOY);
+	}
+	for(i = 0; i < o.bgStars.length; i++) {
+		o.drawStar(o.bgStars[i], bgSOX, bgSOY);
+	}
+
+	// Draw planet orbit circles and lines
+	c.save();
+	c.strokeStyle = "#7777ff";
+	c.globalAlpha = 0.2;
+	for(i=0; i<sys.planets.length; i++) {
+		c.beginPath();
+		c.arc(offsetX, offsetY, o.getCurrentSystem().center.getDistance(sys.planets[i].pos) * zoom, 0, PI2, true);
+		c.shadowColor = '#eee';
+		c.shadowBlur = 30 * zoom;
+		c.stroke();
+		if (o.isObjectInfoOn) {
+			c.beginPath();
+			c.strokeStyle = "#7777ff";
+			c.moveTo(o.halfSize.x, o.halfSize.y);
+			c.lineTo(sys.planets[i].pos.x * zoom + offsetX, sys.planets[i].pos.y * zoom + offsetY);
+			c.stroke();
+		}
+	}
+	c.restore();
+	if (o.isObjectInfoOn) {
+		c.save();
+		c.strokeStyle = "#aa7733";
+		c.globalAlpha = 0.2;		
+		c.beginPath();
+		c.moveTo(o.halfSize.x, o.halfSize.y);
+		c.lineTo(offsetX, offsetY);
+		c.stroke();
+		c.restore();
+	}
+	
+	
+	c.save();
+	for(i = el-1; i >= 0; i--){
+		ent = o.ents[i];
+		if (typeof ent.draw === 'function') {
+			ent.draw(c, zoom, offset);
+		} else if (ent.isPlasma && ent.earthSize > 0) {
+			o.drawSun(ent, zoom, offset);
+			// Get distance to player
+			nearestSun = ent.pos.getDistance(o.player.pos);
+			sunCount++;
+		} else if (!ent.isPlasma) {
+			x = ent.pos.x * zoom + offsetX;
+			y = ent.pos.y * zoom + offsetY;
+			//console.log(ent.isShip, "x", x, "ent pos x", ent.pos.x, "player pos x", o.player.pos.x, "halfsize x", o.halfSize.x, "size x", o.size.x); 
+		 
+			if (ent.earthSize > 0) {
+				o.drawCircle(x, y, ent.earthSize * zoom, 1.0, ent.getColorString("earth"));
+			}
+			if (ent.waterSize > 0) {
+				o.drawCircle(x, y, ent.waterSize * zoom, 0.7, ent.getColorString("water"));
+			}
+			if (ent.airSize > 0) {
+				o.drawCircle(x, y, ent.airSize * zoom, 0.3, ent.getColorString("air"));              
+			}
+		}
+		if (ent.mass > 10) {
+			o.drawText(ent, x, y);
+		}
+
+		//c.stroke();
+	} // end for loop over ents
+	c.restore();
+	
+
+	// Draw ring for system border
+	c.save();
+	c.beginPath();
+	c.globalAlpha = 0.1;
+	c.setLineDash([5, 15]);
+	c.strokeStyle = "#ee77aa";
+	c.arc(offsetX, offsetY, o.getCurrentSystem().radius * zoom, 0, PI2, true);
+	var sysR2 = sys.radius * 2 * zoom;
+	c.rect(offset.x - sys.radius * zoom, offset.y - sys.radius * zoom, sysR2, sysR2);
+	c.stroke();
+	c.restore();
+
+	/*
+	if (o.isObjectInfoOn) {
+		c.fillStyle = "#999";
+		c.fillText("-¤ StarHopper ¤- "
+			+ o.ents.length + " objects (" 
+			+ sunCount + " sun" + ((sunCount==1) ? "":"s") 
+			+ "), nearest sun: " 
+			+ (Math.round(nearestSun/100)*100) , 20,20);
+	}
+	*/
+}
+
+g.drawStar = function(star, offsetX, offsetY){
+	var x = star.pos.x * this.getZoomMultiplier() + offsetX;
+	var y = star.pos.y * this.getZoomMultiplier() + offsetY;
+	var twinkle = (rand(1) < 0.002);
+	ctx.save();
+	ctx.shadowColor = '#ffff00';
+	ctx.shadowBlur = (twinkle) ? randInt(80) : 70;
+	ctx.beginPath();
+	ctx.moveTo(x, y);
+	ctx.arc(x, y, star.size, 0, PI2, true);
+	ctx.fillStyle = (twinkle) ? "#fff" : "#aa8";
+	ctx.fill();
+	ctx.closePath();
+	ctx.restore();
+}
+g.drawSun = function(ent, zoom, offset){
+	var x = ent.pos.x * zoom + offset.x;
+	var y = ent.pos.y * zoom + offset.y;
+	ctx.save();
+	ctx.fillStyle = ent.getColorString("fire");
+	ctx.shadowColor = '#ffff00';
+	ctx.shadowBlur = 30;	
+	ctx.beginPath();
+	ctx.moveTo(x, y);
+	ctx.arc(x, y, (ent.earthSize * zoom), 0, PI2, true);
+	ctx.closePath();
+	ctx.fill();
+	ctx.restore();
+}
+g.drawCircle = function(x, y, radius, alpha, color) {
+	ctx.save();
+	ctx.beginPath();
+	ctx.moveTo(x, y);
+	ctx.globalAlpha = alpha;
+	ctx.arc(x, y, radius, 0, PI2, true);
+	ctx.fillStyle = color;
+	ctx.shadowColor = '#000';
+	ctx.shadowBlur = -30;	
+	ctx.fill();
+	ctx.restore();
+}
+
+g.drawText = function(ent, x, y){
+	var R = Math.round;
+	ctx.save();
+	ctx.font = "14px Verdana";
+
+	if (this.player.isElementScanOn) {
+		var esx = x + ent.earthSize + 8;
+		ctx.fillStyle = "#ccc";
+		ctx.fillText(R(ent.earthArea) + "e" , esx, y-12);
+		ctx.fillText(R(ent.waterArea) + "w" , esx, y);
+		ctx.fillText(R(ent.airArea) + "a" , esx, y+12);
+	}
+	if (this.player.isThermoScanOn) {
+		if (ent.isFrozen) ctx.fillStyle = "#33a";
+		else if (ent.isBoiling) ctx.fillStyle = "#a33";
+		else ctx.fillStyle = "#ec3";
+		ctx.fillText("" + R(ent.heat) + "°", x - 10, y + ent.earthSize + 24);           
+	}
+	/*
+	if (ent.life > 0) {
+		ctx.fillStyle = "#6f6";
+		ctx.fillText("Life: " + R(ent.life) , x-30, y-24);
+	} else if (ent.evolution > 0) {
+		ctx.fillStyle = "#6f6";
+		ctx.fillText("evolution: " + R(ent.evolution) + "%", x-45, y-30);
+	}
+	*/
+	/*
+	if (this.isObjectInfoOn) {
+		ctx.fillStyle = "#77f";
+		ctx.fillText(ent.name, x-20, y-20);
+		if (ent.isShip) {
+			ctx.fillText("" + Math.round(ent.pos.x) + "," + Math.round(ent.pos.y), x-20, y+20);
+		}
+	}
+	*/
+	ctx.restore();
+}
+
+g.zoom = function(n) {
+	var o=this;
+	o.zoomLevel = Math.max(Math.min(o.zoomLevel + n, o.ZOOM_LEVELS.length - 1), 0);
+}
+g.getZoomMultiplier = function(){
+	return this.ZOOM_LEVELS[this.zoomLevel];
+}
+
+
+
+g.jump = function(systemIndex){
+	var o=this;
+	var jumpAmount = 100;
+	if (o.player.jumpFuel < jumpAmount) {
+		o.hud.addMessage("Not enough jump fuel");
+	} else if (o.getCurrentSystem().ring == "A") {
+		o.hud.addMessage("You're at the final system in the galaxy");
+	} else {
+		o.switchSystem(systemIndex);
+		o.hud.renderSystemName();
+		o.player.pos.x = o.getCurrentSystem().radius * -0.7;
+		o.player.vel.clear();
+		o.player.acc.clear();
+		o.player.jumpFuel -= jumpAmount;
+	}
+}
+g.switchSystem = function(systemIndex){
+	var o=this;
+	if (typeof systemIndex === 'number') {
+		o.playerSystemIndex = systemIndex;
+	} else {
+		o.playerSystemIndex += 1;
+	}
+	o.spawnSystem();
+}
+g.hud = {
+	messages: [],
+	timer: 0,
+	addMessage: function(m){
+		if (m === false) return false;
+		this.messages.push({text: m, timestamp: new Date()});
+		this.renderMessages();
+	},
+	renderAll: function(){
+		this.renderMessages();
+		this.renderSystemName();
+		this.renderStats();
+	},
+	renderMessages: function(){
+		var o=this;
+		var h = "";
+		var now = new Date();
+		for(var i=0; i<o.messages.length; i++){
+			if ((now - o.messages[i].timestamp) < 6000) {
+				h += '<li>' + o.messages[i].text + '</li>';
+			}
+		}
+		g.gebi("hud-messages").innerHTML = h;
+	},
+	renderSystemName: function(){
+		g.gebi("hud-system-name").innerHTML = g.getCurrentSystem().name;	
+	},
+	renderStats: function(){
+		g.gebi("jump-fuel-amount").innerHTML = Math.ceil(g.player.jumpFuel);
+		g.gebi("hull-amount").innerHTML = Math.round(g.player.structure * 100 / g.player.mass);
+	},
+	start: function(){
+		var o=this;
+		o.stop();
+		o.timer = setInterval(function(){ o.renderAll(); }, 500);
+	},
+	stop: function(){
+		clearInterval(this.timer);
+	}
+}
+
+
+
+//==== Make Things
+
+g.makeGalaxy = function(){
+	var o=this;
+	o.galaxy = new Galaxy(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']);
+	o.terra = o.galaxy.systems[o.galaxy.systems.length - 1];
+	o.terra.name = "The Terran System";
+	o.terra.planets[0].name = o.HOME;
+	o.spawnSystem();
+	console.log("Made galaxy", o.galaxy, "\ncurrent system", o.getCurrentSystem(), "\nwith entities", o.ents);
+}
+// TODO: Move into System generation
+g.spawnSystem = function(){
+	var o=this;
+	o.ents = [o.player];
+	o.stars = [];
+	o.bgStars = [];
+	o.makeStars(o.getCurrentSystem().radius / 20, o.stars);
+	o.makeStars(o.getCurrentSystem().radius / 10, o.bgStars);
+	o.ents.push(o.getCurrentSystem().sun);
+	o.ents = o.ents.concat(o.getCurrentSystem().planets);
+	o.makeAsteroids(3); //20);
+	//o.makeSun("Sun1");
+	//o.makeSun("Sun2");
+}
+g.makeAsteroid = function(n,x,y,s){
+	var o=this;
+	if (typeof x == 'undefined') x = 0; //o.player.pos.x;
+	if (typeof y == 'undefined') y = 0; //o.player.pos.y;
+	if (typeof s == 'undefined') s = (rand(8)) + 1;
+	var sz = Math.max(o.size.x, o.size.y);
+	x += randAround(sz);
+	y += randAround(sz);
+	var ent = new Obj({name: n, x: x, y: y});
+	ent.isMassAbsorbing = true;
+	ent.isEdgeLooping = true;
+	ent.vel.x = randAround(20);
+	ent.vel.y = randAround(20);
+	// Set areas
+	ent.setAreaBySize("earth", s);
+	if (rand(1) < 0.2) {
+		ent.waterArea = rand(300) + 100;
+	}
+	if (rand(1) < 0.25) {
+		ent.airArea =  rand(300) + 100;
+	}
+	ent.setup();
+	o.ents.push(ent);
+	return ent;
+}
+g.makeAsteroids = function(n){
+	if ((this.ents.length+n) <= this.maxEnts) {
+		for (var i = 0; i < n; i++) {
+			this.makeAsteroid("O" + i, this.player.pos.x, this.player.pos.y);
+		}
+	}
+}
+g.makeSun = function(n,x,y) {
+	var sun = this.makeAsteroid(n,x,y);
+	sun.pos.x = rand(this.getCurrentSystem().radius);
+	sun.pos.y = rand(this.getCurrentSystem().radius);
+	sun.isPlasma = true;
+	sun.color.r = 255;
+	sun.color.g = 150;
+	sun.fireArea = sun.earthArea;
+}
+g.makeStar = function(starArray){
+	var z=this.getCurrentSystem().radius;
+	var star = { 
+		pos: new Coords(
+			randAround(z),
+			randAround(z)
+		),
+		size: (Math.floor(rand(2)) + 1)
+	};
+	starArray.push(star);
+}
+g.makeStars = function(n, starArray){
+	for (var i = 0; i < n; i++) {
+		this.makeStar(starArray);
+	}
+}
+g.makePlayerShip = function(n) {
+	var o=this;
+	var s = new Ship({name: n, x: 0, y: 0});
+	s.color = { r: 50, g: 190, b: 50 };
+	s.isMassAbsorbing = false;
+	s.earthArea = 200;
+	s.luminosity = 0.2;
+	s.density = 1.5;
+	s.setup();
+	o.player = s;
+	o.ents.push(s);    
+}
+
+
+
+g.moment = function(){
+	var o=this;
+	var sys = o.getCurrentSystem();
+	var nearbyEnts;
+	var i;
+	var ent;
+	// Loop over all entities
+	for(i = 0; i < o.ents.length; i++) {
+		nearbyEnts = o.ents.slice(0);
+		nearbyEnts.splice(i,1);
+		ent = o.ents[i];
+		ent.physics(nearbyEnts);
+		o.checkEdges(sys, ent);
+		ent.setTrail();
+	}
+	o.draw();
+	o.checkGameOver();
+	o.checkVictory();
+}
+g.checkEdges = function(sys, ent){
+	var edge = sys.radius;
+	var negEdge = edge * -1;
+	if (ent.pos.getDistance(sys.center) > edge) {
+		if (ent.isEdgeLooping) {
+			if (ent.pos.x < negEdge) 	ent.pos.x += (edge * 2);
+			else if (ent.pos.x > edge) 	ent.pos.x += (negEdge * 2);
+			if (ent.pos.y < negEdge) 	ent.pos.y += (edge * 2);
+			else if (ent.pos.y > edge) 	ent.pos.y += (negEdge * 2);
+		}
+		if (ent.isEdgeBound) {
+			if (ent.pos.x > edge)			{ ent.pos.x = edge; ent.vel.clear(); }
+			else if (ent.pos.x < negEdge)	{ ent.pos.x = negEdge; ent.vel.clear(); }
+			if (ent.pos.y > edge)			{ ent.pos.y = edge; ent.vel.clear(); }
+			else if (ent.pos.y < negEdge)	{ ent.pos.y = negEdge; ent.vel.clear(); }
+		}
+	}	
+}
+g.reclaimEnts = function(){
+	for(var i = 0; i < this.ents.length; i++){
+		if (this.ents[i].mass <= 0) {
+			this.ents.splice(i,1);
+		}
+	}
+}
+g.checkGameOver = function(){
+	var o=this;
+	if (o.player.mass <= 0 || o.player.structure <= 0) {
+		this.stop();
+		this.gebi("gameover").style.display = "block";
+	}
+}
+g.checkVictory = function(){
+	var o=this;
+	if (!o.isWon && o.player.colliding.length > 0 && o.player.colliding[0].name == o.HOME) {
+		o.isWon = true;
+		o.stop();
+		o.gebi("victory").style.display = "block";	
+	}
+}
+g.start = function(){   
+	var o = this;    
+	//console.log(this.ents);
+	o.intId = window.setInterval(function(){
+		o.iteration++;
+		if (o.iteration < o.endIter){
+			o.moment();
+		} else {
+			o.stop();
+		}
+	}, this.timeBetweenIntervals);
+	o.intId2 = window.setInterval(function(){
+		//for(var i = 0, el = o.ents.length; i < el; i++){
+		//	o.ents[i].checkLife();
+		//}
+		o.reclaimEnts();
+		o.checkGameOver();
+		o.checkVictory();
+	}, this.timeBetweenIntervals2);
+}
+g.stop = function(){
+	console.log("Stopped");
+	clearInterval(this.intId);
+	clearInterval(this.intId2);
+	this.intId = 0;
+}
+
+
+//==== SETUP
+
+g.setup = function(){
+	var o=this;
+	
+	o.canvasElt = document.getElementById("s");
+	o.introElt = document.getElementById("intro");
+	o.splashElt = document.getElementById("splash");
+	o.hudElt = document.getElementById("hud");
+	o.isSplash = true;
+	o.splashElt.style.display = "block";
+	
+	o.setupScreen();
+	window.ctx = o.canvasElt.getContext('2d');
+	ctx.font = "14px Verdana";
+	//ctx.webkitImageSmoothingEnabled = false;
+	//ctx.mozImageSmoothingEnabled = false;
+	//ctx.imageSmoothingEnabled = false;
+	ctx.fillStyle = "red";
+	ctx.strokeStyle = "yellow";
+	//ctx.fillText("Sample String", 10, 50);    
+	ctx.save();
+
+	console.log(o.canvasElt, o.size, o.halfSize);
+
+	o.setupEvents();
+	o.makePlayerShip("player");
+	o.makeGalaxy();
+	o.jump(0);
+
+	o.hud.start();
+}
+
+g.setupScreen = function(){
+	var o=this;
+	var w = window,
+		d = document,
+		e = d.documentElement,
+		g = d.getElementsByTagName('body')[0],
+		x = w.innerWidth || e.clientWidth || g.clientWidth,
+		y = w.innerHeight|| e.clientHeight|| g.clientHeight;
+	x -= 20;
+	y -= 20;
+	o.size = new Coords(x,y);
+	o.halfSize = new Coords(x/2, y/2);
+	
+	o.canvasElt.style.width = x + "px";
+	o.canvasElt.style.height = y + "px";
+	o.canvasElt.width = x;
+	o.canvasElt.height = y;
+}
+g.action = function(L){
+	var o=this;
+	console.log(L);
+	switch(L){
+		case "e":     o.player.isElementScanOn = !o.player.isElementScanOn; break;
+		case "t":     o.player.isThermoScanOn = !o.player.isThermoScanOn; break;
+		case "+": 	o.zoom(1); break;
+		case "-": 	o.zoom(-1); break;
+		case "j": 	o.jump(); break;
+		case "r": 	o.hud.addMessage(o.player.repair()); break;
+		case "o":  	o.isObjectInfoOn = !o.isObjectInfoOn; break;
+		case "m": 	o.hud.addMessage(o.player.harvestPlanet()); break;
+		case "n": 	o.hud.addMessage(o.player.toggleEngine()); break;
+		case "x": 	o.makeAsteroids(10); break;
+		case "p":
+			if (o.intId) o.stop(); else o.start();
+			break;
+		case "enter":
+		case "esc":
+		case "h":
+			if (o.intId) {
+				o.stop();
+				o.introElt.style.display = "block";
+				o.hudElt.style.display = "none";
+			} else {
+				o.start(); 
+				o.introElt.style.display = "none";              
+				o.hudElt.style.display = "block";
+			}
+			break;
+	}
+	if (o.intId) {
+		o.gebi("victory").style.display = "none";
+		o.gebi("gameover").style.display = "none";
+	}
+}
+g.setupEvents = function(){
+	var o = this;
+	/*o.toolsElt.addEventListener("click", function(e){
+		console.log(e);
+	});*/
+	var endSplash = function(){
+		o.isSplash = false;
+		o.splashElt.style.display = "none";
+		o.introElt.style.display = "block";
+	}
+	document.getElementById("enter").addEventListener("click", function(e){
+		o.action("enter");
+	});
+	o.splashElt.addEventListener("click",function(e){
+		endSplash();
+	});
+	document.addEventListener("keydown", function(e){
+		e.pd = e.preventDefault;
+		if (o.isSplash) {
+			endSplash();
+			return false;
+		}
+		switch(e.keyCode){
+			case 37: // left
+			case 65: // a
+				o.player.propulsion( new Coords(-1, 0) );
+				e.pd();
+				break;
+			case 38: // up
+			case 87: // w
+				o.player.propulsion( new Coords(0, -1) );
+				e.pd();
+				break;
+			case 39: // right
+			case 68: // d
+				o.player.propulsion( new Coords(1, 0) );
+				e.pd();
+				break;
+			case 40: // down
+			case 83: // s
+				o.player.propulsion( new Coords(0, 1) );
+				e.pd();
+				break;
+			case 32: // space
+			case 77: o.action("m"); break;
+			case 78: o.action("n"); break;
+			case 88: o.action("x"); break;
+			case 82: o.action("r"); break;
+			case 187: o.action("+"); break;
+			case 189: o.action("-"); break;
+			case 74: o.action("j"); break;
+			case 69: o.action("e"); break;
+			case 84: o.action("t"); break;
+			case 72: o.action("h"); break;
+			case 79: o.action("o"); break;
+			case 80: o.action("p"); break;
+			case 27: o.action("esc"); break;
+			case 13: o.action("enter"); break;
+			case 81: // q
+				break;
+			default:
+				console.log(e.keyCode);
+				console.log(g.player);
+		}
+		
+	}, false);
+	window.onresize = function(e){
+		o.setupScreen();
+	}
+}
+
+g.setup();
+g.draw();
+
+// For Testing
+console.log(g);
+galaxy = g.galaxy;
+systems = g.galaxy.systems;</script>
+</body>
+</html>

@@ -1,0 +1,2128 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+    </head>
+    <script>class Player {
+    constructor (
+        x=0,y=0,height=85,width=40,speed=8
+    ) {
+        this.x = x
+        this.y = y
+        this.width = Number(width)
+        this.height = Number(height)
+        this.screenResized = false
+        this.charAlpha = 1; //alpha opacity for player
+        this.fillColor = `rgb(225, 237, 232,${this.charAlpha})`
+        this.speed = speed
+        this.rCollision = [false]
+        this.lCollision = [false]
+        this.uCollision = [false]
+        this.dCollision = [false]
+        this.gravityAvailabe = true
+        this.jumpHeight = 30
+        this.jumpSpeed = 14
+        this.inAir = true
+        this.jumpPressed = false
+        this.charAnimCycle = 0;
+        this.deathAnimCycle = 0;
+        this.startX = x
+        this.startY = y
+        this.characterDraw()
+        this.isAlive = true
+    }
+    start() {
+        this.addGravity()
+        this.borderCollision()
+        this.characterDraw()
+        this.attachControls()
+        this.deathCounter()
+    }
+    newPos(val,speed=1){
+        //1,2,3,4 as URDL
+        if(this.isAlive){
+            if(val==1 && !this.collisionU){
+                this.y -=speed
+            }
+            if(val==2 && !this.collisionR){
+                this.x +=speed
+            }
+            if(val==3 && !this.collisionD){
+                this.y +=speed
+            }
+            if(val==4 && !this.collisionL){
+                this.x -=speed
+            }
+        }
+    }
+
+    borderCollision() {
+        if (this.collisionD){
+            this.inAir = false
+        }
+        else {
+            this.inAir = true
+        }
+        if((this.y+this.height) >=newGameArea.height){
+            this.isDead()
+        }
+        if((this.x) <=5){
+            this.lCollision[objid+1] = true
+        }
+        else {
+            this.lCollision[objid+1] = false
+        }
+        if((this.x+this.width) >newGameArea.width-5){
+            this.rCollision[objid+1] = true
+        }
+        else {
+            this.rCollision[objid+1] = false
+        }
+    }
+    get collisionL(){
+        var len = this.lCollision.length
+        var collision = false
+        for(var i=0;i<len;i++){
+            if(this.lCollision[i]){
+                collision = this.lCollision[i]
+                break
+            }
+        }
+        return collision
+    }
+    get collisionR(){
+        var len = this.rCollision.length
+        var collision = false
+        for(var i=0;i<len;i++){
+            if(this.rCollision[i]){
+                collision = this.rCollision[i]
+                break
+            }
+        }
+        return collision
+    }
+    get collisionU(){
+        var len = this.uCollision.length
+        var collision = false
+        for(var i=0;i<len;i++){
+            if(this.uCollision[i]){
+                collision = this.uCollision[i]
+                break
+            }
+        }
+        return collision
+    }
+    get collisionD(){
+        var len = this.dCollision.length
+        var collision = false
+        for(var i=0;i<len;i++){
+            if(this.dCollision[i]){
+                collision = this.dCollision[i]
+                break
+            }
+        }
+        return collision
+    }
+    addGravity() {
+        //playerControl.DOWN = this.gravityAvailabe
+        if(this.gravityAvailabe){
+            this.newPos(3,this.speed*1.75)
+        }
+    }
+    onRight = function(){
+        if(playerControl.RIGHT){
+            this.newPos(2,this.speed)
+        }
+    }
+    onLeft = function(){
+        if(playerControl.LEFT){
+            this.newPos(4,this.speed)
+        }
+    }
+    onUp = function(){
+        if(!this.gravityAvailabe){
+            if(playerControl.UP){
+                this.newPos(1,this.speed)
+            }
+        }
+    }
+    onDown = function(){
+        if(!this.gravityAvailabe){
+            if(playerControl.DOWN){
+                this.newPos(3,this.speed)
+            }
+        }
+    }
+    onJump= async function(){
+        if(playerControl.JUMP && this.gravityAvailabe){
+            var move = 1;
+            if(!this.inAir && !this.jumpPressed && this.collisionD) {
+                this.inAir = true
+                this.jumpPressed = true
+                while(move<this.jumpHeight) {
+                    this.newPos(1,this.jumpSpeed)
+                    move +=1;
+                    await sleep(1)
+                }
+            }
+        }
+    }
+    attachControls(){
+        if(this.isAlive){
+            this.onJump()
+            this.onRight()
+            this.onLeft()
+            this.onUp()
+            this.onDown()
+        }
+    }
+    isDead(){
+        if (this.isAlive){
+            deaths++
+            this.isAlive = false
+            playString()
+        }
+    }
+    deathCounter(){
+        ctx.beginPath()
+        ctx.lineWidth = "4";
+        ctx.strokeStyle = "rgb(225, 237, 232,0.5)";
+        ctx.fillStyle = "rgb(225, 237, 232,0.5)"
+        ctx.font = 'bold 18px Monospace'
+        ctx.fillText('x', 50, 65)
+        ctx.fillText('x', 70, 65)
+        ctx.font = 'bold 25px "Comic Sans MS", cursive, sans-serif'
+        ctx.fillText('x', 100, 70)
+        ctx.textAlign = "left"
+        ctx.fillText(`${deaths}`, 110, 70)
+        ctx.strokeRect(40, 50, 40, 25)
+        ctx.stroke()
+    }
+    characterDraw() {
+        var eyePos = this.x
+        var eyeSize = [5,2]
+        var eyeCycle = 200;
+        if(this.charAnimCycle >eyeCycle && this.charAnimCycle <eyeCycle+10){
+            eyeSize = [1,0]
+            
+        }
+        else if(this.charAnimCycle > eyeCycle+50){
+            this.charAnimCycle = 0
+        }
+        if(playerControl.LEFT && this.isAlive){
+            eyePos = this.x-4
+        }
+        if(playerControl.RIGHT && this.isAlive){
+            eyePos = this.x+4
+        }
+        if(!this.isAlive){
+            this.deathAnimCycle +=1;
+            eyeSize = [1,0]
+            if(this.deathAnimCycle>0 &&this.deathAnimCycle<50){
+                ctx.beginPath()
+                ctx.font = 'bold 18px Monospace'
+                this.fillColor = `rgb(225, 237, 232,${this.charAlpha})`
+                ctx.fillStyle = this.fillColor
+                ctx.fillText('x', eyePos+10, this.y+15)
+                ctx.fillText('x', eyePos+30, this.y+15)
+                this.charAlpha -= 0.01;
+                ctx.stroke()
+            }
+            else if(this.deathAnimCycle >50){
+                /*this.x = this.startX
+                this.y = this.startY*/
+                level.start()
+                this.deathAnimCycle = 0
+                this.isAlive = true
+                this.charAlpha = 1
+                this.fillColor = `rgb(225, 237, 232,${this.charAlpha})`
+            }
+        }
+        this.charAnimCycle += 1;
+        ctx.lineWidth = 4
+        ctx.strokeStyle = this.fillColor
+        //head
+        ctx.strokeRect(this.x, this.y, 40, 25)
+        ctx.fillStyle = this.fillColor;
+        //body
+        ctx.fillRect(this.x, this.y+25, 40, 35);
+        //legs
+        ctx.fillRect(this.x+5, this.y+60, 10, 20);
+        ctx.fillRect(this.x+25, this.y+60, 10, 20);
+        //eye
+        ctx.beginPath()
+        ctx.ellipse(eyePos+10, this.y+10, eyeSize[0], eyeSize[1], Math.PI / 2, 0, 2 * Math.PI);
+        ctx.fill()
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.ellipse(eyePos+30, this.y+10,eyeSize[0], eyeSize[1], Math.PI / 2, 0, 2 * Math.PI);
+        ctx.fill()
+        ctx.stroke()
+
+    }
+}</script>
+    <script>class ObjectMaterial {
+    constructor (
+        x=0,y=0,width=50,height=50,name,material=0,id=0,movingX=false,movingY=false,startX=null,startY=null,endX=null,endY=null,mSpeed=0,reverse=false,fillColor="rgb(225, 237, 232)"
+    ){
+        this.id = id
+        this.x = x
+        this.name = name
+        this.y = y
+        this.isMovingX = movingX
+        this.isMovingY = movingY
+        this.startX = startX
+        this.startY = startY
+        this.endX = endX
+        this.endY = endY
+        this.mSpeed = mSpeed
+        this.reverse = reverse
+        this.width = width
+        this.height = height
+        this.material = material
+        this.fillColor = fillColor
+        this.collision = [false,false,false,false] //URDL
+        this.playerKeyHistory = [false,false,false,false] //LURD
+        this.objectAnimeCycle = [startX - 1,startY - 1]
+        this.objectAnimeCycleStart = [false,false]
+        this.key = Math.floor(Math.random() * 10)
+        this.flagTouched = false
+        this.flagYpos = this.y
+        this.enteredKey = [] //for key entered in winning point
+        this.winningPointText = "Waiting"
+        this.requestNextLevel = false
+        this.requestNextLevelFailed = false
+    }
+    objectInit(){
+        this.objectDraw()
+            switch(this.material){
+                case -1:
+                    this.nearObjectEffectDeath()
+                    break
+                case 0:
+                    this.checkCollision()
+                    break
+                case 1:
+                    this.nearObjectEffectKey()
+                    break
+                case 2:
+                    this.nearObjectEffectFinishPoint()
+                    break
+            }
+    }
+    nonPlatformObjectInit(){
+        
+    }
+    nearObjectEffectKey(){
+        if(this.actualCollision()){
+            ctx.beginPath()
+            ctx.font = 'bold 15px "Comic Sans MS", cursive, sans-serif'
+            this.fillColor = `#42f5a1`
+            ctx.fillStyle = this.fillColor
+            if(!playerControl.ENTER){
+                ctx.textAlign = "center"
+                ctx.fillText('Press Enter!', this.x, this.y-50)
+                ctx.fill()
+            }
+            else {
+                if(!this.flagTouched){
+                    playString("flag")
+                    level.nextLevelKey.push(this.key)
+                    this.flagTouched = true
+                }
+                ctx.fillText(this.key, this.x, this.y-50)
+                ctx.fill()
+            }
+        }
+    }
+    nearObjectEffectFinishPoint(){
+        ctx.beginPath()
+        if(this.actualCollision(30) && !this.requestNextLevel){
+            document.addEventListener("keydown",this.winningPointKeyInput, false);
+            document.Object = this
+            ctx.beginPath()
+            ctx.font = 'bold 15px "Comic Sans MS", cursive, sans-serif'
+            //this.fillColor = `#42f5a1`
+            ctx.fillStyle = this.fillColor
+            ctx.beginPath();
+            ctx.lineWidth = 3
+            ctx.moveTo(this.x+20, this.y+45);
+            ctx.lineTo(this.x+80, this.y+45);
+            ctx.fillText('***', this.x+50, this.y+25)
+            ctx.fillText(this.enteredKeyVal, this.x+50, this.y+40)
+            ctx.stroke();
+            ctx.fillText('Enter the codes', this.x+this.width/2, this.y-50)
+            if(playerControl.ENTER){
+                if (this.enteredKey.length !=0 && level.nextLevelKey.length!=0 && !this.requestNextLevel){
+                    this.requestNextLevel = true
+                    this.winningPointText = "Fetching"
+                    if(JSON.stringify(this.enteredKey)==JSON.stringify(level.nextLevelKey) && this.enteredKey.length == level.totalFlags){
+                        setTimeout(()=>{
+                            this.winningPointText = "Loading"
+                            setTimeout(()=>{
+                                level = LevelGenerator(level.nextLevel)
+                            },1000)
+                        },1000)
+                    }
+                    else{
+                        setTimeout(()=>{
+                            this.requestNextLevelFailed = true
+                            setTimeout(()=>{
+                                level = LevelGenerator(level.name)
+                            },1000)
+                        },1000)
+                    }
+                }
+            }
+            ctx.fill()
+            ctx.stroke()
+        }
+        else {
+            document.removeEventListener("keydown",this.winningPointKeyInput, false);
+            ctx.fillStyle = "rgb(225, 237, 232)"
+            ctx.font = 'bold 12px "Lucida Console", Monaco, monospace'
+            if(!this.requestNextLevelFailed){
+                ++this.objectAnimeCycle[0]
+                ctx.fillText(`${level.name}`, this.x+50, this.y+30)
+                if(this.objectAnimeCycle[0]>50 && this.objectAnimeCycle[0]<100){
+                    ctx.fillText(`${this.winningPointText}..`, this.x+50, this.y+45)
+                }
+                else if(this.objectAnimeCycle[0]>=100 && this.objectAnimeCycle[0]<150) {
+                    ctx.fillText(`${this.winningPointText}...`, this.x+50, this.y+45)
+                }
+                else {
+                    ctx.fillText(`${this.winningPointText}....`, this.x+50, this.y+45)
+                }
+                if (this.objectAnimeCycle[0]>150){
+                    this.objectAnimeCycle[0]=0
+                }
+            }
+            else{
+                ctx.fillText(`Not Found!`, this.x+50, this.y+30)
+            }
+            ctx.fill()
+            ctx.stroke()
+        }
+    }
+    winningPointKeyInput(event){
+        const key = event.key
+        const keyPas = parseInt(key)
+        const object = event.currentTarget.Object
+        if (Number.isInteger(keyPas) && object.enteredKey.length <4){
+            object.enteredKey.push(keyPas)
+            playString("keyPress")
+        }
+        else if(key == "Backspace"){
+            object.enteredKey.pop()
+        }
+    }
+    get enteredKeyVal() {
+        var str = ""
+        for(var i=0;i<this.enteredKey.length;i++){
+            if(i==this.enteredKey.length-1){
+                str += this.enteredKey[i]
+            }
+            else {
+                str += this.enteredKey[i]+" "
+            }
+        }
+        return str
+    }
+    nearObjectEffectDeath(){
+        if(this.actualCollision()){
+            player.isDead()
+        }
+    }
+    keyFlagPoint(){
+        //ObjectMaterial(50,550,50,90,"star",objid++,1)
+        if(this.flagTouched){
+            if(this.objectAnimeCycle[0]<this.height-40){
+                this.flagYpos += 1
+                this.objectAnimeCycle[0]++
+            }
+        }
+        ctx.beginPath()
+        ctx.moveTo(this.x, this.y); 
+        ctx.lineTo(this.x, this.y+this.height);
+        ctx.ellipse(this.x, this.y+5, 2, 2, Math.PI / 2, 0, 2 * Math.PI);
+        ctx.ellipse(this.x, this.y+this.height, 2, 5, Math.PI / 2, 0, 2 * Math.PI);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = "#ddd";
+        ctx.fillStyle = "#ddd"
+        ctx.stroke();
+        //flag triangle
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.flagYpos+10);
+        ctx.lineTo(this.x, this.flagYpos+40);
+        ctx.lineTo(this.x+this.width, this.flagYpos+25);
+        ctx.fill();
+    }
+    checkMoving(){
+        if(this.isMovingX){
+            if(!this.objectAnimeCycleStart[0]^this.reverse){
+                this.x +=this.mSpeed
+            }
+            else {
+                this.x -=this.mSpeed
+            }
+            if(!this.objectAnimeCycleStart[0]){
+                this.objectAnimeCycle[0] +=this.mSpeed
+            }
+            else {
+                this.objectAnimeCycle[0]-=this.mSpeed
+            }
+            if(this.objectAnimeCycle[0] <this.startX){
+                this.objectAnimeCycleStart[0] = false
+            }
+            else if(this.objectAnimeCycle[0]>=this.endX){
+                this.objectAnimeCycleStart[0] = true
+            }
+            
+        }
+        if(this.isMovingY){
+            if(!this.objectAnimeCycleStart[1]^this.reverse){
+                this.y +=this.mSpeed
+            }
+            else {
+                this.y -=this.mSpeed
+            }
+            if(!this.objectAnimeCycleStart[1]){
+                this.objectAnimeCycle[1] +=this.mSpeed
+            }
+            else {
+                this.objectAnimeCycle[1]-=this.mSpeed
+            }
+            if(this.objectAnimeCycle[1] <this.startY){
+                this.objectAnimeCycleStart[1] = false
+            }
+            else if(this.objectAnimeCycle[1]>=this.endY){
+                this.objectAnimeCycleStart[1] = true
+            }
+            
+        }
+    }
+    drawPlatform(){
+        this.checkMoving()
+        ctx.beginPath()
+        ctx.fillStyle = this.fillColor;
+        ctx.fillRect(this.x, this.y, this.width, this.height)
+        ctx.fill()
+        ctx.stroke();
+        ctx.beginPath()
+        ctx.lineWidth = 5
+        ctx.strokeStyle = "#f24d1b";
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x, this.y+this.height);
+        ctx.moveTo(this.x+this.width, this.y);
+        ctx.lineTo(this.x+this.width, this.y+this.height);
+        ctx.stroke();
+
+    }
+    winningPoint(){
+        ctx.beginPath()
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = this.fillColor
+        ctx.fillStyle = "#ddd"
+        ctx.lineWidth = 8
+        ctx.strokeRect(this.x, this.y, this.width, this.height)
+        ctx.stroke()
+        ctx.textAlign = 'center';
+        ctx.beginPath()
+        ctx.fillRect(this.x, this.y+(this.height/2)+20, this.width, this.height/4)
+        ctx.beginPath()
+        ctx.fillStyle = "rgb(59, 59, 59)"
+        ctx.ellipse(this.x+this.width/2, this.y+this.height-12, 10, 10, Math.PI / 2, 0, 2 * Math.PI);
+        ctx.fill()
+        ctx.stroke()
+    }
+    objectDraw(){
+        switch(this.material){
+            case -1:
+                this.drawPlatform()
+                break
+            case 0:
+                this.drawPlatform()
+                break
+            case 1:
+                this.keyFlagPoint()
+                break
+            case 2:
+                this.winningPoint()
+                break
+        }
+    }
+    get isColliding(){
+        var c = false
+        for(var i=0;i<4;i++){
+            if(this.collision[i]){
+                c = true
+                break
+            }
+        }
+        return c
+    }
+    storeKeyHistory(){
+        //LURD
+        if(!this.playerKeyHistory[0]){
+            if(this.isMovingX){
+                this.playerKeyHistory[0] = playerControl.LEFT || (!this.objectAnimeCycleStart[0]^this.reverse)
+            }
+            else {
+                this.playerKeyHistory[0] = playerControl.LEFT
+            }
+        }
+        if(!this.playerKeyHistory[1]){
+            if(this.isMovingY){
+                this.playerKeyHistory[1] = (playerControl.UP || playerControl.JUMP) || (!this.objectAnimeCycleStart[1]^this.reverse)
+            }
+            else {
+                this.playerKeyHistory[1] = playerControl.UP || playerControl.JUMP
+            }
+        }
+        if(!this.playerKeyHistory[2]){
+            if(this.isMoving){
+                this.playerKeyHistory[2] = playerControl.RIGHT || (this.objectAnimeCycleStart[0]^this.reverse)
+            }
+            else {
+                this.playerKeyHistory[2] = playerControl.RIGHT
+            }
+        }
+        if(!this.playerKeyHistory[3]){
+            if(this.isMovingY){
+                this.playerKeyHistory[3] = (playerControl.DOWN || player.gravityAvailabe) || (this.objectAnimeCycleStart[1]^this.reverse)
+            }
+            else {
+                this.playerKeyHistory[3] = playerControl.DOWN || player.gravityAvailabe
+            }
+        }
+    }
+    objYbound(val=0){
+        if(player.y+player.height>this.y-val && player.y<this.y+this.height+val){
+            return true
+        }
+        else {
+            return false
+        }
+    }
+    objXbound(val=0){
+        if(player.x+player.width>=this.x - val && player.x<=this.x+this.width + val){
+            return true
+        }
+        else {
+            return false
+        }
+    }
+    actualCollision(x=0){
+        return this.objXbound(x) && this.objYbound(x)
+    }
+    restoreKeyHist(val){
+        var i = 4
+        while(i>=0){
+            if(i!=val){
+                this.playerKeyHistory[i]=false
+            }
+            i--
+        }
+    }
+    checkCollision(x=player.x,y=player.y){
+        this.storeKeyHistory()
+        if(!this.isColliding &&player.isAlive){
+            //if not colliding check for collision
+            if(x+player.width>=this.x && x<=this.x+this.width){
+                if(y<=this.y+this.height && y>=this.y && this.playerKeyHistory[1]){
+                    //D collision
+                    this.collision[2] = true
+                    //console.log("collision D ",this.name)
+                }
+                else if (y+player.height>=this.y &&y+player.height<=this.y+this.height && this.playerKeyHistory[3]){
+                    //U collision
+                    this.collision[0] = true
+                    //console.log("collision U ",this.name)
+                }
+            }
+            if(y+player.height>=this.y+30 && y<=this.y+this.height) {
+                if (x+player.width>this.x && x+player.width<this.x+this.width){
+                }
+                if(this.playerKeyHistory[2] && x+player.width>this.x && x+player.width<this.x+this.width){
+                    //L collision
+                    //this.collision[3] = true
+                    //killing the player if touched right or left
+                    player.isDead()
+                    //console.log("collision L ",this.name) 
+                }
+                else if(this.playerKeyHistory[0] && x<this.x+this.width && x>this.x){
+                    //R collision
+                    //killing the player if touched right or left
+                    player.isDead()
+                    //this.collision[1] = true
+                    //console.log("collision R ",this.name)
+                }
+            }
+        }
+        else {
+            if(((x+player.width<this.x && this.playerKeyHistory[0]) || !this.objYbound()) && player.rCollision[this.id]){
+                //L collision
+                this.collision[3] = false
+                //console.log("decollision L ",this.name) 
+            }
+            if(((x>this.x+this.width && this.playerKeyHistory[2]) || !this.objYbound()) && player.lCollision[this.id]){
+                //R collision
+                this.collision[1] = false
+                //console.log("decollision R ",this.name)
+            }
+            if (((y+player.height<=this.y && (this.playerKeyHistory[1])) || !this.objXbound()) && player.dCollision[this.id]){
+                //U collision
+                this.collision[0] = false
+                //console.log("decollision U ",this.name,this.id)
+            }
+            if(((y>=this.y+this.height && this.playerKeyHistory[3]) || !this.objXbound()) && player.uCollision[this.id]){
+                //D collision
+                this.collision[2] = false
+                //console.log("decollision D ",this.name)
+            }
+            player.lCollision[this.id] = this.collision[1]
+            player.rCollision[this.id] = this.collision[3]
+            player.dCollision[this.id] = this.collision[0]
+            player.uCollision[this.id] = this.collision[2]
+        }
+        this.restoreKeyHist()
+        if(!player.isAlive){
+            for(var i=0;i<4;i++){
+                this.collision[i] = false
+            }
+        }
+        //making players leg on ground if inside
+        if (player.dCollision[this.id] && player.isAlive){
+            if (y+player.height>this.y){
+                player.y = this.y - player.height + player.speed
+            }
+        }
+    }
+}</script>
+    <script>/**
+ * screensize width=1300,height=700
+ * height and width of player = 85,40
+ * flag w,h = 50,90
+ * winning point w,h = 100,80
+ */
+/**
+ * Reverse start value is start point and endx will be point start-(end-start)
+ * platform = color:"rgb(225, 237, 232)"
+ * deathMaterial = color:"#f24d1b"
+ * {
+                x:1000,
+                y:150,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:true,
+                movingY:false,
+                startX:1000,
+                startY:100,
+                endX:1800,
+                endY:400,
+                mSpeed:30,
+                reverse:true,
+                color:"#f24d1b"
+            },
+ */
+var levels = {
+    Level1:{
+        nextLevel:"Level2",
+        startX:100,
+        startY:415,
+        Objects:{
+            floor:{
+                x:0,
+                y:500,
+                width:1300,
+                height:80,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag:{
+                x:50,
+                y:410,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:1100,
+                y:420,
+                width:100,
+                height:80,
+                material:2
+            }
+        }
+    },
+    Level2:{
+        nextLevel:"Level3",
+        startX:150,
+        startY:555,
+        Objects:{
+            p1:{
+                x:10,
+                y:640,
+                width:280,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            p2:{
+                x:450,
+                y:540,
+                width:280,
+                height:160,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            p3:{
+                x:900,
+                y:640,
+                width:280,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:590,
+                y:450,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:50,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:980,
+                y:560,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level3:{
+        nextLevel:"Level4",
+        startX:150,
+        startY:555,
+        Objects:{
+            p1:{
+                x:10,
+                y:640,
+                width:280,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            p2:{
+                x:300,
+                y:430,
+                width:700,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            p3:{
+                x:10,
+                y:200,
+                width:280,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            p4:{
+                x:1010,
+                y:200,
+                width:280,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:135,
+                y:110,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:650,
+                y:340,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:1150,
+                y:120,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level4:{
+        nextLevel:"Level5",
+        startX:1050,
+        startY:560,
+        Objects:{
+            base1:{
+                x:1000,
+                y:640,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            base2:{
+                x:1000,
+                y:400,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            base2d:{
+                x:1000,
+                y:455,
+                width:300,
+                height:5,
+                material:-1,
+                color:"#f24d1b"
+            },
+            base3:{
+                x:1000,
+                y:160,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            base3d:{
+                x:1000,
+                y:215,
+                width:300,
+                height:5,
+                material:-1,
+                color:"#f24d1b"
+            },
+            base4:{
+                x:200,
+                y:160,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            mp:{
+                x:500,
+                y:160,
+                width:500,
+                height:60,
+                material:0,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:640,
+                endX:510,
+                endY:1120,
+                mSpeed:4,
+                reverse:false,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:1150,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:1150,
+                y:310,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag3:{
+                x:1150,
+                y:70,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:300,
+                y:80,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level5:{
+        nextLevel:"Level6",
+        startX:170,
+        startY:555,
+        Objects:{
+            p1:{
+                x:460,
+                y:640,
+                width:380,
+                height:60,
+                material:0,
+                movingX:false,
+                movingY:true,
+                startX:510,
+                startY:640,
+                endX:510,
+                endY:1240,
+                mSpeed:2,
+                reverse:true,
+                color:"rgb(225, 237, 232)"
+            },
+            db2p1m:{
+                x:460,
+                y:180,
+                width:80,
+                height:30,
+                material:-1,
+                movingX:true,
+                movingY:false,
+                startX:460,
+                startY:160,
+                endX:660,
+                endY:320,
+                mSpeed:3,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            db2p2m:{
+                x:560,
+                y:180,
+                width:80,
+                height:30,
+                material:-1,
+                movingX:true,
+                movingY:false,
+                startX:560,
+                startY:160,
+                endX:760,
+                endY:320,
+                mSpeed:3,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            base2:{
+                x:540,
+                y:150,
+                width:220,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dBoundry1:{
+                x:450,
+                y:-100,
+                width:10,
+                height:400,
+                material:-1,
+                color:"#f24d1b"
+            },
+            dBoundry2:{
+                x:670+160,
+                y:-100,
+                width:10,
+                height:400,
+                material:-1,
+                color:"#f24d1b"
+            },
+            flag2:{
+                x:650,
+                y:60,
+                width:50,
+                height:90,
+                material:1
+            },
+            base:{
+                x:10,
+                y:640,
+                width:320,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            winningP:{
+                x:980,
+                y:640,
+                width:320,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            winningSpot:{
+                x:1120,
+                y:560,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level6:{
+        nextLevel:"Level7",
+        startX:230,
+        startY:320,
+        Objects:{
+            floor:{
+                x:0,
+                y:640,
+                width:1300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dp:{
+                x:0,
+                y:590,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:true,
+                movingY:false,
+                startX:0,
+                startY:640,
+                endX:510,
+                endY:1240,
+                mSpeed:6,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            p1:{
+                x:190,
+                y:400,
+                width:100,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dp2:{
+                x:500,
+                y:480,
+                width:350,
+                height:15,
+                material:-1,
+                color:"#f24d1b"
+            },
+            fp2:{
+                x:550,
+                y:400,
+                width:100,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:235,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:600,
+                y:310,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:1040,
+                y:560,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level9:{
+        nextLevel:"Level10",
+        startX:60,
+        startY:560,
+        Objects:{
+            floor:{
+                x:0,
+                y:640,
+                width:1300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dp1:{
+                x:270,
+                y:500,
+                width:50,
+                height:140,
+                material:-1,
+                color:"#f24d1b"
+            },
+            dp1m:{
+                x:270,
+                y:450,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:450,
+                endX:510,
+                endY:580,
+                mSpeed:4,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            dp2:{
+                x:570,
+                y:500,
+                width:50,
+                height:140,
+                material:-1,
+                color:"#f24d1b"
+            },
+            dp2m:{
+                x:570,
+                y:450,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:450,
+                endX:510,
+                endY:570,
+                mSpeed:4,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            dp3:{
+                x:870,
+                y:500,
+                width:50,
+                height:140,
+                material:-1,
+                color:"#f24d1b"
+            },
+            dp3m:{
+                x:870,
+                y:450,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:450,
+                endX:510,
+                endY:550,
+                mSpeed:4,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            flag1:{
+                x:185,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:485,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag3:{
+                x:785,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:1040,
+                y:560,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level7:{
+        nextLevel:"Level8",
+        startX:1050,
+        startY:540,
+        Objects:{
+            mp:{
+                x:40,
+                y:640,
+                width:300,
+                height:60,
+                material:0,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:640,
+                endX:510,
+                endY:1120,
+                mSpeed:4,
+                reverse:true,
+                color:"rgb(225, 237, 232)"
+            },
+            base1:{
+                x:1000,
+                y:640,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:1150,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            dp1m:{
+                x:880,
+                y:640,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:640,
+                endX:510,
+                endY:840,
+                mSpeed:4,
+                reverse:true,
+                color:"#f24d1b"
+            },
+            base2:{
+                x:500,
+                y:640,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag2:{
+                x:650,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            base3:{
+                x:500,
+                y:160,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag3:{
+                x:650,
+                y:70,
+                width:50,
+                height:90,
+                material:1
+            },
+            dp2m:{
+                x:880,
+                y:160,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:160,
+                endX:510,
+                endY:320,
+                mSpeed:4,
+                reverse:true,
+                color:"#f24d1b"
+            },
+            base4:{
+                x:1000,
+                y:160,
+                width:300,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            winningSpot:{
+                x:1150,
+                y:80,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level8:{
+        nextLevel:"Level9",
+        startX:170,
+        startY:555,
+        Objects:{
+            p1:{
+                x:510,
+                y:640,
+                width:280,
+                height:60,
+                material:0,
+                movingX:false,
+                movingY:true,
+                startX:510,
+                startY:640,
+                endX:510,
+                endY:1240,
+                mSpeed:6,
+                reverse:true,
+                color:"rgb(225, 237, 232)"
+            },
+            dp:{
+                x:510,
+                y:160,
+                width:280,
+                height:20,
+                material:-1,
+                color:"#f24d1b"
+            },
+            fp1:{
+                x:190,
+                y:290,
+                width:100,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            fp2:{
+                x:1010,
+                y:290,
+                width:100,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:235,
+                y:200,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:1060,
+                y:200,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningP:{
+                x:10,
+                y:640,
+                width:320,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            winningSpot:{
+                x:40,
+                y:560,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    
+    Level10:{
+        nextLevel:"Level11",
+        startX:50,
+        startY:540,
+        Objects:{
+            base1:{
+                x:0,
+                y:640,
+                width:200,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:100,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            dp1m:{
+                x:300,
+                y:390,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:390,
+                endX:510,
+                endY:550,
+                mSpeed:3,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            base2:{
+                x:300,
+                y:540,
+                width:150,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag2:{
+                x:400,
+                y:450,
+                width:50,
+                height:90,
+                material:1
+            },
+            dp2m:{
+                x:350,
+                y:315,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:true,
+                movingY:false,
+                startX:350,
+                startY:90,
+                endX:800,
+                endY:250,
+                mSpeed:4,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            base3:{
+                x:600,
+                y:440,
+                width:150,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag3:{
+                x:700,
+                y:350,
+                width:50,
+                height:90,
+                material:1
+            },
+            base4:{
+                x:900,
+                y:340,
+                width:150,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag4:{
+                x:1000,
+                y:250,
+                width:50,
+                height:90,
+                material:1
+            },
+            dp3m:{
+                x:1050,
+                y:190,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:90,
+                endX:510,
+                endY:250,
+                mSpeed:4,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            base5:{
+                x:1140,
+                y:240,
+                width:150,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            winningSpot:{
+                x:1180,
+                y:160,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+    Level11:{
+        nextLevel:"GameOver",
+        startX:50,
+        startY:555,
+        Objects:{
+            base1:{
+                x:0,
+                y:640,
+                width:270,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dp1m:{
+                x:295,
+                y:450,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:450,
+                endX:510,
+                endY:580,
+                mSpeed:5,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            base2:{
+                x:370,
+                y:640,
+                width:270,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dp2m:{
+                x:665,
+                y:450,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:450,
+                endX:510,
+                endY:580,
+                mSpeed:5,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            base3:{
+                x:740,
+                y:640,
+                width:270,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            flag1:{
+                x:485,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag2:{
+                x:885,
+                y:550,
+                width:50,
+                height:90,
+                material:1
+            },
+            mp:{
+                x:1100,
+                y:640,
+                width:200,
+                height:60,
+                material:0,
+                movingX:false,
+                movingY:true,
+                startX:510,
+                startY:640,
+                endX:510,
+                endY:1240,
+                mSpeed:4,
+                reverse:true,
+                color:"rgb(225, 237, 232)"
+            },
+            base4:{
+                x:0,
+                y:220,
+                width:1010,
+                height:60,
+                material:0,
+                color:"rgb(225, 237, 232)"
+            },
+            dp3m:{
+                x:295,
+                y:20,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:20,
+                endX:510,
+                endY:150,
+                mSpeed:3,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            dp1:{
+                x:295,
+                y:70,
+                width:50,
+                height:150,
+                material:-1,
+                color:"#f24d1b"
+            },
+            dp4m:{
+                x:665,
+                y:20,
+                width:50,
+                height:50,
+                material:-1,
+                movingX:false,
+                movingY:true,
+                startX:0,
+                startY:50,
+                endX:510,
+                endY:150,
+                mSpeed:3,
+                reverse:false,
+                color:"#f24d1b"
+            },
+            dp2:{
+                x:665,
+                y:70,
+                width:50,
+                height:150,
+                material:-1,
+                color:"#f24d1b"
+            },
+            dp:{
+                x:1100,
+                y:70,
+                width:200,
+                height:20,
+                material:-1,
+                color:"#f24d1b"
+            },
+            flag3:{
+                x:485,
+                y:130,
+                width:50,
+                height:90,
+                material:1
+            },
+            flag4:{
+                x:885,
+                y:130,
+                width:50,
+                height:90,
+                material:1
+            },
+            winningSpot:{
+                x:80,
+                y:140,
+                width:100,
+                height:80,
+                material:2,
+                color:"rgb(225, 237, 232)"
+            }
+        }
+    },
+}
+function LevelGenerator(level="Level1"){
+    if(level != "GameOver"){
+        var screenLoader = document.getElementById("screenLoader")
+        if(gameStarted){
+            screenLoader.style.animation = "fadeIn 1s ease-in"
+            screenLoader.style.display = "block"
+        }
+        player = new Player()
+        var object_id = 0
+        var flags = 0
+        var objectArr = []
+        var startX = levels[level].startX
+        var startY = levels[level].startY
+        var Objects = levels[level].Objects
+        for (object in Objects){
+            var objectGen = new ObjectMaterial(Objects[object].x,Objects[object].y,Objects[object].width,Objects[object].height,object,Objects[object].material,object_id++,Objects[object].movingX,Objects[object].movingY,Objects[object].startX,Objects[object].startY,Objects[object].endX,Objects[object].endY,Objects[object].mSpeed,Objects[object].reverse,Objects[object].color)
+            objectArr.push(objectGen)
+            if(Objects[object].material == 1){
+                flags++
+            }
+        }
+        var level = new gameLevel(startX,startY,objectArr,player,levels[level].nextLevel,level,flags)
+        if(gameStarted){
+            screenLoader.style.animation = "fadeOut 1s ease-in"
+            setTimeout(()=>{
+                screenLoader.style.display = "none"
+            },1000)
+        }
+        return level
+    }
+    else {
+        document.getElementById("screenLoader").style.opacity = 1
+        var screenLoader = document.getElementById("endScreen")
+        endScreen.style.animation = "fadeIn 1s ease-in"
+        endScreen.style.display = "flex"
+        return null
+    }
+}
+class gameLevel {
+    constructor (
+        startX,startY,objects,player,nextLevel,name,totalFlags
+    ){
+        this.startX = startX
+        this.startY = startY
+        this.objects = objects
+        this.player = player
+        this.nextLevelKey = []
+        this.nextLevel = nextLevel
+        this.name = name
+        this.totalFlags = totalFlags
+        this.start()
+    }
+    start(){
+        this.player.x = this.startX
+        this.player.y = this.startY
+    }
+    playLevel(){
+        this.objects.forEach((object)=>{
+            object.objectInit()
+        })
+    }
+}</script>
+    <script>var objid = 0;
+var newGameArea;
+var ctx
+var screenResized = false
+var player;
+var gameStarted = false;
+var deaths = 0
+var playerControl = {
+  LEFT: false,
+  UP: false,
+  RIGHT: false,
+  DOWN: false,
+  JUMP:false,
+  ENTER:false
+};
+const sleep = (milliseconds) => {
+    return new Promise(resolve => setTimeout(resolve, milliseconds))
+  }
+function playerControlKeyPressed(event){
+    const key = event.key
+    if (gameStarted){
+        if(key == "ArrowRight" || key == "D" || key == "d"){
+            playerControl.RIGHT = true
+        }
+        if(key == "ArrowLeft" || key == "A" || key == "a"){
+            playerControl.LEFT = true
+        }
+        if(key == "ArrowUp" || key == "W" || key == "w"){
+            if(!player.gravityAvailabe){
+                playerControl.UP = true
+            }
+        }
+        if(key == "ArrowDown" || key == "s" || key == "S"){
+            playerControl.DOWN = true
+        }
+        if(key == " "){
+            playerControl.JUMP = true
+        }
+        if(key=="Enter"){
+            playerControl.ENTER = true
+        }
+    }
+    else {
+        if(key=="Enter"){
+            document.getElementById("screenLoader").style.animation = "fadeOut2 0.5s ease-in"
+            document.getElementById("startScreen").style.animation = "fadeOut 0.5s ease-in"
+            setTimeout(()=>{
+                document.getElementById("screenLoader").style.display = "none"
+                document.getElementById("startScreen").style.display = "none"
+            },500)
+            gameStarted = true
+        }
+    }
+    
+}
+function playerControlKeyReleased(event){
+    const key = event.key
+    if(key == "ArrowRight" || key == "D" || key == "d"){
+        playerControl.RIGHT = false
+    }
+    if(key == "ArrowLeft" || key == "A" || key == "a"){
+        playerControl.LEFT = false
+    }
+    if(key == "ArrowUp" || key == "W" || key == "w"){
+        if(!player.gravityAvailabe){
+            playerControl.UP = false
+        }
+    }
+    if(key == "ArrowDown" || key == "s" || key == "S"){
+        playerControl.DOWN = false
+    }
+    if(key == " "){
+        playerControl.JUMP = false
+        player.jumpPressed = false
+    }
+    if(key=="Enter"){
+        playerControl.ENTER = false
+    }
+}
+var testObject
+var testObject2
+var testObject3
+var testObject4
+var testObject5
+var gameCanvas
+function init() {
+    document.getElementById("screenLoader").style.opacity = 0.7
+    gameCanvas = document.getElementById('gameAreaCanvas')
+    newGameArea = new gameArea()
+    ctx = newGameArea.context
+    level = LevelGenerator()
+    window.requestAnimationFrame(updateGameArea)
+    document.addEventListener("keydown",playerControlKeyPressed, false);	
+    document.addEventListener("keyup",playerControlKeyReleased, false);
+}
+window.addEventListener('resize', ()=>{
+    screenResized = true
+}, false)
+class gameArea {
+    constructor (
+        width=1300,height=700,color="rgb(59, 59, 59)"
+    ) {
+        this.color = color
+        this.width = width
+        this.height = height
+        this.start()
+    }
+    resizeGame() {
+        var gameAreaBody = document.getElementById('gameArea');
+        var widthToHeight = 16 / 9;
+        var newWidth = window.innerWidth;
+        var newHeight = window.innerHeight;
+        var newWidthToHeight = newWidth / newHeight;
+        
+        if (newWidthToHeight > widthToHeight) {
+            newWidth = newHeight * widthToHeight;
+            gameAreaBody.style.height = newHeight + 'px';
+            gameAreaBody.style.width = newWidth + 'px';
+        } else {
+            newHeight = newWidth / widthToHeight;
+            gameAreaBody.style.width = newWidth + 'px';
+            gameAreaBody.style.height = newHeight + 'px';
+        }
+        
+        gameAreaBody.style.marginTop = (-newHeight / 2) + 'px';
+        gameAreaBody.style.marginLeft = (-newWidth / 2) + 'px';
+    }
+    start() {
+        this.canvas = gameCanvas
+        this.resizeGame()
+        this.canvas.style.backgroundColor = this.color
+        this.canvas.width = this.width
+        this.canvas.height = this.height
+        this.context = this.canvas.getContext("2d")
+        this.context.imageSmoothingEnabled = false
+    }
+    clear() {
+        if(screenResized){
+            screenResized = false
+            this.resizeGame()
+        }
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+}
+function updateGameArea() {
+    newGameArea.clear()
+    if (level !=null){
+        level.playLevel()
+        player.start()
+    }
+    window.requestAnimationFrame(updateGameArea)
+}
+document.addEventListener("DOMContentLoaded",init)
+function playSound(params) {
+    var url = window.URL || window.webkitURL;
+    try {
+        var soundURL = jsfxr(params);
+        var player = new Audio();
+        player.addEventListener('error', function(e) {
+        }, false);
+        player.src = soundURL;
+        player.play();
+        player.addEventListener('ended', function(e) {
+        url.revokeObjectURL(soundURL);
+        }, false);
+    } catch(e) {
+        console.log(e);
+    }
+}
+
+function playString(name="death") {
+    var str
+    var flagTouch = "[0,,0.0154,0.538,0.329,0.5342,,,,,,0.4599,0.6024,,,,,,1,,,,,0.52]"
+    if (name =="death"){
+        str = "[1,,0.0404,,0.2501,0.6364,,-0.4971,,,,,,,,,,,1,,,0.2928,,0.5]"
+    }
+    else if(name == "keyPress"){
+        str = "[0,,0.0185,0.5339,0.1614,0.28,0.16,,,,,,,,,,,,1,,,,,0.52]"
+    }
+    else if(name=="flag"){
+        str = flagTouch
+    }
+    var temp = str.split(",");
+    var params = new Array();
+    for(var i = 0; i < temp.length; i++) {
+        params[i] = parseFloat(temp[i]);
+    }
+    playSound(params);
+}
+</script>
+    <script>function SfxrParams(){this.setSettings=function(r){for(var a=0;a<24;a++)this[String.fromCharCode(97+a)]=r[a]||0;this.c<.01&&(this.c=.01);var t=this.b+this.c+this.e;if(t<.18){var e=.18/t;this.b*=e,this.c*=e,this.e*=e}}}function SfxrSynth(){var r,a,t,e,s,n,i,h,f,c,o,v;this._params=new SfxrParams,this.reset=function(){var r=this._params;e=100/(r.f*r.f+.001),s=100/(r.g*r.g+.001),n=1-r.h*r.h*r.h*.01,i=-r.i*r.i*r.i*1e-6,r.a||(o=.5-r.n/2,v=5e-5*-r.o),h=1+r.l*r.l*(r.l>0?-.9:10),f=0,c=1==r.m?0:(1-r.m)*(1-r.m)*2e4+32},this.totalReset=function(){this.reset();var e=this._params;return r=e.b*e.b*1e5,a=e.c*e.c*1e5,t=e.e*e.e*1e5+12,3*((r+a+t)/3|0)},this.synthWave=function(u,b){var w=this._params,m=1!=w.s||w.v,y=w.v*w.v*.1,g=1+3e-4*w.w,k=w.s*w.s*w.s*.1,S=1+1e-4*w.t,l=1!=w.s,p=w.x*w.x,d=w.g,x=w.q||w.r,A=w.r*w.r*w.r*.2,q=w.q*w.q*(w.q<0?-1020:1020),M=w.p?32+((1-w.p)*(1-w.p)*2e4|0):0,_=w.d,U=w.j/2,j=w.k*w.k*.01,C=w.a,P=r,R=1/r,W=1/a,z=1/t,B=5/(1+w.u*w.u*20)*(.01+k);B>.8&&(B=.8),B=1-B;for(var D,E,F,G,H,I,J=!1,K=0,L=0,N=0,O=0,Q=0,T=0,V=0,X=0,Y=0,Z=0,$=new Array(1024),rr=new Array(32),ar=$.length;ar--;)$[ar]=0;for(ar=rr.length;ar--;)rr[ar]=2*Math.random()-1;for(ar=0;ar<b;ar++){if(J)return ar;if(M&&++Y>=M&&(Y=0,this.reset()),c&&++f>=c&&(c=0,e*=h),(e*=n+=i)>s&&(e=s,d>0&&(J=!0)),E=e,U>0&&(Z+=j,E*=1+Math.sin(Z)*U),(E|=0)<8&&(E=8),C||((o+=v)<0?o=0:o>.5&&(o=.5)),++L>P)switch(L=0,++K){case 1:P=a;break;case 2:P=t}switch(K){case 0:N=L*R;break;case 1:N=1+2*(1-L*W)*_;break;case 2:N=1-L*z;break;case 3:N=0,J=!0}x&&((F=0|(q+=A))<0?F=-F:F>1023&&(F=1023)),m&&g&&((y*=g)<1e-5?y=1e-5:y>.1&&(y=.1)),I=0;for(var tr=8;tr--;){if(++V>=E&&(V%=E,3==C))for(var er=rr.length;er--;)rr[er]=2*Math.random()-1;switch(C){case 0:H=V/E<o?.5:-.5;break;case 1:H=1-V/E*2;break;case 2:H=.225*(((H=1.27323954*(G=6.28318531*((G=V/E)>.5?G-1:G))+.405284735*G*G*(G<0?1:-1))<0?-1:1)*H*H-H)+H;break;case 3:H=rr[Math.abs(32*V/E|0)]}m&&(D=T,(k*=S)<0?k=0:k>.1&&(k=.1),l?(Q+=(H-T)*k,Q*=B):(T=H,Q=0),O+=(T+=Q)-D,H=O*=1-y),x&&($[X%1024]=H,H+=$[(X-F+1024)%1024],X++),I+=H}I*=.125*N*p,u[ar]=I>=1?32767:I<=-1?-32768:32767*I|0}return b}}var synth=new SfxrSynth;window.jsfxr=function(r){synth._params.setSettings(r);var a=synth.totalReset(),t=new Uint8Array(4*((a+1)/2|0)+44),e=2*synth.synthWave(new Uint16Array(t.buffer,44),a),s=new Uint32Array(t.buffer,0,44);s[0]=1179011410,s[1]=e+36,s[2]=1163280727,s[3]=544501094,s[4]=16,s[5]=65537,s[6]=44100,s[7]=88200,s[8]=1048578,s[9]=1635017060,s[10]=e,e+=44;for(var n=0,i="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",h="data:audio/wav;base64,";n<e;n+=3){var f=t[n]<<16|t[n+1]<<8|t[n+2];h+=i[f>>18]+i[f>>12&63]+i[f>>6&63]+i[63&f]}return h};</script>
+    <style>
+        #gameArea{
+            position:absolute;
+            left:50%;
+            top:50%;
+            overflow: hidden;
+        }
+        #screenLoader {
+            position:absolute;
+            width:100%;
+            height: 100%;
+            background-color: rgb(59, 59, 59);
+            display: block;
+            opacity:1;
+        }
+        @keyframes fadeIn {
+            0% {opacity: 0;}
+            100% {opacity: 1;}
+        }
+        @keyframes fadeOut {
+            0% {opacity: 1;}
+            100% {opacity: 0;}
+        }
+        @keyframes fadeOut2 {
+            0% {opacity: 0.7;}
+            100% {opacity: 0;}
+        }
+        canvas{
+            height: 100%;
+            width: 100%;
+        }
+        body {
+            background-color: rgb(59, 59, 59);
+        }
+        #endScreen {
+            opacity: 1;
+            color: white;
+            position: relative;
+            vertical-align: middle;
+            height: 100%;
+            width: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-flow: column;
+            font-family: "Lucida Console", Monaco, monospace;
+        }
+        #startScreen {
+            opacity: 1;
+            color: white;
+            position: relative;
+            vertical-align: middle;
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-flow: column;
+            font-family: "Lucida Console", Monaco, monospace;
+        }
+        h1 {
+            font-size: 80px;
+        }
+        #startScreen p#enterKeyWaittxt {
+            animation:blinkingText 1.2s infinite;
+        }
+        @keyframes blinkingText{
+            0%{     color: #ddd;    }
+            49%{    color: #ddd; }
+            60%{    color: transparent; }
+            99%{    color:transparent;  }
+            100%{   color: #ddd;    }
+        }
+    </style>
+    <title>!Found</title>
+    <body style="text-align: center;margin: 0;">
+        <div id="gameArea">
+            <canvas id="gameAreaCanvas"></canvas>
+        </div>
+        <div id="screenLoader">
+        </div>
+        <div id="startScreen">
+            <h1>!Found</h1>
+            <p>Use WASD/Arrow keys for movement, SPACE for Jump.</p>
+            <p id="enterKeyWaittxt">Press Enter to Start</p>
+        </div>
+        <div id="endScreen">
+            <h1>Found!</h1>
+            <h2>Thank you for playing</h2>
+            <p>Created by SobyDamn</p>
+        </div>
+    </body>
+</html>

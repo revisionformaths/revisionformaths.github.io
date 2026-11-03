@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Unicorn Sugarworld: Apocalypse</title>
+<style>
+html,body{margin:0;height:100%;background:#07040a;overflow:hidden;touch-action:none;
+  font-family:"Trebuchet MS",Verdana,sans-serif;color:#ffe9d6;-webkit-user-select:none;user-select:none}
+canvas{display:block;width:100vw;height:100vh}
+.scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:24px;box-sizing:border-box;z-index:5}
+.scr.on{display:flex}
+.lbl{letter-spacing:.42em;font-size:12px;color:#c9a2b8;margin-bottom:10px;text-transform:uppercase}
+h1{font-family:Georgia,serif;font-size:clamp(30px,7vw,58px);margin:0;line-height:1.02;
+  background:linear-gradient(180deg,#ffe27a,#ff9a3c 55%,#c8402c);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-family:Georgia,serif;font-weight:400;font-size:clamp(18px,3.4vw,26px);margin:6px 0 0;color:#e8b8c8}
+.sub{color:#c69bb2;font-size:14px;margin-top:14px;max-width:32em;line-height:1.55}
+.by{position:fixed;bottom:14px;font-size:11px;color:#8a6a80;letter-spacing:.06em}
+.pill{margin:9px;padding:13px 30px;border-radius:30px;background:none;color:#ffe9d6;cursor:pointer;
+  border:1px solid #9a4a5a;font:inherit;font-size:16px;letter-spacing:.05em;min-width:180px}
+.pill:hover,.pill:focus{background:#2a0e18;border-color:#ffb0a0;outline:none}
+.pill b{display:block;font-weight:400;font-size:11px;color:#ac8399;letter-spacing:.14em;margin-top:3px}
+.row{display:flex;flex-wrap:wrap;justify-content:center;margin-top:22px}
+.hud{position:fixed;inset:0;display:none;pointer-events:none;z-index:4}
+.hud.on{display:block}
+#score,#clock,#cx{position:absolute;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:.03em}
+#score{left:20px;top:14px;font-size:clamp(26px,5vw,46px);color:#fff;
+  text-shadow:0 0 18px #8f6bff88,0 3px 10px #000}
+#clock{left:50%;top:14px;transform:translateX(-50%);color:#e6e2f2;
+  font-size:clamp(28px,6vw,54px);text-shadow:0 3px 12px #000}
+#clock.low{color:#ff9a7a;animation:tick .5s steps(2,end) infinite}
+@keyframes tick{50%{opacity:.45}}
+#combo{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);text-align:center;
+  opacity:0;transition:opacity .25s}
+#combo.on{opacity:1}
+#cx{position:static;display:block;font-size:clamp(44px,11vw,104px);
+  color:#cbb4ff;text-shadow:0 0 34px currentColor}
+#score span,#cn,#open b{display:block;font:400 11px/1 monospace}
+#score span{letter-spacing:.34em;color:#8f88a0;margin-bottom:5px}
+#cn{letter-spacing:.36em;color:#9a93ad;margin-top:8px}
+#combo.pop #cx{animation:pp .22s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pp{from{transform:scale(1.34)}to{transform:scale(1)}}
+#toast{position:fixed;left:50%;top:70%;letter-spacing:.22em;transform:translateX(-50%);z-index:4;pointer-events:none;
+  font-family:Georgia,serif;font-size:clamp(13px,2vw,17px);text-align:center;
+  max-width:80vw;opacity:0;transition:opacity .5s;text-shadow:0 2px 12px #000}
+#toast.on{opacity:1}
+#gear{position:fixed;top:12px;right:12px;z-index:6;display:none;width:40px;height:40px;
+  border:1px solid #6b4a63;border-radius:10px;background:#150c1acc;color:#d7c9e4;
+  font-size:15px;cursor:pointer}
+#gear.on{display:block}
+#open{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:4;
+  pointer-events:none;width:min(660px,84vw);text-align:center;font-family:Georgia,serif;
+  font-size:clamp(15px,2.5vw,23px);line-height:1.6;color:#e3d6f2;opacity:0;
+  transition:opacity .8s;text-shadow:0 3px 16px #000}
+#open.on{opacity:1}
+#open b{letter-spacing:.4em;color:#a07fd0;margin-bottom:14px}
+#toast.good{color:#cbb4ff}
+#toast.off{color:#8f8a9c}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="hud">
+  <div id="score"><span>SCORE</span>0</div>
+  <div id="clock">3:00</div>
+  <div id="combo"><b id="cx">2×</b><b id="cn">CHAIN 0</b></div>
+</div>
+<div id="toast"></div>
+<div id="open"><b>GRIM</b>Unicorns give colour. I have transcended. Now I take.<br>
+Come, little ones. You only feed my ambition.</div>
+<button id="gear">&#9208;</button>
+
+<div class="scr" id="pause"><div class="lbl">Paused</div>
+  <h1 style="font-size:clamp(24px,5vw,42px)">Hold still</h1>
+  <div class="row" style="flex-direction:column">
+    <button class="pill" id="pRes">Resume</button>
+    <button class="pill" id="pMus">Music: on</button>
+    <button class="pill" id="pSfx">Sound: on</button>
+    <button class="pill" id="pRst">Restart</button>
+    <button class="pill" id="pQuit">Quit to menu</button>
+  </div>
+</div>
+
+<div class="scr on" id="title">
+  <div class="lbl">Unicorn Sugarworld</div>
+  <h1>Apocalypse</h1>
+  <h2>Anansi's venom. The Grim's memory. Your hands.</h2>
+  <div class="row">
+    <button class="pill" id="mDesk">Desktop<b>MOUSE</b></button>
+    <button class="pill" id="mTouch">Mobile<b>SWIPE</b></button>
+  </div>
+  <div class="lbl" id="tbest" style="margin:16px 0 0"></div>
+  <div class="by">Made by Jesse Rogers for JS13kGames</div>
+</div>
+
+<div class="scr" id="end">
+  <div class="lbl">RANK</div>
+  <h1 id="etitle">Sated</h1>
+  <div class="sub" id="eline"></div>
+  <div class="sub" style="color:#e8b8c8" id="estat"></div>
+  <div class="row"><button class="pill" id="again">Again</button><button class="pill" id="menu">Menu</button></div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Unicorn Sugarworld: Apocalypse
+   Athena inside Anansi's dream venom, wearing the Grim's point of view.
+   Cavalry ranks charge, one blade takes their colour, and every cut
+   disturbs the surface the whole dream is floating on.
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const cvs = $('c');
+const gl = cvs.getContext('webgl2',{antialias:false,alpha:false,xrCompatible:true,
+                                   powerPreference:'high-performance'});
+if(!gl){ document.body.innerHTML='<p style="padding:2em;font:16px sans-serif;color:#fff">'+
+  'Unicorn Sugarworld: Apocalypse needs WebGL2.</p>'; throw 0; }
+gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float');
+
+/* ----------------------------- tuning ------------------------------ */
+const BPM=96, SPB=60/BPM;
+const SPEED=8.4, LEAD=2.35;
+const HITZ=-1.05, WIN=1.05;
+const LANES=[-0.56,0,0.56], ROWS=[1.02,1.56];
+const FEYE=1.32;
+const CW=0.50, CH=0.40;
+const PREROLL=7.0;            // the Grim speaks before anything moves
+const LAST_BEAT=288;          // 3:00 of ranks at 96 BPM
+const SLEEP_BEATS=22;         // the flutes and the lullaby, after the last rank
+
+/* ----------------------------- state ------------------------------- */
+let mode='desk', notes=[], nextNote=0, live=[], halves=[], shards=[];
+let running=false, songT=0, dark=0.16, sleep=0;
+let score=0, combo=0, bestCombo=0, hits=0, missed=0, mult=1, paused=false;
+let best=0; try{ best=+localStorage.getItem('usaBest')||0; }catch(e){}
+function saveBest(){ if(score<=best) return; best=score;
+  try{ localStorage.setItem('usaBest',best); }catch(e){} }
+
+let tipPrev=null, tipNow=null, swing=0, bladeBase=null, bladeQuad=null;
+let flash=0, absorb=0, pointerXY=null, pointerDown=false;
+/* A phone in portrait sees far less width than a monitor. Squeeze the lanes
+   and the ranks to fit, instead of charging down corridors nobody can reach. */
+let laneScale=1, cw=CW, ch=CH;
+let pokes=[];                                   // queued disturbances for the water
+
+/* ============================ shaders ============================== */
+const FSV=`#version 300 es
+const vec2 v[3]=vec2[3](vec2(-1.,-1.),vec2(3.,-1.),vec2(-1.,3.));
+out vec2 uv;
+void main(){ uv=(v[gl_VertexID]+1.)*.5; gl_Position=vec4(v[gl_VertexID],0.,1.); }`;
+
+/* height field, 2D wave equation, rg = (h, h_prev) */
+const SIM=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 O;
+uniform sampler2D T; uniform vec2 P; uniform vec4 K[8]; uniform int NK;
+void main(){
+  vec2 s=texture(T,uv).rg;
+  float lap = texture(T,uv+vec2(P.x,0.)).r + texture(T,uv-vec2(P.x,0.)).r
+            + texture(T,uv+vec2(0.,P.y)).r + texture(T,uv-vec2(0.,P.y)).r - 4.*s.r;
+  float n=(2.*s.r - s.g + .44*lap)*.9955;
+  for(int i=0;i<8;i++){
+    if(i>=NK) break;
+    vec2 d=(uv-K[i].xy)*vec2(K[i].z,1.);
+    n += K[i].w*exp(-dot(d,d)*760.);
+  }
+  vec2 e=min(uv,1.-uv);
+  n *= smoothstep(0.,.03,min(e.x,e.y));
+  O=vec4(n,s.r,0.,1.);
+}`;
+
+/* the dream layer: the rendered scene, refracted through the disturbed
+   surface, with caustics from the Jacobian of the light map */
+const DREAM=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 O;
+uniform sampler2D S, T;
+uniform vec2 P; uniform float A, uDark, uFlash, uT, uSleep;
+float hs(vec2 p){ p=fract(p*vec2(127.31,311.7)); p+=dot(p,p+37.4); return fract(p.x*p.y); }
+void main(){
+  float h =texture(T,uv).r;
+  float hl=texture(T,uv-vec2(P.x,0.)).r, hr=texture(T,uv+vec2(P.x,0.)).r;
+  float hd=texture(T,uv-vec2(0.,P.y)).r, hu=texture(T,uv+vec2(0.,P.y)).r;
+  float ha=texture(T,uv+P).r, hb=texture(T,uv-P).r;
+  float hc=texture(T,uv+vec2(P.x,-P.y)).r, he=texture(T,uv+vec2(-P.x,P.y)).r;
+  vec2 g=vec2(hr-hl,hu-hd)*.5;
+  float xx=hr-2.*h+hl, yy=hu-2.*h+hd, xy=(ha-hc-he+hb)*.25;
+  const float K=5.2;
+  float dj=(1.+K*xx)*(1.+K*yy)-K*K*xy*xy;
+  float cau=1./(abs(dj)+.30);
+  // chromatic refraction: the dream does not resolve cleanly
+  vec2 o=g*0.85;
+  vec3 col=vec3(texture(S,uv+o*1.15).r, texture(S,uv+o).g, texture(S,uv+o*0.85).b);
+  col += col*(cau-1.)*(.55+.5*uDark);
+  col += vec3(.72,.66,.85)*abs(h)*.30;
+  col *= 1.-.30*pow(length((uv-.5)*vec2(A,1.))*.95,2.3);
+  // sleep: the lids come down and what is left of the colour goes out of it
+  float lid=smoothstep(.0,1.,uSleep);
+  col=mix(col, vec3(dot(col,vec3(.33))), lid*.85);
+  col*=1.-lid*.9;
+  col*=smoothstep(-.05, .35, .5-abs(uv.y-.5)-lid*.52);
+  col += vec3(1.,.86,.72)*uFlash*.35;
+  col += (hs(uv*vec2(1280.,720.)+uT)-.5)*.02;
+  O=vec4(col,1.);
+}`;
+
+/* the backdrop, baked once at boot: tomb sky, dunes, the palace gone dark */
+const BG=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 O;
+float hs(vec2 p){ p=fract(p*vec2(127.31,311.7)); p+=dot(p,p+37.4); return fract(p.x*p.y); }
+float dune(vec2 p, float y0, float amp, float f, float ph){
+  return step(p.y, y0 + amp*(sin(p.x*f+ph)*.6 + sin(p.x*f*2.17+ph*1.7)*.4));
+}
+void main(){
+  vec2 p=uv;
+  vec3 sky=mix(vec3(.055,.05,.065), vec3(.20,.19,.215), pow(p.y,.75));
+  // the rainbow is still up there. There is no colour left in it.
+  float r=length((p-vec2(.5,.16))*vec2(1.5,2.6));
+  if(r>.44&&r<.71) sky=mix(sky, vec3(.30,.29,.32), .34*smoothstep(.71,.60,r));
+  // stars: one candidate per cell, jittered off the lattice, soft-edged
+  vec2 gp=p*vec2(150.,86.);
+  vec2 cell=floor(gp), fr=fract(gp);
+  float r1=hs(cell), r2=hs(cell+11.7), r3=hs(cell+27.3);
+  vec2 jit=vec2(r1,r2);
+  float d=length((fr-jit)*vec2(1.,.58));
+  float mag=step(.87,r3)*(r3-.87)/.13;
+  float st=mag*smoothstep(.16,0.,d);
+  sky+=mix(vec3(.86,.90,1.),vec3(1.,.94,.86),r1)*st*smoothstep(.30,.95,p.y)*.85;
+  // the Rainbow Palace, unlit
+  vec2 q=(p-vec2(.5,.30))*vec2(1.,1.);
+  float pal=step(abs(q.x),.085)*step(q.y,.13)*step(-.02,q.y);
+  pal+=step(length((q-vec2(0.,.145))*vec2(1.,.85)),.055);
+  for(int i=-2;i<=2;i++){
+    float x=float(i)*.055;
+    pal+=step(abs(q.x-x),.012)*step(q.y,.175+.02*cos(float(i)))*step(-.02,q.y);
+  }
+  sky=mix(sky, vec3(.035,.032,.045), clamp(pal,0.,1.));
+  // dunes
+  sky=mix(sky, vec3(.13,.125,.145), dune(p,.30,.035,7.,1.3));
+  sky=mix(sky, vec3(.075,.07,.088), dune(p,.24,.028,11.,4.1));
+  O=vec4(sky,1.);
+}`;
+
+const QV=`#version 300 es
+layout(location=0) in vec2 a;
+layout(location=1) in vec3 iPos;
+layout(location=2) in vec2 iSize;
+layout(location=3) in float iRot;
+layout(location=4) in float iTile;
+layout(location=5) in vec4 iCol;
+layout(location=6) in vec4 iUv;      // xy offset, zw scale, into the tile
+uniform mat4 uVP;
+out vec2 vUv; out vec4 vCol; out float vTile;
+void main(){
+  float s=sin(iRot), c=cos(iRot);
+  vec2 p=vec2(a.x*c-a.y*s, a.x*s+a.y*c)*iSize;
+  gl_Position=uVP*vec4(iPos+vec3(p,0.),1.);
+  vUv=iUv.xy+(a+.5)*iUv.zw; vCol=iCol; vTile=iTile;
+}`;
+const QF=`#version 300 es
+precision mediump float;
+in vec2 vUv; in vec4 vCol; in float vTile;
+uniform sampler2D uTex; uniform float uFull;
+out vec4 o;
+void main(){
+  vec2 uv=(vUv+vec2(mod(vTile,4.), 3.-floor(vTile/4.)))*.25;
+  if(uFull>.5) uv=vUv;
+  vec4 s=texture(uTex,uv);
+  if(s.a<.02) discard;
+  o=vec4(s.rgb*vCol.rgb, s.a*vCol.a);
+}`;
+const GV=`#version 300 es
+layout(location=0) in vec2 a;
+uniform mat4 uVP;
+out vec3 vW;
+void main(){ vec3 w=vec3(a.x*40., 0., a.y*70.-22.); vW=w; gl_Position=uVP*vec4(w,1.); }`;
+const GF=`#version 300 es
+precision mediump float;
+in vec3 vW; out vec4 o;
+uniform float uDark;
+void main(){
+  /* the causeway is stone now. Whatever colour it had, something took it. */
+  float z=-vW.z, lane=vW.x;
+  float slab=smoothstep(.04,0.,abs(fract(lane*1.5)-.5)-.44);
+  float rib =smoothstep(.05,0.,abs(fract(z*.45)-.5)-.42);
+  float n=fract(sin(floor(lane*1.5)*12.9898+floor(z*.45)*78.233)*43758.5453);
+  vec3 c=vec3(.26,.245,.27)*(.72+.28*n);
+  c=mix(c*.55,c,.34+.66*rib);
+  c+=slab*.06;
+  c*=1.-uDark*.62;
+  o=vec4(c*exp(-z*.055),1.);
+}`;
+
+function sh(t,src){ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+function prog(v,f){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,v));
+  gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f)); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p)); return p; }
+
+const pQuad=prog(QV,QF), pGnd=prog(GV,GF), pSim=prog(FSV,SIM),
+      pDream=prog(FSV,DREAM), pBG=prog(FSV,BG);
+const U=(p,n)=>gl.getUniformLocation(p,n);
+const uVP=U(pQuad,'uVP'), uFull=U(pQuad,'uFull'), uTexU=U(pQuad,'uTex');
+const gVP=U(pGnd,'uVP'), gDark=U(pGnd,'uDark');
+const sT=U(pSim,'T'), sP=U(pSim,'P'), sK=U(pSim,'K'), sNK=U(pSim,'NK');
+const dS=U(pDream,'S'), dT=U(pDream,'T'), dP=U(pDream,'P'), dA=U(pDream,'A'),
+      dDark=U(pDream,'uDark'), dFlash=U(pDream,'uFlash'), dTime=U(pDream,'uT'),
+      dSleep=U(pDream,'uSleep');
+
+/* ------------------------- procedural atlas ------------------------ */
+/* 1024x1024, 4x4 grid: 0 winged rank, 2 glow, 3 ground rank, 4 horn */
+function unicorn(x, wings){
+  /* proportions lifted from Athena's SDF in Sugarwind: deep body, long neck,
+     high head, the horn carrying past it, one wing raised as a sail */
+  x.beginPath();
+  x.ellipse(0,0,26,17,0.12,0,6.3); x.fill();                    // body
+  x.beginPath();                                                 // neck and head
+  x.moveTo(16,-8); x.lineTo(30,-34); x.lineTo(40,-36);
+  x.lineTo(52,-40); x.lineTo(56,-33); x.lineTo(42,-26);
+  x.lineTo(30,-10); x.closePath(); x.fill();
+  x.beginPath();                                                 // horn
+  x.moveTo(50,-44); x.lineTo(72,-70); x.lineTo(56,-40); x.closePath(); x.fill();
+  x.beginPath();                                                 // mane
+  x.moveTo(24,-16); x.lineTo(38,-40); x.lineTo(44,-34); x.lineTo(30,-12);
+  x.closePath(); x.fill();
+  for(const lx of [-16,-6,10,20]){                               // legs
+    x.save(); x.translate(lx,10); x.rotate(lx*0.012);
+    x.fillRect(-3.4,0,6.8, wings?18:22); x.restore();
+  }
+  x.beginPath();                                                 // tail
+  x.moveTo(-24,-6); x.lineTo(-48,-16); x.lineTo(-44,-2); x.lineTo(-50,10);
+  x.lineTo(-26,6); x.closePath(); x.fill();
+  if(wings){
+    x.beginPath();                                               // the one wing, raised
+    x.moveTo(-2,-12); x.lineTo(-34,-62); x.lineTo(-6,-46);
+    x.lineTo(6,-52); x.lineTo(8,-18); x.closePath(); x.fill();
+  } else {
+    x.beginPath();                                               // the board
+    x.ellipse(-4,30,40,6,-0.06,0,6.3); x.fill();
+  }
+}
+function rank(x, wings){
+  /* a rank is three riders abreast with banners; it reads as a unit, not a body */
+  x.save(); x.translate(0,0);
+  x.fillStyle='#fff';
+  x.globalAlpha=.42;
+  for(let i=0;i<3;i++){ const bx=44+i*84;                        // banners behind
+    x.fillRect(bx-2, 26, 3.4, 54);
+    x.beginPath(); x.moveTo(bx+1,28); x.lineTo(bx+30,40); x.lineTo(bx+1,52); x.closePath(); x.fill(); }
+  x.globalAlpha=1;
+  for(let i=0;i<3;i++){ x.save(); x.translate(46+i*84, wings?150:158); x.scale(.60,.60);
+    unicorn(x, wings); x.restore(); }
+  x.globalAlpha=.5; x.fillRect(14, wings?214:212, 228, 5); x.globalAlpha=1;
+  x.restore();
+}
+/* the horn: tapered, ridged, and drawn white so it can be tinted twice —
+   once as the black core of the blade, once as the light coming off it */
+function horn(x){
+  x.fillStyle='#fff';
+  x.beginPath();
+  x.moveTo(128,14); x.quadraticCurveTo(150,120,146,238);
+  x.lineTo(110,238); x.quadraticCurveTo(106,120,128,14); x.closePath(); x.fill();
+  x.globalCompositeOperation='destination-out';
+  for(let i=0;i<11;i++){                      // the spiral, cut out of the taper
+    const t=i/11, y=26+t*206, w=20-14*(1-t)*0.2;
+    x.save(); x.translate(128,y); x.rotate(-0.42);
+    x.fillRect(-w*1.5,-2.4, w*3, 3.0);
+    x.restore();
+  }
+  x.globalCompositeOperation='source-over';
+}
+function buildAtlas(){
+  const a=document.createElement('canvas'); a.width=a.height=1024;
+  const x=a.getContext('2d');
+  x.save(); rank(x,true);  x.restore();                          // tile 0
+  x.save(); x.translate(512,0);                                  // tile 2 glow
+    const g=x.createRadialGradient(128,128,2,128,128,126);
+    g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.35,'rgba(255,255,255,.42)');
+    g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.fillRect(0,0,256,256);
+  x.restore();
+  x.save(); x.translate(768,0); rank(x,false); x.restore();      // tile 3 ground rank
+  x.save(); x.translate(0,256); horn(x); x.restore();            // tile 4 horn
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,a);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  return t;
+}
+const atlas=buildAtlas();
+
+/* --------------------------- geometry ------------------------------ */
+const quadVbo=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quadVbo);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-.5,-.5,.5,-.5,-.5,.5,.5,.5]),gl.STATIC_DRAW);
+const ATTRS=[[1,3],[2,2],[3,1],[4,1],[5,4],[6,4]];
+const STRIDE=15, MAXI=700;
+const idata=new Float32Array(MAXI*STRIDE);
+function mkVao(instBuf){
+  const v=gl.createVertexArray(); gl.bindVertexArray(v);
+  gl.bindBuffer(gl.ARRAY_BUFFER,quadVbo);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  if(instBuf){
+    gl.bindBuffer(gl.ARRAY_BUFFER,instBuf);
+    let o=0; for(const [loc,n] of ATTRS){
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc,n,gl.FLOAT,false,STRIDE*4,o*4);
+      gl.vertexAttribDivisor(loc,1); o+=n; }
+  }
+  gl.bindVertexArray(null); return v;
+}
+const ivbo=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,ivbo);
+gl.bufferData(gl.ARRAY_BUFFER,idata.byteLength,gl.DYNAMIC_DRAW);
+const cvbo=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,cvbo);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(STRIDE),gl.DYNAMIC_DRAW);
+const vao=mkVao(ivbo), gvao=mkVao(null), cvao=mkVao(cvbo);
+const cinst=new Float32Array(STRIDE);
+const emptyVao=gl.createVertexArray();
+
+let icount=0;
+function push(px,py,pz,sx,sy,rot,tile,r,g,b,a,uo,vo,us,vs){
+  if(icount>=MAXI) return;
+  const o=icount*STRIDE;
+  idata[o]=px; idata[o+1]=py; idata[o+2]=pz;
+  idata[o+3]=sx; idata[o+4]=sy; idata[o+5]=rot; idata[o+6]=tile;
+  idata[o+7]=r; idata[o+8]=g; idata[o+9]=b; idata[o+10]=a;
+  idata[o+11]=uo===undefined?0:uo; idata[o+12]=vo===undefined?0:vo;
+  idata[o+13]=us===undefined?1:us; idata[o+14]=vs===undefined?1:vs;
+  icount++;
+}
+
+/* ---------------------------- targets ------------------------------ */
+let SW=256,SH=144, simTex=[], simFbo=[], cur=0, FT=gl.HALF_FLOAT, FI=gl.RGBA16F;
+let sceneTex=null, sceneFbo=null, bgTex=null, bgFbo=null, outW=2, outH=2;
+function mkTex(w,h,fi,ft){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,fi,w,h,0,gl.RGBA,ft,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  return [t,f];
+}
+function initSim(){
+  simTex.forEach(t=>gl.deleteTexture(t)); simFbo.forEach(f=>gl.deleteFramebuffer(f));
+  simTex=[]; simFbo=[];
+  for(let i=0;i<2;i++){
+    const [t,f]=mkTex(SW,SH,FI,FT);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE && FT===gl.HALF_FLOAT){
+      FT=gl.FLOAT; FI=gl.RGBA32F; gl.deleteTexture(t); gl.deleteFramebuffer(f);
+      simTex=[]; simFbo=[]; return initSim();
+    }
+    simTex.push(t); simFbo.push(f);
+    gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+}
+function resize(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  cvs.width=outW=innerWidth*dpr|0; cvs.height=outH=innerHeight*dpr|0;
+  SH=Math.max(72,Math.min(320,Math.round(256/(outW/outH))));
+  initSim();
+  if(sceneTex){ gl.deleteTexture(sceneTex); gl.deleteFramebuffer(sceneFbo); }
+  const rs=Math.min(1, 1400/outW);
+  [sceneTex,sceneFbo]=mkTex(Math.max(2,outW*rs|0),Math.max(2,outH*rs|0),gl.RGBA8,gl.UNSIGNED_BYTE);
+  sceneTex.w=Math.max(2,outW*rs|0); sceneTex.h=Math.max(2,outH*rs|0);
+  const halfW=Math.tan(1.15/2)*(-HITZ)*(outW/outH);
+  laneScale=Math.min(1, halfW*.80/LANES[2]);
+  cw=CW*Math.min(1,.42+.58*laneScale); ch=CH*Math.min(1,.62+.38*laneScale);
+}
+addEventListener('resize',resize); resize();
+/* bake the backdrop once */
+(function(){
+  [bgTex,bgFbo]=mkTex(1024,576,gl.RGBA8,gl.UNSIGNED_BYTE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,bgFbo); gl.viewport(0,0,1024,576);
+  gl.useProgram(pBG); gl.bindVertexArray(emptyVao); gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.bindVertexArray(null);
+})();
+
+/* ------------------------------ maths ------------------------------ */
+function mul(a,b,out){ for(let i=0;i<4;i++)for(let j=0;j<4;j++){
+  let s=0; for(let k=0;k<4;k++) s+=a[k*4+j]*b[i*4+k]; out[i*4+j]=s; } return out; }
+function persp(fovy,asp,n,f,out){ const t=1/Math.tan(fovy/2); out.fill(0);
+  out[0]=t/asp; out[5]=t; out[10]=(f+n)/(n-f); out[11]=-1; out[14]=2*f*n/(n-f); return out; }
+function lookFrom(px,py,pz,out){ out.fill(0); out[0]=out[5]=out[10]=out[15]=1;
+  out[12]=-px; out[13]=-py; out[14]=-pz; return out; }
+const mP=new Float32Array(16), mV=new Float32Array(16), mVP=new Float32Array(16);
+function project(vp,x,y,z){
+  const w=vp[3]*x+vp[7]*y+vp[11]*z+vp[15];
+  if(w<=0.0001) return null;
+  return [((vp[0]*x+vp[4]*y+vp[8]*z+vp[12])/w)*.5+.5,
+          ((vp[1]*x+vp[5]*y+vp[9]*z+vp[13])/w)*.5+.5];
+}
+
+/* --------------------------- the beatmap --------------------------- */
+/* One arm, so: alternate forehand and backhand, never the same directional
+   twice running, keep it inside one cone, and lean on any-direction marks.
+   Fewer ranks than a two-handed map would carry — these are units, not notes. */
+function rng(s){ return ()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+function buildMap(){
+  const r=rng(20260909), out=[];
+  let lastLane=1, lastRow=0;
+  const secs=[[8,48,2,0],[48,88,1.5,.14],[88,128,1.25,.2],[128,160,1.5,.12],
+              [160,200,1,.24],[200,240,1,.3],[240,272,.75,.34],[272,LAST_BEAT,1.5,.1]];
+  for(const [b0,b1,gap,sweep] of secs){
+    let b=b0;
+    while(b<b1){
+      if(r()<sweep){
+        // a cavalry sweep: one rank per lane, crossing in front of you
+        const ord=r()<.5?[0,1,2]:[2,1,0], row=r()<.5?0:1;
+        for(let i=0;i<3;i++) out.push({b:b+i*.75, lane:ord[i], row});
+        lastLane=ord[2]; lastRow=row; b+=3; continue;
+      }
+      // avoid repeating the same slot twice running so the arm keeps moving
+      let lane=(r()*3)|0, row=r()<.5?0:1;
+      if(lane===lastLane&&row===lastRow){ lane=(lane+1+((r()*2)|0))%3; row=1-row; }
+      out.push({b,lane,row});
+      lastLane=lane; lastRow=row;
+      b += gap*(r()<.3?.75:1);
+    }
+  }
+  out.sort((p,q)=>p.b-q.b);
+  return out;
+}
+
+/* ------------------------------ audio ------------------------------ */
+/* Anansi's seperewa, plucked, over the twelve-pulse bell. The flutes from the
+   tomb only sound at the end, when there is nobody left to play them at me. */
+let actx=null, musicBus=null, sfxBus=null, audioStart=0, schedBeat=0;
+const PENT=[0,3,5,7,10], BELL12=[1,0,1,0,1,1,0,1,0,1,0,1];
+const SEVEN=[0,2,3,5,7,10,12];
+function initAudio(){
+  if(actx) return;
+  actx=new (window.AudioContext||window.webkitAudioContext)();
+  musicBus=actx.createGain(); musicBus.gain.value=.5;
+  sfxBus=actx.createGain(); sfxBus.gain.value=.55;
+  const cmp=actx.createDynamicsCompressor(); cmp.threshold.value=-14; cmp.ratio.value=3;
+  musicBus.connect(cmp); sfxBus.connect(cmp); cmp.connect(actx.destination);
+}
+function pluck(t,freq,dur,gv,bright){
+  const n=Math.max(2,(actx.sampleRate/freq)|0), len=Math.ceil(actx.sampleRate*dur);
+  const buf=actx.createBuffer(1,len,actx.sampleRate), ch=buf.getChannelData(0);
+  const ring=new Float32Array(n);
+  for(let i=0;i<n;i++) ring[i]=Math.random()*2-1;
+  const dc=bright||.494; let idx=0, prev=0;
+  for(let i=0;i<len;i++){ const v=ring[idx], s=(v+prev)*dc; prev=v; ring[idx]=s;
+    idx=(idx+1)%n; ch[i]=s; }
+  const src=actx.createBufferSource(); src.buffer=buf;
+  const g=actx.createGain(); g.gain.setValueAtTime(gv,t);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  src.connect(g); g.connect(musicBus); src.start(t); src.stop(t+dur);
+}
+function bell(t,f,gv){ const o=actx.createOscillator(), g=actx.createGain();
+  o.type='triangle'; o.frequency.value=f;
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gv,t+.004);
+  g.gain.exponentialRampToValueAtTime(.0001,t+.9);
+  o.connect(g); g.connect(musicBus); o.start(t); o.stop(t+.95); }
+function drum(t,f0,f1,dur,gv,noise){
+  let o;
+  if(noise){ const len=(actx.sampleRate*dur)|0, b=actx.createBuffer(1,len,actx.sampleRate),
+      d=b.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+    o=actx.createBufferSource(); o.buffer=b; }
+  else { o=actx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur); }
+  const g=actx.createGain(); g.gain.setValueAtTime(gv,t);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  const f=actx.createBiquadFilter(); f.type=noise?'bandpass':'lowpass';
+  f.frequency.value=noise?2600:900;
+  o.connect(f); f.connect(g); g.connect(musicBus); o.start(t); o.stop(t+dur+.02);
+}
+/* the flute: breathy sine with a noise edge, for the tomb's own instrument */
+function flute(t,f,dur,gv){
+  const o=actx.createOscillator(), g=actx.createGain(), lp=actx.createBiquadFilter();
+  o.type='sine'; o.frequency.setValueAtTime(f*.995,t);
+  o.frequency.linearRampToValueAtTime(f,t+.12);
+  lp.type='lowpass'; lp.frequency.value=f*3.4;
+  g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(gv,t+.09);
+  g.gain.setValueAtTime(gv,t+dur*.7); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(lp); lp.connect(g); g.connect(musicBus); o.start(t); o.stop(t+dur+.05);
+  const len=(actx.sampleRate*dur)|0, b=actx.createBuffer(1,len,actx.sampleRate),
+        d=b.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*.5*Math.min(1,i/900)*(1-i/len);
+  const ns=actx.createBufferSource(); ns.buffer=b;
+  const nf=actx.createBiquadFilter(); nf.type='bandpass'; nf.frequency.value=f*2.1; nf.Q.value=1.1;
+  const ng=actx.createGain(); ng.gain.value=gv*.22;
+  ns.connect(nf); nf.connect(ng); ng.connect(musicBus); ns.start(t); ns.stop(t+dur);
+}
+/* the drone the whole thing sits on: two detuned saws under a closed filter */
+function drone(t,f,dur){
+  const g=actx.createGain(), lp=actx.createBiquadFilter();
+  lp.type='lowpass'; lp.frequency.setValueAtTime(160,t);
+  lp.frequency.linearRampToValueAtTime(300,t+dur*.6); lp.Q.value=3;
+  g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(.11,t+2.2);
+  g.gain.setValueAtTime(.11,t+dur-2); g.gain.linearRampToValueAtTime(.0001,t+dur);
+  for(const d of [-7,6]){
+    const o=actx.createOscillator(); o.type='sawtooth';
+    o.frequency.value=f/2; o.detune.value=d;
+    o.connect(lp); o.start(t); o.stop(t+dur+.1);
+  }
+  lp.connect(g); g.connect(musicBus);
+}
+function schedule(){
+  if(!actx) return;
+  const ahead=(actx.currentTime-audioStart)/SPB+4;
+  while(schedBeat<ahead && schedBeat<LAST_BEAT+SLEEP_BEATS+2){
+    const t=audioStart+schedBeat*SPB, b=schedBeat, half=Math.round(b*2)%2===1;
+    const sec=Math.floor(b/32);
+    const power=Math.min(1,.34+sec*.12)*(.62+.38*dark);
+    if(b<LAST_BEAT+1){
+      if(!half){
+        const st=Math.round(b)%12;
+        if(BELL12[st]) bell(t,392,.045*power);
+        if(st%4===0) drum(t,120,32,.44,.72*power);
+        if(st===7) drum(t,0,0,.18,.16*power,true);
+      }
+      if(!half && Math.round(b)%2===0){
+        // a low seperewa figure, an octave and a half under where it sat in the cave
+        const deg=PENT[(Math.round(b)*3)%5];
+        pluck(t,55*Math.pow(2,deg/12),2.6,.24*power,.4965);
+      }
+      if(!half && Math.round(b)%16===0) drone(t, 55*Math.pow(2,(Math.round(b)%32?3:0)/12), 16*SPB);
+    } else {
+      /* the seven flutes, one after another, over the emptied causeway */
+      const q=b-LAST_BEAT;
+      const k=Math.round((q-1)/1.5);
+      if(k>=0&&k<7&&Math.abs(q-(1+k*1.5))<.01)          // seven flutes, one by one
+        flute(t, 262*Math.pow(2,SEVEN[k]/12), 1.6, .20);
+      // then the lullaby, falling, over a last low drone
+      const LUL=[12,10,7,5,3,0,-2,0], li=Math.round((q-11)/1.5);
+      if(li>=0&&li<LUL.length&&Math.abs(q-(11+li*1.5))<.01)
+        flute(t, 196*Math.pow(2,LUL[li]/12), 2.2, .17*(1-li/12));
+      if(Math.abs(q-10)<.01) drone(t, 49, SLEEP_BEATS*SPB);
+    }
+    schedBeat+=.5;
+  }
+}
+/* Deathball's strum, brought over: the seven flute pitches, one per colour.
+   Cutting a rank plays the note that rank was carrying. */
+function strum(k,power){
+  if(!actx) return;
+  const t=actx.currentTime, f=98*Math.pow(2,SEVEN[k%7]/12);
+  for(let i=0;i<4;i++)
+    pluck(t+i*0.017, f*Math.pow(2,i), 1.9-i*0.3, (0.30-i*0.055)*power, 0.4955-i*0.001);
+  const o=actx.createOscillator(), g=actx.createGain();   // the body of the strum
+  o.type='triangle'; o.frequency.setValueAtTime(f/2,t);
+  g.gain.setValueAtTime(.16*power,t); g.gain.exponentialRampToValueAtTime(.0001,t+1.1);
+  o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t+1.15);
+}
+function sfxSlice(good){
+  if(!actx) return;
+  const t=actx.currentTime;
+  const len=(actx.sampleRate*.17)|0, b=actx.createBuffer(1,len,actx.sampleRate),
+        d=b.getChannelData(0);
+  for(let i=0;i<len;i++){ const k=i/len; d[i]=(Math.random()*2-1)*Math.pow(1-k,3); }
+  const s=actx.createBufferSource(); s.buffer=b;
+  const f=actx.createBiquadFilter(); f.type='bandpass';
+  f.frequency.setValueAtTime(good?3400:1500,t);
+  f.frequency.exponentialRampToValueAtTime(good?520:340,t+.17); f.Q.value=1.7;
+  const g=actx.createGain(); g.gain.value=good?.5:.22;
+  s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t+.19);
+}
+function sfxGive(){
+  if(!actx) return;
+  const t=actx.currentTime, o=actx.createOscillator(), g=actx.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(540,t);
+  o.frequency.exponentialRampToValueAtTime(180,t+.5);
+  g.gain.setValueAtTime(.18,t); g.gain.exponentialRampToValueAtTime(.0001,t+.5);
+  o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t+.52);
+}
+
+/* ------------------------------ toasts ----------------------------- */
+let toastUntil=0;
+function toast(txt,cls){
+  const el=$('toast'); el.textContent=txt; el.className='on '+cls;
+  toastUntil=songT+0.62;
+}
+
+/* ------------------------------- run ------------------------------- */
+function reset(){
+  notes=buildMap(); nextNote=0; live.length=0; halves.length=0; shards.length=0;
+  score=0; combo=0; bestCombo=0; hits=0; missed=0; dark=.16; absorb=0; sleep=0;
+  schedBeat=0; songT=0; pokes.length=0;
+}
+function startRun(){
+  reset(); initAudio();
+  if(actx.state==='suspended') actx.resume();
+  audioStart=actx.currentTime+PREROLL;
+  running=true; paused=false; mult=1;
+  $('hud').classList.add('on');
+  $('gear').classList.add('on');
+  $('pause').classList.remove('on'); $('open').className='';
+  if(musicBus) musicBus.gain.value=musicOn?.5:0;
+  if(sfxBus) sfxBus.gain.value=sfxOn?.55:0;
+}
+const TINTS=[[1,.42,.5],[1,.68,.36],[1,.9,.5],[.6,.95,.66],[.5,.8,1],[.72,.6,1],[.95,.6,.96]];
+function spawnDue(){
+  while(nextNote<notes.length && notes[nextNote].b*SPB-LEAD<=songT){
+    const n=notes[nextNote++];
+    live.push({x:LANES[n.lane]*laneScale, y:ROWS[n.row], z:-(LEAD*SPEED)+(songT-(n.b*SPB-LEAD))*SPEED,
+               d:n.d, row:n.row, hit:false, b:n.b});
+  }
+}
+function poke(u,v,amp){ if(pokes.length<8) pokes.push([u,v,amp]); }
+function burst(x,y,z,dx,dy,n,tint){
+  if(shards.length>240) shards.splice(0,shards.length-240);
+  for(let i=0;i<n;i++){
+    const a=Math.atan2(dy,dx)+(Math.random()-.5)*1.6, sp=1.1+Math.random()*3.2;
+    shards.push({x,y,z,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp+.5,vz:(Math.random()-.5)*1.2,
+                 r:Math.random()*6,vr:(Math.random()-.5)*14,life:.5+Math.random()*.4,t:0,c:tint});
+  }
+}
+/* the cut: the rank parts along the stroke and the two halves drift apart */
+function splitCard(c,ux,uy,tint){
+  const ang=Math.atan2(uy,ux);
+  const nx=-uy, ny=ux;                      // perpendicular: the parting direction
+  for(const s of [1,-1]){
+    halves.push({x:c.x+nx*s*ch*.26, y:c.y+ny*s*ch*.26, z:c.z, vx:nx*s*1.5+ux*.5, vy:ny*s*1.5+uy*.5+.4, vz:1.2+Math.random()*.6,
+      rot:ang, vr:s*2.6, t:0, life:.85, tile:c.row?0:3, tint,
+      // the half of the sprite that lies on this side of the cut
+      uo:0, vo:s>0?.5:0, us:1, vs:.5, ang});
+  }
+}
+/* perpendicular distance from a point to a segment, in the slice plane */
+function segDist(ax,ay,bx,by,px,py){
+  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  let t = L2>1e-9 ? ((px-ax)*dx+(py-ay)*dy)/L2 : 0;
+  t=Math.max(0,Math.min(1,t));
+  return Math.hypot(ax+dx*t-px, ay+dy*t-py);
+}
+function trySlice(){
+  if(!tipPrev||!tipNow) return;
+  const dx=tipNow[0]-tipPrev[0], dy=tipNow[1]-tipPrev[1], len=Math.hypot(dx,dy);
+  swing=len;
+  if(len<.022) return;
+  const ux=dx/len, uy=dy/len;
+  // the whole horn sweeps, so the swept area is the path of the tip AND the
+  // length of the blade itself at both ends of that path
+  const bb=bladeBase||[tipNow[0],tipNow[1]-.6,tipNow[2]];
+
+  /* The honest question is "did the drawn horn cross the drawn rank", so the
+     test happens where both are drawn: projected screen space. Any part of the
+     horn counts, and so does the ground it swept between frames. */
+  const ASP=outW/outH;
+  const P0=project(mVP,tipPrev[0],tipPrev[1],tipPrev[2]),
+        P1=project(mVP,tipNow[0],tipNow[1],tipNow[2]),
+        PB=project(mVP,bb[0],bb[1],bb[2]);
+  if(!P0||!P1||!PB) return;
+  for(const c of live){
+    if(c.hit || Math.abs(c.z-HITZ)>WIN) continue;
+    let d, REACH;
+      const C=project(mVP,c.x,c.y,c.z), E=project(mVP,c.x+cw*.5,c.y+ch*.5,c.z);
+      if(!C||!E) continue;
+      REACH=Math.max(Math.abs(E[0]-C[0])*ASP, Math.abs(E[1]-C[1]))+.075;
+      const cx=C[0]*ASP, cy=C[1];
+      d=Math.min(
+        segDist(P0[0]*ASP,P0[1],P1[0]*ASP,P1[1], cx,cy),
+        segDist(PB[0]*ASP,PB[1],P1[0]*ASP,P1[1], cx,cy),
+        segDist(PB[0]*ASP,PB[1],P0[0]*ASP,P0[1], cx,cy));
+    if(d>REACH) continue;
+    c.hit=true;
+    const tint=TINTS[(c.b|0)%7];
+    {
+      hits++; combo++; bestCombo=Math.max(bestCombo,combo);
+      mult = combo>=24?8 : combo>=12?4 : combo>=5?2 : 1;
+      const timing=1-Math.min(1,Math.abs(c.z-HITZ)/WIN);
+      score+=Math.round((100+120*timing)*mult);
+      bumpCombo();
+      dark=Math.min(1,dark+.0135);
+      absorb=1; flash=.55;
+      splitCard(c,ux,uy,tint);
+      burst(c.x,c.y,c.z,ux,uy,10,tint);
+      sfxSlice(true); strum((c.b|0)%7, .55+.45*Math.min(combo,12)/12);
+      toast(timing>.62?'GOOD HIT':(c.z<HITZ?'TOO EARLY':'TOO LATE'),
+            timing>.62?'good':'off');
+      cardPoke(c, .30+.18*Math.min(combo,10)/10);
+    }
+  }
+}
+function cardPoke(c,amp){
+  const p=project(mVP,c.x,c.y,c.z);
+  if(p) poke(p[0],p[1],amp);
+}
+function step(dt){
+  songT=actx?(actx.currentTime-audioStart):songT+dt;
+  if(songT<0){
+    // the ranks are not moving yet; only the voice is
+    $('open').classList.toggle('on', songT>-PREROLL+0.4 && songT<-0.9);
+    return;
+  }
+  if($('open').className) $('open').className='';
+  schedule(); spawnDue();
+  for(let i=live.length-1;i>=0;i--){
+    const c=live[i];
+    c.z+=SPEED*dt;
+    if(!c.hit && c.z>HITZ+WIN){
+      c.hit=true; combo=0; mult=1; missed++;
+      dark=Math.max(0,dark-.016);
+      sfxGive(); cardPoke(c,-.34);
+      burst(c.x,c.y,HITZ,0,1,8,[1,1,1]);
+    }
+    if(c.z>1.4) live.splice(i,1);
+  }
+  for(let i=halves.length-1;i>=0;i--){
+    const h=halves[i]; h.t+=dt;
+    if(h.t>=h.life){ halves.splice(i,1); continue; }
+    h.x+=h.vx*dt; h.y+=h.vy*dt; h.z+=h.vz*dt; h.vy-=3.4*dt; h.rot+=h.vr*dt;
+  }
+  for(let i=shards.length-1;i>=0;i--){
+    const s=shards[i]; s.t+=dt;
+    if(s.t>=s.life){ shards.splice(i,1); continue; }
+    s.x+=s.vx*dt; s.y+=s.vy*dt; s.z+=s.vz*dt; s.vy-=5*dt; s.r+=s.vr*dt;
+  }
+  trySlice();
+  tipPrev=tipNow?tipNow.slice():null;
+  flash=Math.max(0,flash-dt*2.4); absorb=Math.max(0,absorb-dt*2);
+  if(songT>toastUntil) $('toast').classList.remove('on');
+  // the ranks stop, the flutes start, and the lullaby takes you down
+  const past=songT/SPB-LAST_BEAT;
+  if(past>0) sleep=Math.min(1, past/(SLEEP_BEATS*0.8));
+  if(past>SLEEP_BEATS && running) finish();
+  paintHud();
+}
+
+const MULCOL=['','#cbb4ff','#8ef0d0','#ffd27a','#ff8fa3'];
+function bumpCombo(){
+  const el=$('combo');
+  el.classList.add('on'); el.classList.remove('pop');
+  void el.offsetWidth; el.classList.add('pop');
+}
+function paintHud(){
+  const sc=$('score');
+  if(sc.lastChild.nodeValue!==String(score)) sc.lastChild.nodeValue=score.toLocaleString();
+  const left=Math.max(0,LAST_BEAT*SPB-songT);
+  const cl=$('clock');
+  cl.textContent = sleep>0 ? 'SLEEP'
+    : Math.floor(left/60)+':'+String(Math.floor(left%60)).padStart(2,'0');
+  cl.classList.toggle('low', sleep<=0 && left<=15);
+  const cm=$('combo');
+  if(combo<2||sleep>0) cm.classList.remove('on');
+  else {
+    cm.classList.add('on');
+    $('cx').textContent=mult+'\u00d7';
+    $('cx').style.color=MULCOL[[1,2,4,8].indexOf(mult)+1]||'#cbb4ff';
+    $('cn').textContent='CHAIN '+combo;
+  }
+}
+
+/* ---------------------------- rendering ---------------------------- */
+function buildInstances(){
+  icount=0;
+  for(const c of live){
+    if(c.hit) continue;
+    const fade=Math.min(1,(c.z+LEAD*SPEED)/3);
+    const near=Math.min(1,Math.max(0,(c.z+LEAD*SPEED)/(LEAD*SPEED)));   // 0 far, 1 here
+    const tint=TINTS[(c.b|0)%7];
+    const gl2=(.30+1.5*near*near)*fade;
+    push(c.x,c.y,c.z-.05, cw*(2.1+2.4*near),ch*(2.1+2.4*near), 0, 2,
+         tint[0],tint[1],tint[2], gl2*.42);
+    push(c.x,c.y,c.z-.03, cw*1.5,ch*1.5, 0, 2, tint[0],tint[1],tint[2], gl2*.5);
+    push(c.x,c.y,c.z, cw,ch, 0, c.row?0:3,
+         tint[0]*(.7+.6*near),tint[1]*(.7+.6*near),tint[2]*(.7+.6*near), fade);
+    push(c.x,c.y,c.z+.012, .15,.15, 0, 2, 1,1,1, fade*.95);
+  }
+  for(const h of halves){
+    const k=1-h.t/h.life;
+    push(h.x,h.y,h.z, cw,ch*.5, h.rot, h.tile, h.tint[0],h.tint[1],h.tint[2], k,
+         h.uo,h.vo,h.us,h.vs);
+  }
+  for(const s of shards){
+    const k=1-s.t/s.life;
+    push(s.x,s.y,s.z, .05*k+.02,.05*k+.02, s.r, 2, s.c[0],s.c[1],s.c[2], k*.9);
+  }
+  bladeQuad=null;
+  if(tipNow&&bladeBase){
+    const dx=tipNow[0]-bladeBase[0], dy=tipNow[1]-bladeBase[1];
+    const len=Math.max(.72,Math.hypot(dx,dy));
+    const ang=Math.atan2(dy,dx)-Math.PI/2;          // the horn sprite points up at 0
+    const mx=(bladeBase[0]+tipNow[0])/2, my=(bladeBase[1]+tipNow[1])/2,
+          mz=(bladeBase[2]+tipNow[2])/2;
+    const w=.175+swing*.06;
+    // the halo it throws, and the light along the edge
+    push(mx,my,mz-.02, len*.95,len*1.15, 0, 2, .62+absorb*.38,.16,.92, .34+.30*absorb);
+    push(mx,my,mz-.01, w*1.6,len*1.04, ang, 4, .80+absorb*.20,.32,1.0, .9,
+         .3906,.0469,.2188,.9219);
+    // the core is drawn opaque afterwards, so the blade reads black against it
+    bladeQuad=[mx,my,mz+.004,w*1.12,len*.97,ang];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER,ivbo);
+  gl.bufferSubData(gl.ARRAY_BUFFER,0,idata,0,icount*STRIDE);
+}
+function drawScene(vp,vw,vh,fb,vx,vy){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fb||null);
+  gl.viewport(vx|0,vy|0,vw|0,vh|0);
+  gl.enable(gl.SCISSOR_TEST); gl.scissor(vx|0,vy|0,vw|0,vh|0);
+  gl.disable(gl.DEPTH_TEST);
+  /* backdrop */
+  gl.bindVertexArray(emptyVao);
+  gl.clearColor(.03,.015,.045,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(pBGDraw); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,bgTex);
+  gl.uniform1i(bgS,0); gl.uniform1f(bgD,dark);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  /* causeway */
+  gl.useProgram(pGnd); gl.bindVertexArray(gvao);
+  gl.uniformMatrix4fv(gVP,false,vp); gl.uniform1f(gDark,dark);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  /* ranks, halves, shards, blade */
+  gl.useProgram(pQuad); gl.bindVertexArray(vao);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  gl.uniformMatrix4fv(uVP,false,vp);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,atlas);
+  gl.uniform1i(uTexU,0); gl.uniform1f(uFull,0);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,icount);
+  if(bladeQuad){
+    const[bx,by,bz,bw,bl,ba]=bladeQuad;
+    cinst.set([bx,by,bz, bw,bl, ba, 4, .05,.02,.07, 1, .3906,.0469,.2188,.9219]);
+    gl.bindBuffer(gl.ARRAY_BUFFER,cvbo); gl.bufferSubData(gl.ARRAY_BUFFER,0,cinst);
+    gl.bindVertexArray(cvao);
+    gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,1);
+  }
+  gl.disable(gl.BLEND); gl.bindVertexArray(null);
+  gl.disable(gl.SCISSOR_TEST);
+}
+/* the backdrop blit, dimmed as the Grim takes the world */
+const BGD=`#version 300 es
+precision mediump float;
+in vec2 uv; out vec4 o;
+uniform sampler2D S; uniform float uDark;
+void main(){
+  vec3 c=texture(S,uv).rgb;
+  float g=dot(c,vec3(.33));
+  c=mix(c, vec3(g), .55);
+  o=vec4(c*(1.-uDark*.55),1.);
+}`;
+const pBGDraw=prog(FSV,BGD);
+const bgS=U(pBGDraw,'S'), bgD=U(pBGDraw,'uDark');
+
+/* --------------------------- water passes -------------------------- */
+const KB=new Float32Array(32);
+let acc=0;
+function stepWater(dt){
+  gl.useProgram(pSim); gl.bindVertexArray(emptyVao);
+  gl.uniform2f(sP,1/SW,1/SH); gl.viewport(0,0,SW,SH);
+  gl.activeTexture(gl.TEXTURE0);
+  acc=Math.min(acc+dt,.05);
+  for(let s=0; acc>=1/60 && s<3; s++, acc-=1/60){
+    KB.fill(0); let nk=0;
+    if(!s){
+      nk=Math.min(8,pokes.length);
+      for(let i=0;i<nk;i++){ const p=pokes[i];
+        KB[i*4]=p[0]; KB[i*4+1]=p[1]; KB[i*4+2]=outW/outH; KB[i*4+3]=p[2]; }
+      pokes=pokes.slice(nk);
+    }
+    gl.uniform4fv(sK,KB); gl.uniform1i(sNK,nk);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,simFbo[cur^1]);
+    gl.bindTexture(gl.TEXTURE_2D,simTex[cur]); gl.uniform1i(sT,0);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    cur^=1;
+  }
+  gl.bindVertexArray(null);
+}
+function composite(){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.viewport(0,0,outW,outH);
+  gl.useProgram(pDream); gl.bindVertexArray(emptyVao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,sceneTex); gl.uniform1i(dS,0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,simTex[cur]); gl.uniform1i(dT,1);
+  gl.uniform2f(dP,1/SW,1/SH); gl.uniform1f(dA,outW/outH);
+  gl.uniform1f(dDark,dark); gl.uniform1f(dFlash,flash); gl.uniform1f(dTime,songT);
+  gl.uniform1f(dSleep,sleep);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindVertexArray(null);
+}
+
+/* ------------------------ flatscreen input ------------------------- */
+function screenToPlane(cx,cy){
+  const asp=outW/outH, fov=1.15;
+  const ndx=(cx/innerWidth)*2-1;
+  const off=mode==='touch'?.12:0;
+  const ndy=1-(cy/innerHeight)*2+off;
+  const t=Math.tan(fov/2), k=-HITZ;
+  return [ndx*t*asp*k, FEYE+ndy*t*k, HITZ];
+}
+cvs.addEventListener('pointerdown',e=>{ pointerDown=true;
+  try{ cvs.setPointerCapture(e.pointerId); }catch(_){}
+  pointerXY=[e.clientX,e.clientY]; },{passive:true});
+cvs.addEventListener('pointermove',e=>{ pointerXY=[e.clientX,e.clientY]; },{passive:true});
+cvs.addEventListener('pointerup',()=>{ pointerDown=false; },{passive:true});
+cvs.addEventListener('pointercancel',()=>{ pointerDown=false; },{passive:true});
+function flatTip(){
+  if(!pointerXY) return null;
+  if(mode==='touch'&&!pointerDown) return null;
+  return screenToPlane(pointerXY[0],pointerXY[1]);
+}
+
+let last=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  const asp=outW/outH;
+  persp(1.15,asp,.05,120,mP); lookFrom(0,FEYE,0,mV); mul(mP,mV,mVP);
+  if(running&&!paused){
+    tipNow=flatTip();
+    bladeBase=tipNow?[tipNow[0]*.66, FEYE-1.02, -.34]:null;
+    step(dt);
+    // the blade's own wake, so the surface never sits still while you move
+    if(tipNow&&swing>.05){ const p=project(mVP,tipNow[0],tipNow[1],tipNow[2]);
+      if(p) poke(p[0],p[1],Math.min(.1,swing*.12)); }
+  }
+  buildInstances();
+  stepWater(dt);
+  drawScene(mVP,sceneTex.w,sceneTex.h,sceneFbo,0,0);
+  composite();
+}
+requestAnimationFrame(frame);
+
+/* ------------------------------- flow ------------------------------ */
+function hideAll(){ $('title').classList.remove('on'); $('end').classList.remove('on'); }
+if(best) $('tbest').textContent='BEST '+best.toLocaleString();
+$('mDesk').onclick =()=>{ mode='desk';  hideAll(); startRun(); };
+$('mTouch').onclick=()=>{ mode='touch'; hideAll(); startRun(); };
+
+const RANKS=[[.95,'S'],[.88,'A'],[.75,'B'],[.55,'C'],[0,'D']];
+function finish(){
+  running=false;
+  $('hud').classList.remove('on'); $('toast').classList.remove('on');
+  $('gear').classList.remove('on');
+  const prev=best; saveBest();
+  const acc=hits/Math.max(1,hits+missed);
+  const r=RANKS.find(x=>acc>=x[0])||RANKS[4];
+  $('etitle').textContent=score.toLocaleString();
+  $('eline').textContent='RANK '+r[1]+'  \u00b7  '+Math.round(acc*100)+'%';
+  $('estat').textContent='best chain '+bestCombo+' \u00b7 '+hits+' cut, '+missed+' let through'
+    +(score>prev&&prev>0 ? ' \u00b7 NEW BEST' : prev? ' \u00b7 best '+prev.toLocaleString() : '');
+  $('tbest').textContent = best? 'BEST '+best.toLocaleString() : '';
+  $('end').classList.add('on');
+}
+let musicOn=true, sfxOn=true;
+function setPaused(p){
+  if(!running) return;
+  paused=p;
+  $('pause').classList.toggle('on',p);
+  $('gear').classList.toggle('on',!p);
+  if(!actx) return;
+  if(p) actx.suspend(); else actx.resume();      // suspending freezes the song clock
+}
+function paintPause(){
+  $('pMus').textContent='Music: '+(musicOn?'on':'off');
+  $('pSfx').textContent='Sound: '+(sfxOn?'on':'off');
+}
+$('gear').onclick=()=>{ paintPause(); setPaused(true); };
+$('pRes').onclick=()=>setPaused(false);
+$('pMus').onclick=()=>{ musicOn=!musicOn; if(musicBus) musicBus.gain.value=musicOn?.5:0;
+  paintPause(); };
+$('pSfx').onclick=()=>{ sfxOn=!sfxOn; if(sfxBus) sfxBus.gain.value=sfxOn?.55:0; paintPause(); };
+$('pRst').onclick=()=>{ setPaused(false); $('pause').classList.remove('on'); startRun(); };
+$('pQuit').onclick=()=>{ paused=false; running=false; if(actx) actx.resume();
+  $('pause').classList.remove('on'); $('gear').classList.remove('on');
+  $('hud').classList.remove('on'); $('title').classList.add('on'); };
+addEventListener('keydown',e=>{ if(e.key==='Escape'&&running) setPaused(!paused); });
+
+$('again').onclick=()=>{ hideAll(); startRun(); };
+$('menu').onclick=()=>{ hideAll(); $('title').classList.add('on'); };
+</script>
+</body>
+</html>

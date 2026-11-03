@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Unicorn Sugarworld: Rainbow Tiles</title>
+<style>/* ============================================================
+   Unicorn Sugarworld: Rainbow Tiles — styles
+   Palette: warm sugar paper. The board carries all the colour,
+   so the chrome stays deliberately pale.
+   ============================================================ */
+:root{--paper:#fff4e6;--ink:#4a2b35;--rule:#e9c7bd;--box:#2b1b2e}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;
+  background:radial-gradient(130% 95% at 50% 0%,#fffaf3 0%,#ffe9dd 52%,#f8d5cf 100%);
+  color:var(--ink);font:14px/1.45 ui-rounded,"Trebuchet MS",system-ui,sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#wrap{display:flex;flex-direction:column;height:100%;max-width:520px;margin:0 auto;position:relative}
+
+header{display:flex;gap:10px;align-items:baseline;padding:8px 14px 4px}
+#room{font-weight:800;letter-spacing:.1em;font-size:11px;text-transform:uppercase;opacity:.7}
+#sugar{margin-left:auto;font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+#bar{height:5px;margin:0 14px;border-radius:3px;background:#f0d9d2;overflow:hidden}
+#barfill{height:100%;width:0;border-radius:3px;transition:width .4s cubic-bezier(.2,.9,.3,1);
+  background:linear-gradient(90deg,#f4737f,#eda048,#f2d16b,#7fce9a,#5fc0d2,#8b8ce0,#c98cd8)}
+
+/* ---------- board ---------- */
+#boardwrap{flex:1;min-height:0;position:relative}
+svg{width:100%;height:100%;display:block;touch-action:manipulation}
+.hit{fill:transparent;cursor:pointer}
+/* LEGIBILITY: a tile that is finished drops back — desaturated, half
+   opacity, hairline stroke. An unfinished tile keeps full contrast and
+   a white ring. The eye goes straight to the work remaining. */
+.done{opacity:.5}
+.glow{fill:none;stroke:#fff;stroke-width:3.4;stroke-linejoin:round;
+  animation:pulse 1.15s ease-in-out infinite;pointer-events:none}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.95}}
+.num{font:700 7px ui-monospace,monospace;text-anchor:middle;pointer-events:none;
+  paint-order:stroke;stroke:#fff;stroke-width:2.2px;stroke-linejoin:round}
+.setstar{pointer-events:none}
+
+.float{position:absolute;pointer-events:none;font-weight:800;font-size:15px;
+  text-shadow:0 1px 0 #fff,0 0 8px #fff;animation:rise 1s ease-out forwards}
+@keyframes rise{0%{transform:translate(-50%,0) scale(.6);opacity:0}
+  22%{transform:translate(-50%,-10px) scale(1.1);opacity:1}
+  100%{transform:translate(-50%,-42px) scale(1);opacity:0}}
+.sparkle{position:absolute;width:6px;height:6px;border-radius:50%;pointer-events:none;
+  animation:spark .75s ease-out forwards}
+@keyframes spark{0%{transform:translate(-50%,-50%) scale(1);opacity:1}
+  100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}}
+
+#msg{min-height:15px;text-align:center;font-size:11px;opacity:.65;padding:1px 12px}
+
+/* ---------- cast controls ---------- */
+#ctl{display:flex;align-items:center;gap:6px;padding:2px 12px 4px;font-size:11px}
+#spacer{flex:1}
+#rounds{font-variant-numeric:tabular-nums;opacity:.65;letter-spacing:.05em}
+.chip{font:inherit;font-weight:800;border:1.5px solid var(--rule);background:transparent;
+  color:var(--ink);border-radius:14px;padding:3px 10px;cursor:pointer;letter-spacing:.04em}
+.chip.on{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+.chip[disabled]{opacity:.25;cursor:default}
+
+/* ---------- hand: up to nine owned spells, 3 across ---------- */
+/* three cards, squarish, thumb-sized */
+#hand{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  padding:2px 14px calc(11px + env(safe-area-inset-bottom))}
+.card{border:2px solid var(--rule);border-radius:15px;background:rgba(255,252,247,.94);
+  padding:9px 4px 8px;text-align:center;cursor:pointer;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:3px;aspect-ratio:1/.92;
+  transition:transform .12s,border-color .12s}
+.card.sel{border-color:var(--ink);transform:translateY(-4px);background:#fff;
+  box-shadow:0 5px 14px rgba(120,70,80,.16)}
+.card svg{width:38px;height:34px;flex:none}
+.card .nm{font-weight:800;font-size:13px;line-height:1.1}
+.card .lv{font-size:8px;opacity:.5;letter-spacing:.13em}
+
+/* ---------- mentor ---------- */
+#dlg{position:absolute;inset:0;background:rgba(30,18,32,.35);display:none;
+  align-items:flex-end;padding:0 0 14px;z-index:20}
+#dlg.on{display:flex}
+#dlgin{width:100%;margin:0 10px;display:flex;align-items:stretch;animation:slidein .2s ease-out}
+@keyframes slidein{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+#port{width:96px;flex:none;border:3px solid #f4e2c8;border-right:none;border-radius:9px 0 0 9px;
+  background:linear-gradient(#3a2540,#241730);overflow:hidden}
+#port svg{width:100%;height:100%}
+#txt{flex:1;border:3px solid #f4e2c8;border-radius:0 9px 9px 0;background:var(--box);
+  color:#ffeede;padding:11px 13px 26px;font-size:13px;line-height:1.5;min-height:120px;
+  position:relative;cursor:pointer;font-family:ui-serif,Georgia,serif}
+#who{font:800 9.5px ui-rounded,sans-serif;letter-spacing:.2em;text-transform:uppercase;
+  color:#f6c98a;margin-bottom:5px}
+#cursor{position:absolute;right:11px;bottom:8px;color:#f6c98a;font-size:11px;
+  animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- panels: shop, overlay, settings, title ---------- */
+#shop,#set{position:absolute;inset:0;background:rgba(43,27,46,.5);display:none;
+  align-items:center;justify-content:center;padding:16px;z-index:35}
+#shop.on,#set.on{display:flex}
+#shopin,#setin{width:100%;max-width:340px;background:var(--paper);border:3px solid var(--rule);
+  border-radius:16px;padding:14px 16px 16px;box-shadow:0 10px 30px rgba(90,50,60,.25);
+  max-height:100%;overflow:auto}
+h3{margin:2px 0 8px;font:800 9.5px ui-rounded,sans-serif;letter-spacing:.2em;
+  text-transform:uppercase;opacity:.5}
+#shopnext{font-size:10.5px;opacity:.75;margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap}
+#shopnext span{display:flex;align-items:center;gap:5px}
+#shopnext i{width:12px;height:12px;flex:none;border-radius:50%;display:inline-block;
+  border:2px solid rgba(0,0,0,.15)}
+
+#over{position:absolute;inset:0;background:rgba(255,246,236,.965);display:none;
+  flex-direction:column;gap:10px;align-items:center;justify-content:center;padding:26px;
+  text-align:center;z-index:30}
+#over.on{display:flex}
+#over h1{margin:0;font-size:21px;letter-spacing:.04em;font-family:ui-serif,Georgia,serif}
+#stars{font-size:28px;letter-spacing:5px;color:#e8b356}
+#stars i{color:#e6d5cd;font-style:normal}
+#ovsub{font-size:12.5px;opacity:.75;max-width:310px;line-height:1.55}
+button.big{font:inherit;font-weight:800;border:2px solid var(--ink);background:transparent;
+  color:var(--ink);border-radius:24px;padding:10px 26px;cursor:pointer;letter-spacing:.05em}
+.big.sm{padding:8px 0;font-size:12px;width:100%;margin-top:10px}
+.big.ghost{opacity:.5}
+.big[hidden]{display:none}
+
+.row{display:flex;align-items:center;font-size:12.5px;padding:5px 0}
+.sw{margin-left:auto;width:42px;height:23px;border-radius:14px;border:2px solid var(--ink);
+  background:transparent;position:relative;cursor:pointer;transition:background .18s}
+.sw::after{content:'';position:absolute;top:2.5px;left:3px;width:14px;height:14px;
+  border-radius:50%;background:var(--ink);transition:transform .18s}
+.sw.on{background:#7fce9a}
+.sw.on::after{transform:translateX(19px)}
+#gear{background:none;border:none;color:var(--ink);opacity:.45;font-size:18px;cursor:pointer;
+  padding:0 0 0 8px;line-height:1}
+
+#title{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 10%,#fffaf3,#f9d9d2);
+  display:flex;flex-direction:column;gap:13px;align-items:center;justify-content:center;
+  padding:26px;text-align:center;z-index:40}
+#title.off{display:none}
+#title h1{margin:0;font-size:14px;letter-spacing:.3em;text-transform:uppercase;opacity:.55;
+  font-weight:700}
+#title h2{margin:-8px 0 0;font-size:30px;font-family:ui-serif,Georgia,serif;font-weight:600}
+#title p{margin:0;font-size:12px;opacity:.62;max-width:300px;line-height:1.55}
+
+/* ---------- shop matrix ---------- */
+.cell{flex:1;font:inherit;border:1.5px solid var(--rule);background:transparent;color:var(--ink);
+  border-radius:9px;padding:3px 2px;cursor:pointer;display:flex;flex-direction:column;
+  align-items:center;line-height:1.1}
+.cell b{font-size:10.5px}
+.cell i{font-style:normal;font-size:8.5px;opacity:.6;font-variant-numeric:tabular-nums}
+.cell[disabled]{opacity:.2;cursor:default}
+#matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.offer{padding:7px 3px 6px;gap:2px}
+.offer svg{width:26px;height:24px}
+.offer b{font-size:11px}
+.osh{font-size:7.5px;opacity:.5;letter-spacing:.09em}
+#extras{display:flex;gap:5px;margin-top:10px}
+.dchip.hot{border-color:#c04a63;color:#c04a63}
+#decklist{margin-top:6px}
+.dchip{display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;
+  border:1px solid var(--rule);border-radius:11px;padding:1px 7px 1px 2px;margin:2px 2px 0 0;
+  cursor:pointer}
+.dchip svg{width:15px;height:14px}
+
+/* ---------- the three-second celebration ----------
+   Everything here is drawn from one <symbol>: the crowd is five <use>
+   instances with different transforms and hue-rotates. The dance floor
+   is the board itself, so the light show is literally the floor the
+   player just laid. */
+#party{position:absolute;inset:0;display:none;z-index:28;
+  transition:filter .55s ease,opacity .55s ease}
+#party.on{display:block}
+#party.out{filter:blur(16px);opacity:0}
+#party svg{width:100%;height:100%}
+#bd.disco{animation:flr 1.1s steps(4) infinite}
+@keyframes flr{0%{filter:hue-rotate(0) saturate(1.5) brightness(1.08)}
+  100%{filter:hue-rotate(360deg) saturate(1.5) brightness(1.08)}}
+#bd.disco g{animation:bmp .55s ease-in-out infinite}
+#bd.disco g:nth-child(2n){animation-delay:.27s}
+@keyframes bmp{0%,100%{transform:none;opacity:1}50%{transform:translateY(-3px);opacity:.72}}
+.dncr{animation:dnc .55s ease-in-out infinite;transform-origin:center bottom}
+@keyframes dnc{0%,100%{transform:translateY(0) rotate(-6deg)}
+  50%{transform:translateY(-9px) rotate(6deg)}}
+#ball{animation:spn 2.4s linear infinite;transform-origin:170px 52px}
+@keyframes spn{to{transform:rotate(360deg)}}
+#beams{animation:spn 5s linear infinite reverse;transform-origin:170px 52px;
+  mix-blend-mode:screen;opacity:.55}
+</style>
+</head>
+<body>
+<div id=wrap>
+
+  <!-- ================= HEADER: room name, tiles set, sugar ================= -->
+  <header>
+    <span id=room></span>
+    <span id=sugar></span>
+    <button id=gear aria-label=Settings>&#9881;</button>
+  </header>
+  <div id=bar><div id=barfill></div></div>
+
+  <!-- ================= BOARD ================= -->
+  <div id=boardwrap>
+    <svg id=bd viewBox="-168 -152 336 304"></svg>
+    <!-- three-second celebration between clearing a room and the shop -->
+    <div id=party><svg id=pty viewBox="0 0 340 300"></svg></div>
+  </div>
+
+  <!-- ================= CAST CONTROLS ================= -->
+  <div id=msg></div>
+  <div id=ctl>
+    <span id=spacer></span>
+    <span id=rounds></span>
+    <button id=sweep class=chip>sweep</button>
+    <button id=undo class=chip>undo</button>
+  </div>
+  <div id=hand></div>
+
+  <!-- ================= MENTOR ================= -->
+  <div id=dlg><div id=dlgin>
+    <div id=port></div>
+    <div id=txt><div id=who></div><span id=line></span><span id=cursor>&#9660;</span></div>
+  </div></div>
+
+  <!-- ================= SHOP ================= -->
+  <div id=shop><div id=shopin>
+    <h3 id=shoph></h3>
+    <div id=shopnext></div>
+    <div id=shoplist></div>
+    <button class="big sm" id=shopgo>Enter the Room</button>
+  </div></div>
+
+  <!-- ================= OVERLAY (room result / run over) ================= -->
+  <div id=over>
+    <h1 id=ovh></h1>
+    <div id=stars></div>
+    <div id=ovsub></div>
+    <button class=big id=ovbtn></button>
+    <button class="big sm ghost" id=ovbtn2></button>
+  </div>
+
+  <!-- ================= SETTINGS ================= -->
+  <div id=set><div id=setin>
+    <h3>Workshop</h3>
+    <div class=row><span>Music</span><button class=sw id=swm></button></div>
+    <div class=row><span>Chimes</span><button class=sw id=sws></button></div>
+    <div class=row><span>Direction arrows</span><button class=sw id=swh></button></div>
+    <div class=row><span>Exact numbers</span><button class=sw id=swn></button></div>
+    <button class="big sm ghost" id=restart>Abandon Run</button>
+    <button class="big sm" id=close>Back to Work</button>
+  </div></div>
+
+  <!-- ================= TITLE ================= -->
+  <div id=title>
+    <h1>Unicorn Sugarworld</h1>
+    <h2>Rainbow&nbsp;Tiles</h2>
+    <p>Made by Jesse Rogers for JS13kGames</p>
+    <button class=big id=start>Begin Apprenticeship</button>
+  </div>
+</div>
+<script>"use strict";
+/* ================================================================
+   UNICORN SUGARWORLD: RAINBOW TILES  (v2 — deckbuilder roguelite)
+
+   You are an apprentice sugarwright. Each room is a floor of 19 raw
+   sugar tiles that must be pushed to the colour the Assembly ordered.
+   You own a small book of spells; each spell shifts ONE colour channel
+   on a hex footprint. Between rooms you spend sugar to level the spells
+   up, which buys you MORE INTENSITY OPTIONS — not merely bigger hits.
+
+   The three design commitments, so future edits do not undo them:
+
+   1. TARGETS ARE GENERATED FROM THE PLAYER'S OWN SPELL BOOK.
+      castTarget() only uses casts the player can actually perform at
+      an intensity they actually own. Solvability is therefore a
+      property of construction, not of tuning. If you change the kit,
+      the targets change with it automatically.
+
+   2. INTENSITY IS DISCRETE, NEVER A SLIDER.
+      L1 = {50}. L2 = {50,80}. L3 = {50,80,110}. Surge = 150.
+      A slider would make overshoot impossible and delete the game.
+      Discrete steps against a tolerance of 35 keep near-misses real.
+
+   3. ROOMS ARE COLOUR-DOMINANT, IN A FIXED ORDER, AND BIDIRECTIONAL.
+      Each room leans on its colour's channels, but every channel is
+      pushed BOTH ways across the floor (BIAS decides how strongly it
+      leans). This is what keeps both signs of every card alive: with
+      one-way rooms, half of every ± pair and half the starting deck
+      was dead weight, and buying made the deck worse. Red, Green,
+      Blue are single-channel rooms; Orange and Yellow need two held
+      together; Indigo and Violet mix. The curve is the colour wheel.
+
+   4. ROOM ONE IS AUTHORED, NOT ROLLED.
+      The Ember Room is a fixed unicorn head (UNIFLOOR). Nine casts
+      from the starting deck lay it. A rolled first room used to come
+      out already accepted; the tutorial floor has to be a floor.
+   ================================================================ */
+
+/* ---------------- tuning ---------------- */
+const PINK = [230, 175, 195];   // raw sugar, the start of every room
+const TOL  = 35;                // a tile is "set" when every channel is within this
+const ACCEPT = 15;              // tiles of 19 the Assembly will accept
+const HAND = 3;                 // draw three, cast one, discard the rest
+const MAGS = [50, 80, 110];     // the three levels a spell can be bought at
+
+const P_BURN = 5, P_UNDO = 10;
+const SUGAR = 4;                // sugar earned per tile set
+/* Sweep is unlimited and paid for in sugar. Flat 2 for the first three
+   in a room, then it climbs, so "when do I stop fishing" stays a live
+   question instead of becoming an infinite mulligan. */
+const sweepCost = n => n < 3 ? 2 : 2 * (n - 1);
+const rerollCost = n => 3 * (n + 1);
+/* Pairs: every purchase adds BOTH signs of the card, so prices are per
+   pair. Rows are shapes, columns are levels. */
+const PRICE = [[6, 14, 24], [11, 20, 34], [14, 25, 40]];
+const MAX_UNDO = 3;
+/* How strongly a room's channels lean its own way. .65 = roughly two
+   pushes with the colour for every one against it. Tuned by sim:
+   at 1.0 the off-sign half of the deck is dead and shopping is a
+   trap; at .5 the rooms stop reading as colours. */
+const BIAS = .65;
+
+/* The Ember Room's commission: a unicorn head, hex-pixel style, keyed
+   by "q,r". Everything not listed stays raw sugar (the face). Every
+   entry is one or two ±50 steps from PINK, so the starting book can
+   lay it in nine casts. Horn top-right, eye, muzzle, rainbow mane down
+   the left. */
+const UNIFLOOR = {
+  '2,-2':  [230, 225, 145],   // horn — gold
+  '1,0':   [180, 125, 195],   // eye — mulberry
+  '0,2':   [230, 175, 145],   // muzzle — peach
+  '0,-2':  [230, 125, 195],   // mane — hot pink
+  '-1,-1': [230, 175, 145],   // mane — peach
+  '-2,0':  [180, 225, 195],   // mane — mint
+  '-2,1':  [230, 175, 245]    // mane — lilac
+};
+
+/* ---------------- rooms ----------------
+   dir : which way each channel is pushed when building the commission
+   w   : relative frequency of each channel being chosen
+   sp  : how many casts the commission was built from (its density)
+   rd  : rounds granted. Later floors are harder AND longer, on the
+         assumption your deck has grown to match.
+   sw  : swatch shown in the shop preview                             */
+const ROOMS = [
+  /* shw = how the commission picks its shapes [single, egg, ring].
+     Shaped casts are expensive for the player to answer with singles,
+     so they stay rare and arrive only once the shop has had a chance
+     to sell shapes. mg = how many magnitudes the commission may use. */
+  { nm:'The Ember Room',       c:'Red',    dir:[ 1,-1,-1], w:[4,1,1], shw:[9,0,0], mg:1, sp:4,  rd:16, sw:'#e0546a' },
+  { nm:'The Green Gallery',    c:'Green',  dir:[-1, 1,-1], w:[1,4,1], shw:[8,1,0], mg:2, sp:5,  rd:19, sw:'#4fae72' },
+  { nm:'The Blue Landing',     c:'Blue',   dir:[-1,-1, 1], w:[1,1,4], shw:[7,2,0], mg:2, sp:6,  rd:21, sw:'#4d86d8' },
+  { nm:'The Orange Exchange',  c:'Orange', dir:[ 1, 1,-1], w:[3,2,3], shw:[6,2,1], mg:2, sp:7,  rd:24, sw:'#e08a3c' },
+  { nm:'The Yellow Chancery',  c:'Yellow', dir:[ 1, 1,-1], w:[2,2,3], shw:[5,3,1], mg:3, sp:7,  rd:27, sw:'#e0c04a' },
+  { nm:'The Indigo Vestibule', c:'Indigo', dir:[-1,-1, 1], w:[2,2,3], shw:[5,3,2], mg:3, sp:8,  rd:30, sw:'#4a4a9e' },
+  { nm:'The Violet Hall',      c:'Violet', dir:[ 1,-1, 1], w:[2,3,2], shw:[4,3,2], mg:3, sp:9,  rd:33, sw:'#a05ac0' }
+];
+const CHAN = ['R', 'G', 'B'];
+const CHANHUE = ['#e0546a', '#4fae72', '#4d86d8'];
+const SHORT  = ['SINGLE', 'RING', 'EGG'];
+
+/* ---------------- rng: xorshift, seeded per room ---------------- */
+let _s = 1;
+const srand = s => { _s = (s >>> 0) || 1; };
+const rnd = () => { _s ^= _s << 13; _s >>>= 0; _s ^= _s >> 17; _s ^= _s << 5; _s >>>= 0; return _s / 4294967296; };
+const ri = n => Math.floor(rnd() * n);
+const pick = a => a[ri(a.length)];
+
+/* ---------------- grid: 19 hexes, radius 2, pointy-top ---------------- */
+const HEX = [];
+for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++) if (Math.abs(q + r) <= 2) HEX.push({ q, r });
+const S = 33;
+const px = h => [S * Math.sqrt(3) * (h.q + h.r / 2), S * 1.5 * h.r];
+const idx = {}; HEX.forEach((h, i) => idx[h.q + ',' + h.r] = i);
+const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+const ADJ = HEX.map(h => HEX.map((_, j) => j).filter(j => dist(h, HEX[j]) === 1));
+/* mirror through the centre — makes generated commissions read as designed */
+const MIRROR = HEX.map(h => idx[(-h.q) + ',' + (-h.r)]);
+const RINGOF = HEX.map(h => dist(h, { q: 0, r: 0 }));
+
+/* ================================================================
+   THE DECK
+
+   A card is {s: shape, c: channel, g: sign, m: magnitude}. Everything
+   about a card is fixed at purchase. At cast time you have no dial and
+   no sign toggle — you play what you drew. All the agency lives in the
+   shop, where you decide what your deck is made of, with full
+   information and no clock.
+
+   You begin with twelve cards: +50 and -50, twice each, in all three
+   channels. Because the worst residual against a 50-step is 25 and
+   tolerance is 35, that starting deck can reach ANY commission given
+   enough rounds. Upgrades buy speed, never access — so no purchase
+   path can lock you out of a floor.
+   ================================================================ */
+let deck, discard, hand, sugar, stars, undoMax, undoLeft, swept, hinted;
+/* Briefings teach; once taught, they are a tax on the next run. SEEN
+   survives newRun() deliberately, so a retry starts playing at once. */
+const SEEN = {};
+
+const RUN = { cast: 0, tiles: 0, undos: 0, sweeps: 0, relays: 0, rooms: 0, bought: 0, started: 0 };
+
+function newRun() {
+  deck = [];
+  for (let c = 0; c < 3; c++) for (const g of [1, -1]) for (let k = 0; k < 2; k++)
+    deck.push({ s: 0, c, g, m: 50 });
+  discard = []; hand = [];
+  /* Seed sugar so the first room can afford a sweep or three. Without
+     it Praline's dead-hand hint recommends an action the player cannot
+     pay for, and room one has no income yet to fix that. */
+  sugar = 6; stars = 0;
+  undoMax = 1; hinted = false;
+  RUN.cast = RUN.tiles = RUN.undos = RUN.sweeps = RUN.relays = RUN.rooms = RUN.bought = 0;
+  RUN.started = Date.now();
+}
+
+const shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = ri(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* The deck never runs dry: when it empties, the discard pile is
+   reshuffled back in. No hidden weighting, no guaranteed-useful draw.
+   If the hand is bad, that is what Sweep is for, and Sweep costs. */
+function drawHand() {
+  discard.push(...hand); hand = [];
+  for (let i = 0; i < HAND; i++) {
+    if (!deck.length) { deck = shuf(discard); discard = []; }
+    if (!deck.length) break;
+    hand.push(deck.pop());
+  }
+}
+
+/* Apply a cast to a board. amt is already signed.
+   Clamping at 0/255 is deliberate and permanent: overshoot destroys
+   information and no opposite spell recovers it. That is the game. */
+function cast(bd, i, shape, ch, amt) {
+  const hit = (j, a) => { const v = bd[j][ch] + a; bd[j][ch] = v < 0 ? 0 : v > 255 ? 255 : v; };
+  if (shape === 0) hit(i, amt);
+  else if (shape === 1) ADJ[i].forEach(j => hit(j, amt));
+  else { hit(i, amt); ADJ[i].forEach(j => hit(j, Math.round(amt / 2))); }
+}
+
+/* ================================================================
+   TARGET GENERATION
+   Only owned spells, only owned intensities, only the room's colour
+   directions. Mirrored so the commission looks like a design.
+   ================================================================ */
+/* expand the [single, egg, ring] weights into a lottery */
+function shapeLot(R) {
+  const l = [];
+  [0, 2, 1].forEach((sh, k) => { for (let i = 0; i < R.shw[k]; i++) l.push(sh); });
+  return l;
+}
+
+function makeTarget(R) {
+  const t = HEX.map(() => PINK.slice());
+  const lot = [];
+  R.w.forEach((n, c) => { for (let k = 0; k < n; k++) lot.push(c); });
+  for (let k = 0; k < R.sp; k++) {
+    const ch = pick(lot);
+    const shape = pick(shapeLot(R)), pw = MAGS[ri(R.mg)];
+    const pool = HEX.map((_, i) => i).filter(i => RINGOF[i] <= (k % 3 ? 2 : 1));
+    const at = pick(pool);
+    const amt = (rnd() < BIAS ? R.dir[ch] : -R.dir[ch]) * pw;
+    cast(t, at, shape, ch, amt);
+    if (at !== MIRROR[at]) cast(t, MIRROR[at], shape, ch, amt);
+  }
+  return t;
+}
+
+/* ================================================================
+   STATE + SCORING
+   ================================================================ */
+let board, target, roomN, left, sel, hist, showNums, dlgOn;
+const HINT = { v: true }, SFXON = { v: true };
+const $ = id => document.getElementById(id);
+
+const err = i => { let e = 0; for (let c = 0; c < 3; c++) e = Math.max(e, Math.abs(board[i][c] - target[i][c])); return e; };
+const seated = i => err(i) <= TOL;
+const setCount = () => { let n = 0; for (let i = 0; i < 19; i++) if (seated(i)) n++; return n; };
+/* Progress is measured across ALL THREE channels, not by each tile's
+   worst one. With max-per-tile, fixing one of two wrong channels moved
+   the number by zero: the player saw "\u00b10" on a correct cast, and
+   handHelps() called a hand dead while it held the needed card.
+   seated() still uses max, because tolerance is per-channel. */
+const totalErr = () => { let s = 0; for (let i = 0; i < 19; i++) for (let c = 0; c < 3; c++) s += Math.abs(board[i][c] - target[i][c]); return s; };
+
+function newRoom(n) {
+  roomN = n;
+  const R = ROOMS[n];
+  srand(Math.floor(Math.random() * 99999) + 1);
+  target = n ? makeTarget(R) : HEX.map(h => (UNIFLOOR[h.q + ',' + h.r] || PINK).slice());
+  board = HEX.map(() => PINK.slice());
+  left = R.rd;
+  undoLeft = undoMax; swept = 0;
+  deck = shuf(deck.concat(discard, hand)); discard = []; hand = [];
+  drawHand();
+  sel = null; hist = [];
+  $('over').classList.remove('on');
+  render();
+}
+
+/* ================================================================
+   THE UNICORN
+
+   One body, two dressings. UNI is the shared markup; the crowd
+   instances it through a <symbol>, and Master Praline is the same
+   figure with spectacles, a greying mane and a slower pose. Drawing
+   him twice would cost more than he is worth.
+   ================================================================ */
+const UNI = `<path d="M18 46 L17 59M25 47 L25 60M33 47 L34 60M39 45 L41 58" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>
+<path d="M13 32 q-8 3 -10 13 q6 -5 11 -7Z" fill="#f6c98a"/>
+<path d="M12 36 q0 -11 12 -11 h12 q12 0 12 11 q0 11 -12 11 h-12 q-12 0 -12 -11Z" fill="#fff"/>
+<path d="M37 30 q3 -10 8 -15" stroke="#fff" stroke-width="10" stroke-linecap="round" fill="none"/>
+<path d="M44 12 q-2 -7 1 -9 q4 3 4 8Z" fill="#ffd0e4"/>
+<path d="M40 18 q4 -8 12 -7 q8 1 8 7 q0 7 -8 8 q-9 1 -12 -8Z" fill="#fff"/>
+<path d="M49.5 13 l2 -11 l4 10Z" fill="#f6c98a"/>`;
+
+const DANCER = `<symbol id=dnc viewBox="0 -4 62 68">${UNI}<circle cx="56" cy="19" r="1.5" fill="#3d2b33"/></symbol>`;
+
+/* the mentor: same unicorn, older. The grey follows the neck crest and
+   the tail — it must never cross the body, or he reads as a smudge. */
+const MENTOR = `<svg viewBox="-2 -6 66 74">${UNI}
+<path d="M35 27 q2.5 -8 7 -11M45 13 q-2 3 -2 5" stroke="#cfcad9" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".85"/>
+<circle cx="47" cy="18" r="4.6" fill="#cfe6ea" fill-opacity=".3" stroke="#5a4a3a" stroke-width="1.3"/>
+<circle cx="55.5" cy="17" r="4" fill="#cfe6ea" fill-opacity=".3" stroke="#5a4a3a" stroke-width="1.3"/>
+<path d="M51.6 17.6 q1.6 -1 .3 -1.4M42.4 18 q-3 -1 -4 -3" fill="none" stroke="#5a4a3a" stroke-width="1.2" stroke-linecap="round"/>
+<circle cx="47" cy="18" r="1.4" fill="#3d2b33"/><circle cx="55.5" cy="17" r="1.2" fill="#3d2b33"/></svg>`;
+
+/* ================================================================
+   ART
+   ================================================================ */
+const rgb = a => 'rgb(' + a[0] + ',' + a[1] + ',' + a[2] + ')';
+/* a desaturated, lightened version — used for finished tiles so they
+   recede without vanishing */
+function pale(a) {
+  const g = (a[0] * .35 + a[1] * .5 + a[2] * .15);
+  return 'rgb(' + a.map(v => Math.round(v * .45 + g * .3 + 90)).join(',') + ')';
+}
+
+function hexPath(x, y, s) {
+  let d = '';
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 90);
+    d += (i ? 'L' : 'M') + (x + s * Math.cos(a)).toFixed(1) + ' ' + (y + s * Math.sin(a)).toFixed(1);
+  }
+  return d + 'Z';
+}
+function starPath(x, y, r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI / 180 * (36 * i - 90), rr = i % 2 ? r * .44 : r;
+    d += (i ? 'L' : 'M') + (x + rr * Math.cos(a)).toFixed(1) + ' ' + (y + rr * Math.sin(a)).toFixed(1);
+  }
+  return d + 'Z';
+}
+
+/* the spell icon: a little hex diagram of the footprint */
+function icon(shape, ch, size) {
+  const hue = CHANHUE[ch], s = 7.5;
+  const ring = [[0,-13],[11.3,-6.5],[11.3,6.5],[0,13],[-11.3,6.5],[-11.3,-6.5]];
+  const on = shape !== 0, op = shape === 2 ? .45 : .95;
+  let g = '';
+  ring.forEach(p => g += `<path d="${hexPath(p[0],p[1],s)}" fill="${on?hue:'#f2e6e2'}" fill-opacity="${on?op:1}" stroke="#b89a95" stroke-width=".9"/>`);
+  const mid = shape !== 1;
+  g += `<path d="${hexPath(0,0,s)}" fill="${mid?hue:'#f2e6e2'}" fill-opacity="${mid?.95:1}" stroke="#8a6a63" stroke-width="1.1"/>`;
+  return `<svg viewBox="-22 -22 44 44"${size?` width="${size}"`:''}>${g}</svg>`;
+}
+
+/* ================================================================
+   RENDER
+   ================================================================ */
+const bd = $('bd'), bw = $('boardwrap');
+
+function render() {
+  const R = ROOMS[roomN], n = setCount();
+  $('room').textContent = (roomN + 1) + '/7 \u00b7 ' + R.nm;
+  $('sugar').innerHTML = n + '/19 &nbsp; \u2605' + stars + ' &nbsp; \u25c6' + sugar;
+  $('barfill').style.width = (n / 19 * 100).toFixed(1) + '%';
+  Music.intensity(n / 19);
+  $('rounds').textContent = left + ' rounds \u00b7 deck ' + deck.length;
+  $('undo').disabled = !hist.length || left <= 1 || undoLeft <= 0;
+  $('undo').textContent = 'undo \u00d7' + undoLeft;
+  const sc = sweepCost(swept);
+  $('sweep').disabled = left <= 1 || sugar < sc;
+  $('sweep').textContent = 'sweep \u25c6' + sc;
+
+  let g = '', hits = '', glow = '';
+  HEX.forEach((h, i) => {
+    const [x, y] = px(h), done = seated(i);
+    if (done) {
+      g += `<g class=done><path d="${hexPath(x,y,S)}" fill="${pale(board[i])}" stroke="#d9bdb4" stroke-width=".8"/>
+        <path class=setstar d="${starPath(x,y,8)}" fill="${rgb(target[i])}" opacity=".9"/></g>`;
+    } else {
+      g += `<g><path d="${hexPath(x,y,S)}" fill="${rgb(board[i])}" stroke="#fff8ee" stroke-width="2.6"/>
+        <circle cx="${x}" cy="${y}" r="10.5" fill="${rgb(target[i])}" stroke="#fffaf3" stroke-width="2.2"/>`;
+      if (HINT.v) {
+        for (let c = 0; c < 3; c++) {
+          const dv = board[i][c] - target[i][c];
+          if (Math.abs(dv) <= TOL) continue;
+          const up = dv < 0, ax = x + (c - 1) * 11, ay = y + 19, m = Math.abs(dv) > 90 ? 2 : 1;
+          for (let k = 0; k < m; k++) {
+            const by = ay + (up ? k * 4.2 : -k * 4.2), tip = up ? by - 3.6 : by + 3.6, tl = up ? by + 1.3 : by - 1.3;
+            g += `<path d="M${ax-4.6} ${tl} L${ax} ${tip} L${ax+4.6} ${tl}" fill=none stroke="${CHANHUE[c]}" stroke-width="2.6" stroke-linecap=round stroke-linejoin=round opacity="${k?.6:1}"/>`;
+          }
+        }
+      }
+      if (showNums) {
+        /* only channels that are actually off, placed under their own
+           chevron so number and arrow read as one thing */
+        for (let c = 0; c < 3; c++) {
+          const dv = target[i][c] - board[i][c];
+          if (Math.abs(dv) <= TOL) continue;
+          g += `<text class=num x="${x+(c-1)*11}" y="${y+29}" fill="${CHANHUE[c]}">${dv>0?'+':'\u2212'}${Math.abs(dv)}</text>`;
+        }
+      }
+      g += `</g>`;
+    }
+    if (sel !== null) glow += `<path class=glow d="${hexPath(x,y,S-2)}"/>`;
+    hits += `<path class=hit d="${hexPath(x,y,S)}" data-i="${i}"/>`;
+  });
+  bd.innerHTML = g + glow + hits;
+
+  /* the hand: four cards, take one */
+  $('hand').innerHTML = hand.map((k, n) =>
+    `<div class="card${sel === n ? ' sel' : ''}" data-n="${n}">${icon(k.s, k.c)}
+      <div><div class=nm>${k.g > 0 ? '+' : '\u2212'}${k.m} ${CHAN[k.c]}</div>
+      <div class=lv>${n + 1} \u00b7 ${SHORT[k.s]}</div></div></div>`).join('');
+}
+
+const msg = t => $('msg').textContent = t;
+
+/* ================================================================
+   INPUT
+   ================================================================ */
+$('hand').onclick = e => {
+  if (dlgOn) return;
+  const c = e.target.closest('.card'); if (!c) return;
+  const n = +c.dataset.n;
+  sel = (sel === n) ? null : n;
+  msg(sel === null ? '' : 'Cast it on a tile.');
+  beep(560, .07, 'sine', .05); render();
+};
+
+bd.onclick = e => {
+  if (dlgOn || sel === null || left <= 0) return;
+  const p = e.target.closest('.hit'); if (!p) return;
+  const i = +p.dataset.i, k = hand[sel];
+  if (!k) return;
+
+  hist.push({ b: board.map(a => a.slice()), h: hand.slice(), d: deck.slice(), x: discard.slice(), l: left });
+  const was = HEX.map((_, j) => seated(j)), e0 = totalErr();
+
+  cast(board, i, k.s, k.c, k.g * k.m);
+  /* the played card and the three you passed on all go to the discard */
+  drawHand();
+  left--; RUN.cast++; sel = null;
+  render();
+
+  const d = e0 - totalErr();
+  sfxCast();
+  floatAt(i, (d > 0 ? '\u2212' : d < 0 ? '+' : '\u00b1') + Math.abs(d),
+    d > 0 ? '#3f9c68' : d < 0 ? '#c04a63' : '#a08d92');
+
+  let got = 0;
+  HEX.forEach((_, j) => { if (!was[j] && seated(j)) { got++; sparkleAt(j); } });
+  if (got) { RUN.tiles += got; sfxSeat(); msg(got + ' tile' + (got > 1 ? 's' : '') + ' set.'); }
+  else msg('');
+
+  setTimeout(() => {
+    if (setCount() === 19 || left <= 0) { endRoom(); return; }
+    checkDeadHand();
+  }, 600);
+};
+
+/* Does any card in hand, on any tile, reduce total error at all? */
+function handHelps() {
+  const e0 = totalErr();
+  for (const k of hand) for (let i = 0; i < 19; i++) {
+    const c = board.map(a => a.slice());
+    cast(c, i, k.s, k.c, k.g * k.m);
+    let e = 0;
+    for (let j = 0; j < 19; j++) { let m = 0;
+      for (let ch = 0; ch < 3; ch++) m = Math.max(m, Math.abs(c[j][ch] - target[j][ch]));
+      e += m; }
+    if (e < e0) return true;
+  }
+  return false;
+}
+/* The first time in a run that nothing in hand helps, Praline names the
+   way out. Once only \u2014 after that you are expected to know. */
+function checkDeadHand() {
+  if (hinted || dlgOn || left <= 1) return;
+  if (handHelps()) return;
+  hinted = true;
+  say(['Nothing in that hand will help you. Sweep it \u2014 pay the sugar, take three more.',
+       'It costs a round as well, and it gets dearer the more you do it in one room.']);
+}
+
+/* Sweep: throw the hand away and draw four more. Costs a round and one
+   of a limited number of uses. A mulligan is a choice, not a guarantee. */
+$('sweep').onclick = () => {
+  const c = sweepCost(swept);
+  if (dlgOn || left <= 1 || sugar < c) return;
+  drawHand();
+  /* Sweeping is a commitment: it burns the undo history, so you cannot
+     fish for a hand and then rewind the fishing. */
+  hist = [];
+  sugar -= c; left--; swept++; sel = null; RUN.sweeps++;
+  beep(400, .16, 'sine', .06);
+  msg('Swept for \u25c6' + c + '. The next one costs \u25c6' + sweepCost(swept) + '.');
+  render();
+};
+
+$('undo').onclick = () => {
+  if (dlgOn || !hist.length || left <= 1 || undoLeft <= 0) return;
+  const h = hist.pop();
+  board = h.b; hand = h.h; deck = h.d; discard = h.x; left = h.l - 1;
+  undoLeft--; RUN.undos++; sel = null;
+  sfxUndo(); msg('Praline looks away. It costs you a round.');
+  render();
+};
+
+/* ================================================================
+   THE CELEBRATION
+
+   One unicorn <symbol>, instanced five times with different scales,
+   positions and hue-rotates to make a crowd. A disco ball above, beams
+   behind it, and the board underneath doing the actual light show.
+   Three seconds, skippable on tap, then blur into the workshop.
+   ================================================================ */
+/* five dancers: x, y, scale, hue */
+const CROWD = [[26,178,1.05,0],[88,196,1.3,62],[162,186,1.15,140],[232,199,1.32,214],[292,180,1,292]];
+
+function partyArt() {
+  let g = `<defs>${DANCER}
+    <radialGradient id=bg cx=".35" cy=".3"><stop offset="0" stop-color="#fff"/>
+    <stop offset=".55" stop-color="#d8c4e8"/><stop offset="1" stop-color="#6b4f80"/></radialGradient>
+  </defs>`;
+  /* beams */
+  g += '<g id=beams>';
+  for (let i = 0; i < 6; i++) {
+    const a = i * 60 * Math.PI / 180, L = 300;
+    g += `<path d="M170 52 L${(170 + Math.cos(a - .06) * L).toFixed(0)} ${(52 + Math.sin(a - .06) * L).toFixed(0)} L${(170 + Math.cos(a + .06) * L).toFixed(0)} ${(52 + Math.sin(a + .06) * L).toFixed(0)}Z" fill="${SPARKCOL[i % 4]}" opacity=".5"/>`;
+  }
+  g += '</g>';
+  /* ball on a wire */
+  g += '<path d="M170 0 L170 28" stroke="#8a6a63" stroke-width="1.6"/><g id=ball>';
+  g += '<circle cx="170" cy="52" r="24" fill="url(#bg)"/>';
+  for (let i = -1; i <= 1; i++) {
+    g += `<path d="M${170 + i * 9} 29 q${-i * 3} 23 0 46" stroke="#fff" stroke-width=".8" fill="none" opacity=".5"/>`;
+    g += `<path d="M147 ${52 + i * 9} q23 ${-i * 3} 46 0" stroke="#fff" stroke-width=".8" fill="none" opacity=".5"/>`;
+  }
+  g += '</g>';
+  /* the crowd */
+  CROWD.forEach(([x, y, sc, hue], i) => {
+    g += `<g class=dncr style="animation-delay:${(i * .11).toFixed(2)}s;filter:hue-rotate(${hue}deg)">
+      <use href="#dnc" x="${x}" y="${y}" width="${(62 * sc).toFixed(0)}" height="${(68 * sc).toFixed(0)}"/></g>`;
+  });
+  return g;
+}
+
+let partyTimer = null, partyDone = null;
+function party(after) {
+  partyDone = after;
+  $('pty').innerHTML = partyArt();
+  $('party').className = 'on';
+  bd.classList.add('disco');
+  sfxFanfare();
+  clearTimeout(partyTimer);
+  partyTimer = setTimeout(endParty, 3000);
+}
+/* blur out, then hand over to the workshop */
+function endParty() {
+  if (!partyDone) return;
+  clearTimeout(partyTimer);
+  $('party').className = 'on out';
+  bd.classList.remove('disco');
+  const a = partyDone; partyDone = null;
+  setTimeout(() => { $('party').className = ''; a(); }, 560);
+}
+$('party').onclick = endParty;
+
+/* ================================================================
+   ROOM RESULT
+   ================================================================ */
+function endRoom() {
+  const n = setCount();
+  const st = n === 19 ? 3 : n >= 17 ? 2 : n >= ACCEPT ? 1 : 0;
+  const ok = n >= ACCEPT;
+  const last = roomN === ROOMS.length - 1;
+
+  $('stars').innerHTML = [0, 1, 2].map(i => i < st ? '\u2605' : '<i>\u2605</i>').join('');
+  $('ovbtn2').hidden = true;
+
+  if (ok) {
+    stars += st; sugar += n * SUGAR; RUN.rooms++;
+    $('ovh').textContent = n === 19 ? 'Flawless' : 'The Floor Is Accepted';
+    $('ovsub').textContent = n === 19
+      ? 'Every tile. Praline examines it twice and finds nothing to say. \u25c6' + n * SUGAR + ' sugar.'
+      : n + ' of 19 accepted. \u25c6' + n * SUGAR + ' sugar. ' + (19 - n) + ' tile' + (19 - n === 1 ? '' : 's') + ' you will notice forever.';
+    $('ovbtn').textContent = last ? 'The Hall Is Laid' : 'To the Workshop';
+    $('ovbtn').onclick = () => last ? finale() : openShop();
+    party(() => $('over').classList.add('on'));
+    return;                       // the celebration reveals the overlay
+  } else {
+    /* Failure. Relaying the room costs two commendations; with fewer
+       than two you have nothing left to trade and the run ends. */
+    $('ovh').textContent = 'The Magic Runs Dry';
+    $('ovsub').textContent = n + ' of 19. The Assembly wants ' + ACCEPT + '. '
+      + (stars >= 2 ? 'Praline will let you tear it up for two commendations.'
+                    : 'You have nothing left to trade.');
+    if (stars >= 2) {
+      $('ovbtn').textContent = 'Relay It (\u2605\u2605)';
+      $('ovbtn').onclick = () => { stars -= 2; RUN.relays++; newRoom(roomN); };
+      $('ovbtn2').hidden = false;
+      $('ovbtn2').textContent = 'End the Run';
+      $('ovbtn2').onclick = () => postMortem(0);
+    } else {
+      $('ovbtn').textContent = 'End the Run';
+      $('ovbtn').onclick = () => postMortem(0);
+    }
+  }
+  $('over').classList.add('on');
+}
+
+/* ================================================================
+   THE WORKSHOP
+
+   A matrix, not a list: nine spell types down, three levels across.
+   Each cell is a card you ADD to the deck, repeatably — buying is
+   never an upgrade to a slot, so a deck can hold four cheap -50 reds
+   and one expensive +110 egg. The sign toggle at the top decides which
+   way the cards you buy will push; you will not get to choose later.
+
+   All the agency of the old cast-time controls now lives here, where
+   you have full information and no clock.
+   ================================================================ */
+/* Six offers, rolled fresh each visit. No guarantees and no floor on
+   price: a poor shop is a real outcome, and the reroll is the answer. */
+let offers = [], rerollN = 0, burning = false;
+
+function rollOffers() {
+  const all = [];
+  for (let sh = 0; sh < 3; sh++) for (let c = 0; c < 3; c++) for (let L = 0; L < 3; L++) all.push({ sh, c, L });
+  offers = shuf(all).slice(0, 6);
+}
+
+function drawShop() {
+  $('shoph').textContent = 'The Candy Shop \u00b7 \u25c6' + sugar;
+  /* two rooms ahead, so a purchase can be made for the floor after next */
+  $('shopnext').innerHTML = ROOMS.slice(roomN + 1, roomN + 3).map((R, k) =>
+    `<span>${k ? 'Then' : 'Next'} <i style="background:${R.sw}"></i> <b>${R.nm}</b></span>`).join('');
+
+  let h = '<div id=matrix>';
+  offers.forEach((o, k) => {
+    const p = PRICE[o.sh][o.L];
+    h += `<button class="cell offer" data-k="${k}" ${sugar < p ? 'disabled' : ''}>
+      ${icon(o.sh, o.c)}
+      <b>\u00b1${MAGS[o.L]} ${CHAN[o.c]}</b>
+      <span class=osh>${SHORT[o.sh]} pair</span>
+      <i>\u25c6${p}</i></button>`;
+  });
+  h += '</div><div id=extras>';
+  const rc = rerollCost(rerollN);
+  h += `<button class=cell data-x=r ${sugar < rc ? 'disabled' : ''}><b>New stock</b><i>\u25c6${rc}</i></button>`;
+  h += `<button class=cell data-x=b ${sugar < P_BURN || deck.length + discard.length + hand.length <= 6 ? 'disabled' : ''}><b>Burn a card</b><i>\u25c6${P_BURN}</i></button>`;
+  h += `<button class=cell data-x=u ${sugar < P_UNDO || undoMax >= MAX_UNDO ? 'disabled' : ''}><b>+1 Undo (${undoMax})</b><i>\u25c6${P_UNDO}</i></button>`;
+  h += '</div><div id=decklist></div>';
+  $('shoplist').innerHTML = h;
+  drawDeckList();
+}
+
+/* the deck, tallied — you cannot build well without seeing what you own */
+function drawDeckList() {
+  const all = deck.concat(discard, hand), tally = {};
+  all.forEach(k => { const key = k.s + ':' + k.c + ':' + k.g + ':' + k.m; tally[key] = (tally[key] || 0) + 1; });
+  $('decklist').innerHTML = `<h3>Your deck \u00b7 ${all.length} cards${burning ? ' \u00b7 tap one to burn' : ''}</h3>` +
+    Object.keys(tally).sort().map(key => {
+      const [sh, c, g, m] = key.split(':').map(Number);
+      return `<span class="dchip${burning ? ' hot' : ''}" data-key="${key}">${icon(sh, c)}${g > 0 ? '+' : '\u2212'}${m} ${CHAN[c]} ${SHORT[sh]} \u00d7${tally[key]}</span>`;
+    }).join('');
+}
+
+$('shoplist').onclick = e => {
+  const b = e.target.closest('button');
+  if (b && b.dataset.x) {
+    if (b.dataset.x === 'r') {
+      const rc = rerollCost(rerollN);
+      if (sugar < rc) return;
+      sugar -= rc; rerollN++; rollOffers();
+    }
+    if (b.dataset.x === 'b') { burning = !burning; drawShop(); return; }
+    if (b.dataset.x === 'u' && sugar >= P_UNDO && undoMax < MAX_UNDO) { sugar -= P_UNDO; undoMax++; }
+    beep(720, .1, 'triangle', .07); drawShop(); return;
+  }
+  if (b && b.dataset.k !== undefined) {
+    const k = +b.dataset.k, o = offers[k], p = PRICE[o.sh][o.L];
+    if (sugar < p) return;
+    sugar -= p; RUN.bought++;
+    /* a purchase is a PAIR: both signs enter the deck together */
+    discard.push({ s: o.sh, c: o.c, g: 1, m: MAGS[o.L] });
+    discard.push({ s: o.sh, c: o.c, g: -1, m: MAGS[o.L] });
+    offers.splice(k, 1);
+    beep(720, .1, 'triangle', .07); drawShop(); return;
+  }
+  const chip = e.target.closest('.dchip');
+  if (chip && burning && sugar >= P_BURN) {
+    const [sh, c, g, m] = chip.dataset.key.split(':').map(Number);
+    for (const pile of [deck, discard, hand]) {
+      const j = pile.findIndex(k => k.s === sh && k.c === c && k.g === g && k.m === m);
+      if (j >= 0) { pile.splice(j, 1); sugar -= P_BURN; break; }
+    }
+    burning = false; beep(300, .18, 'sawtooth', .06); drawShop();
+  }
+};
+
+function openShop() {
+  $('over').classList.remove('on');
+  burning = false; rerollN = 0; rollOffers();
+  drawShop();
+  $('shop').classList.add('on');
+}
+$('shopgo').onclick = () => {
+  $('shop').classList.remove('on');
+  const n = roomN + 1;
+  newRoom(n);
+  brief(n);
+};
+
+/* ================================================================
+   POST-MORTEM — where Praline is allowed to be a character.
+   Nothing here is instruction, so it costs the player no attention
+   during a room and it is the last thing anyone reads.
+   ================================================================ */
+function postMortem(won) {
+  $('over').classList.remove('on');   // the overlay outranks the dialogue box
+  const mins = Math.max(1, Math.round((Date.now() - RUN.started) / 60000));
+  const lines = won ? [
+    'Hm. They will dance on that tonight and not one of them will look down.',
+    'That is what a good floor is: the thing nobody notices. You will notice it. Every time you come through this hall for the rest of your life.',
+    'That is the price. Nobody mentions it when you sign on.',
+    'Well done, apprentice.'
+  ] : [
+    'Sit down. The sugar is not the problem and neither is your hand.',
+    'You bought strength when you needed a deck. Four heavy spells you never draw are worth less than one small one you always do.',
+    'Come back tomorrow. The Assembly is patient though it pretends not to be.'
+  ];
+  say(lines, () => {
+    $('ovh').textContent = won ? 'Apprenticeship Complete' : 'The Run Ends';
+    $('stars').innerHTML = '\u2605' + stars;
+    $('ovsub').innerHTML = `${RUN.rooms} of 7 rooms \u00b7 ${RUN.tiles} tiles set \u00b7 ${RUN.cast} spells cast<br>
+      ${RUN.bought} cards bought \u00b7 ${RUN.sweeps} hands swept \u00b7 ${RUN.undos} undone \u00b7 ${mins} min`;
+    $('ovbtn').textContent = 'Again, From the Sugar';
+    $('ovbtn').onclick = beginRun;
+    $('ovbtn2').hidden = true;
+    $('over').classList.add('on');
+  });
+}
+const finale = () => { Music.calm(); postMortem(true); };
+
+/* ================================================================
+   MENTOR DIALOGUE — one functional line per room, teaching exactly
+   the thing that is new. Character lives in the post-mortem.
+   ================================================================ */
+const BRIEF = [
+  ['The Assembly ordered a unicorn. Tap a spell from your hand, then tap a tile \u2014 the disc on each tile is the shade they want there.',
+   'You draw three and cast one. The others go back in the book. Sweep throws the hand away for a fresh set and costs you a round.'],
+  ['Fifteen tiles of nineteen and they accept the floor. Every tile you set earns sugar, and sugar buys cards for the book.'],
+  ['A spell is fixed the day you buy it \u2014 its colour, its strength, and which way it pushes. Choose at the bench, not at the floor.'],
+  ['There are boundaries to how far you can push a colour. You will learn through practice.'],
+  ['Two colours held high at once. Buy a spell that touches more than one tile, or you will run out of rounds.'],
+  ['A ring spares the tile you aim at and strikes the six around it. An egg strikes the heart at full and the ring at half.'],
+  ['The floor they will dance on. Every tile.']
+];
+
+const brief = n => { if (BRIEF[n] && !SEEN[n]) { SEEN[n] = 1; say(BRIEF[n]); } };
+
+const MASTER = 'Master Praline';
+let dq, typing, typeTimer = null, fullLine = '';
+function say(lines, after) {
+  dq = lines.slice(); dq.after = after || null;
+  $('port').innerHTML = MENTOR; $('who').textContent = MASTER;
+  $('dlg').classList.add('on'); dlgOn = true; nextLine();
+}
+function nextLine() {
+  if (!dq) return;
+  if (typing) { clearInterval(typeTimer); typing = false; $('line').textContent = fullLine; return; }
+  if (!dq.length) {
+    $('dlg').classList.remove('on'); dlgOn = false;
+    const a = dq.after; dq.after = null; if (a) a();
+    return;
+  }
+  fullLine = dq.shift(); typing = true;
+  const el = $('line'); el.textContent = ''; let n = 0;
+  clearInterval(typeTimer);
+  typeTimer = setInterval(() => {
+    el.textContent = fullLine.slice(0, ++n);
+    if (n % 3 === 0) beep(300 + ri(60), .02, 'square', .03);
+    if (n >= fullLine.length) { clearInterval(typeTimer); typing = false; }
+  }, 17);
+}
+$('dlg').onclick = nextLine;
+
+/* ================================================================
+   JUICE
+   ================================================================ */
+function toScreen(x, y) {
+  const pt = bd.createSVGPoint(); pt.x = x; pt.y = y;
+  const p = pt.matrixTransform(bd.getScreenCTM()), r = bw.getBoundingClientRect();
+  return [p.x - r.left, p.y - r.top];
+}
+function floatAt(i, txt, col) {
+  const [x, y] = px(HEX[i]), [sx, sy] = toScreen(x, y - 12);
+  const d = document.createElement('div');
+  d.className = 'float'; d.textContent = txt; d.style.color = col;
+  d.style.left = sx + 'px'; d.style.top = sy + 'px';
+  bw.appendChild(d); setTimeout(() => d.remove(), 1020);
+}
+const SPARKCOL = ['#ffd9e4', '#fff3c4', '#cdeef4', '#d6f0dc'];
+function sparkleAt(i) {
+  const [x, y] = px(HEX[i]), [sx, sy] = toScreen(x, y);
+  for (let k = 0; k < 9; k++) {
+    const s = document.createElement('div'), a = Math.random() * 6.28, r = 16 + Math.random() * 24;
+    s.className = 'sparkle';
+    s.style.left = sx + 'px'; s.style.top = sy + 'px';
+    s.style.background = SPARKCOL[k % 4];
+    s.style.setProperty('--dx', (Math.cos(a) * r - 3).toFixed(0) + 'px');
+    s.style.setProperty('--dy', (Math.sin(a) * r - 3).toFixed(0) + 'px');
+    bw.appendChild(s); setTimeout(() => s.remove(), 760);
+  }
+}
+
+/* ================================================================
+   AUDIO — oscillators and one Karplus-Strong voice. No samples.
+   ================================================================ */
+let AC = null;
+function beep(f, d, type, vol) {
+  if (!SFXON.v) return;
+  try {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.value = f;
+    o.frequency.exponentialRampToValueAtTime(f * 1.35, AC.currentTime + d * .85);
+    g.gain.setValueAtTime(0, AC.currentTime);
+    g.gain.linearRampToValueAtTime(vol, AC.currentTime + .012);
+    g.gain.exponentialRampToValueAtTime(.0001, AC.currentTime + d);
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + d);
+  } catch (e) {}
+}
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+
+/* a plucked-wood voice, rendered into a buffer at note time */
+function ks(freq, dur, damp, bright) {
+  const sr = AC.sampleRate, n = Math.max(2, Math.round(sr / freq)), len = Math.ceil(sr * dur);
+  const buf = AC.createBuffer(1, len, sr), out = buf.getChannelData(0), line = new Float32Array(n);
+  let last = 0;
+  for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; last += (w - last) * bright; line[i] = last; }
+  let p = 0, prev = 0;
+  for (let i = 0; i < len; i++) {
+    const cur = line[p];
+    line[p] = (cur + prev) * .5 * damp; prev = cur; out[i] = cur; p = (p + 1) % n;
+  }
+  const f = Math.min(400, len);
+  for (let i = 0; i < f; i++) out[len - 1 - i] *= i / f;
+  return buf;
+}
+
+/* "The Sugarwrights' Round" — D major, 6/8. One clock, one scalar
+   (tiles set / 19). Every layer is gated on that scalar, so the score
+   is a readout of the floor. Lines are packed one char per eighth;
+   base-36 indexes SCALE, '.' rests, '-' holds. */
+const Music = {
+  on: true, started: false, t: 0, step: 0, next: 0, master: null, wet: null, E: 60 / (50 * 3),
+  SCALE: [62,64,66,67,69,71,73,74,76,78,79,81,83,85,86],
+  ch: [[50,[62,66,69,74]],[47,[59,66,71,74]],[43,[59,62,67,71]],[45,[61,64,69,73]],
+       [50,[62,66,69,74]],[43,[59,62,67,71]],[45,[61,64,69,73]],[50,[62,69,74,78]]],
+  bass: '0--2--2--1--4--3--1--2--0--4--4--2--1--3--0--2--',
+  fig: ['2.6.5.','1.5.4.','0.4.3.','1.5.3.','2.6.5.','0.4.3.','1.5.3.','2.6.4.'],
+  mel: '7--9-8' + '7--5--' + '6--8-7' + '6--4--' + '9--8-6' + '5--7--' + '8--6-4',
+  cel: '..b---' + '------' + '..a---' + '------' + '--d---' + '------' + '..b---',
+
+  boot() {
+    if (this.started) return;
+    // Audio is optional. A browser with Web Audio blocked must still play.
+    try {
+      if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { return; }
+    if (!AC) return;
+    if (AC.state === 'suspended') AC.resume();
+    this.master = AC.createGain(); this.master.gain.value = 0;
+    this.master.connect(AC.destination);
+    /* a delay line stands in for the convolver: far fewer bytes,
+       and at this tempo the ear reads it as the same room */
+    const dl = AC.createDelay(1), fb = AC.createGain(), lp = AC.createBiquadFilter();
+    fb.gain.value = .34; lp.type = 'lowpass'; lp.frequency.value = 2600;
+    dl.delayTime.value = .19;
+    this.wet = AC.createGain(); this.wet.gain.value = .4;
+    this.wet.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl);
+    dl.connect(this.master);
+    this.started = true;
+    this.next = AC.currentTime + .1;
+    this.master.gain.linearRampToValueAtTime(this.on ? .9 : 0, AC.currentTime + 2.5);
+    setInterval(() => this.tick(), 25);
+  },
+  intensity(v) { this.t = v; },
+  calm() { if (this.started) this.master.gain.linearRampToValueAtTime(.5, AC.currentTime + 2); },
+
+  voice(m, dur, gain, damp, bright, when, pan) {
+    const src = AC.createBufferSource();
+    src.buffer = ks(mtof(m), dur, damp, bright);
+    const g = AC.createGain(); g.gain.value = gain;
+    const p = AC.createStereoPanner ? AC.createStereoPanner() : null;
+    if (p) { p.pan.value = pan || 0; src.connect(g); g.connect(p); p.connect(this.master); p.connect(this.wet); }
+    else { src.connect(g); g.connect(this.master); g.connect(this.wet); }
+    src.start(when);
+  },
+  /* a soft sustained tone for melody and bass, so not everything is struck */
+  soft(m, dur, gain, when, pan) {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'triangle'; o.frequency.value = mtof(m);
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(gain, when + dur * .18);
+    g.gain.linearRampToValueAtTime(0, when + dur);
+    const p = AC.createStereoPanner ? AC.createStereoPanner() : null;
+    o.connect(g);
+    if (p) { p.pan.value = pan || 0; g.connect(p); p.connect(this.master); p.connect(this.wet); }
+    else { g.connect(this.master); g.connect(this.wet); }
+    o.start(when); o.stop(when + dur + .05);
+  },
+  pad(tones, when, dur, gain) {
+    tones.forEach(m => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = 'sine'; o.frequency.value = mtof(m);
+      g.gain.setValueAtTime(0, when);
+      g.gain.linearRampToValueAtTime(gain, when + dur * .4);
+      g.gain.linearRampToValueAtTime(0, when + dur);
+      o.connect(g); g.connect(this.wet); g.connect(this.master);
+      o.start(when); o.stop(when + dur + .05);
+    });
+  },
+  tick() {
+    if (!this.started) return;
+    while (this.next < AC.currentTime + .25) {
+      this.play(this.step, this.next);
+      this.step++; this.next += this.E;
+    }
+  },
+  play(s, when) {
+    const t = this.t, bar = Math.floor(s / 6) % 8, beat = s % 6;
+    const w = when + (beat % 3 === 2 ? this.E * .05 : 0);
+    const tones = this.ch[bar][1];
+
+    const b = this.bass[s % this.bass.length];
+    if (b !== '.' && b !== '-') this.soft(this.SCALE[parseInt(b, 36)] - 12, this.E * 3, .13, w, -.2);
+
+    const f = this.fig[bar][beat];
+    if (f !== '.') this.voice(this.SCALE[parseInt(f, 36)] + 12, 1.9, .10 + t * .04, .9935, .5, w, (beat % 3 - 1) * .32);
+
+    const m = this.mel[s % this.mel.length];
+    if (m !== '.' && m !== '-') {
+      let len = 1, k = s + 1;
+      while (this.mel[k % this.mel.length] === '-' && len < 12) { len++; k++; }
+      this.soft(this.SCALE[parseInt(m, 36)], this.E * len * 1.05, .16, w, .12);
+    }
+    const c = this.cel[s % this.cel.length];
+    if (c !== '.' && c !== '-') this.voice(this.SCALE[parseInt(c, 36)] + 12, 3.4, .075, .9977, .9, w, .35);
+
+    if (beat === 0) this.pad(tones, w, this.E * 6, .010 + t * .028);
+  },
+  toggle() {
+    if (!this.started) { this.on = true; this.boot(); return true; }
+    this.on = !this.on;
+    this.master.gain.linearRampToValueAtTime(this.on ? .9 : 0, AC.currentTime + .3);
+    return this.on;
+  }
+};
+
+const sfxCast = () => { beep(587, .12, 'triangle', .08); setTimeout(() => beep(880, .14, 'triangle', .07), 55); };
+const sfxUndo = () => { beep(440, .12, 'sine', .07); setTimeout(() => beep(330, .15, 'sine', .06), 80); };
+const sfxSeat = () => {
+  if (!AC || !SFXON.v) return;
+  [74, 78, 81, 86].forEach((m, i) => setTimeout(() => Music.started
+    ? Music.voice(m, 1.6, .16, .995, .85, AC.currentTime, 0) : beep(mtof(m), .3, 'triangle', .09), i * 70));
+};
+const sfxFanfare = () => {
+  if (!AC || !SFXON.v) return;
+  [62, 66, 69, 74, 78, 81, 86].forEach((m, i) => setTimeout(() => Music.started
+    ? Music.voice(m, 2.4, .2, .9965, .8, AC.currentTime, (i % 3 - 1) * .3) : beep(mtof(m), .5, 'triangle', .09), i * 100));
+};
+
+/* ================================================================
+   KEYBOARD — desktop players still click tiles, but everything else
+   that has a button has a key. 1-3 picks a card, S sweeps, U undoes,
+   Space advances Praline and the overlays, Esc closes a panel.
+   ================================================================ */
+addEventListener('keydown', e => {
+  const k = e.key, sp = k === ' ' || k === 'Enter';
+  if (sp) e.preventDefault();
+  if (dlgOn) { if (sp) nextLine(); return; }
+  if (k === 'Escape') { $('set').classList.remove('on'); return; }
+  if ($('set').classList.contains('on') || $('shop').classList.contains('on')) {
+    if (sp) $(($('shop').classList.contains('on') ? 'shopgo' : 'close')).onclick();
+    return;
+  }
+  if ($('party').className) { endParty(); return; }
+  if (!$('title').classList.contains('off')) { if (sp) $('start').onclick(); return; }
+  if ($('over').classList.contains('on')) { if (sp) $('ovbtn').onclick(); return; }
+  if (k > '0' && k < '4' && hand[+k - 1]) {
+    sel = sel === +k - 1 ? null : +k - 1;
+    msg(sel === null ? '' : 'Cast it on a tile.');
+    beep(560, .07, 'sine', .05); render();
+  }
+  else if (k === 's' || k === 'S') $('sweep').onclick();
+  else if (k === 'u' || k === 'U') $('undo').onclick();
+});
+
+/* ================================================================
+   SETTINGS
+   ================================================================ */
+const swset = (el, on) => el.classList.toggle('on', on);
+$('gear').onclick = () => {
+  if (dlgOn) return;
+  swset($('swm'), Music.on); swset($('sws'), SFXON.v);
+  swset($('swh'), HINT.v); swset($('swn'), showNums);
+  $('set').classList.add('on');
+};
+$('close').onclick = () => $('set').classList.remove('on');
+$('set').onclick = e => { if (e.target === $('set')) $('set').classList.remove('on'); };
+$('swm').onclick = () => swset($('swm'), Music.toggle());
+$('sws').onclick = () => { SFXON.v = !SFXON.v; swset($('sws'), SFXON.v); if (SFXON.v) sfxCast(); };
+$('swh').onclick = () => { HINT.v = !HINT.v; swset($('swh'), HINT.v); render(); };
+$('swn').onclick = () => { showNums = !showNums; swset($('swn'), showNums); render(); };
+$('restart').onclick = () => { $('set').classList.remove('on'); beginRun(); };
+
+/* ================================================================
+   BOOT
+   Exact numbers default ON: this is a colour-matching game, and a
+   player who cannot separate the three hues must not be locked out.
+   ================================================================ */
+function beginRun() {
+  newRun(); showNums = true;
+  $('over').classList.remove('on'); $('shop').classList.remove('on');
+  newRoom(0); brief(0);
+}
+$('start').onclick = () => {
+  try { Music.boot(); } catch (e) { }   // audio starts in the gesture, but never blocks
+  $('title').classList.add('off');
+  beginRun();
+};
+newRun(); showNums = true; newRoom(0);
+</script>
+</body>
+</html>

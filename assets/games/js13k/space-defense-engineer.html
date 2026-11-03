@@ -1,0 +1,1139 @@
+<html>
+  <head><script>window.dcr=(e,c=null)=>{if(c!=null){return c.createElement(e);}else{return document.createElement(e);}};
+window.dba=(e,c)=>{if (c!=null){c.body.appendChild(e);}else{document.body.appendChild(e)}};</script>
+    <title>Space Defense Engineer</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>body {
+  background: #000;
+  color: #f5f5f5;
+  overflow: hidden;
+  margin: 0;
+}
+
+body > * {
+  font-family: monospace;
+  user-select: none;
+}
+
+link,
+[hidden] {
+  display: none !important;
+}
+#ene {
+  height: 30px;
+  width: 30px;
+  position: absolute;
+} /*enemy*/
+#sst {
+  border-radius: 50%;
+  width: 100%;
+  height: 100%;
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAMAAADXqc3KAAAAbFBMVEUAAAD///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8+T+BWAAAAI3RSTlMA4wVx+ep+FfLRzMWeYk5JHwmvDNe2pZZ2UkE5NSoa3NqwDeTXEe4AAAC1SURBVCjPpdA3FoMwFAVRlMkmOAccZv97NGoAf1zZah5n7kGFkn/OsNsN33qjQDXrrjOKgkyvwPPoX3e87K3jnCRnXCvgRBGn4CTggNkotTEcBORcFKgLuQBFiBBQAlJ0vEqTCrDoOBorwBHiBJyAjGucK5l4kD1V3Iq9/uhHQxk/SsxxKXV+w41BO255vYCOZssYarYN3dyDxRsAMB4bJjCkvn1asF3rU8wEZdXPv/dVmfx03pw8DKK4zI4qAAAAAElFTkSuQmCC);
+  background-repeat: no-repeat;
+  background-size: cover;
+  transform: rotate(180deg);
+  background-color: transparent;
+} /*space ship top*/
+#ssm {
+  width: 100%;
+  display: block;
+  background-color: green;
+  left: 50%;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  height: 6px;
+  top: 42px;
+} /*space ship mid*/
+#ssb {
+  width: 18px;
+  height: 15px;
+  bottom: -2px;
+  left: 6px;
+  position: relative;
+  display: block;
+  border-radius: 50%;
+}
+.hei {
+  width: 100%;
+  height: 100%;
+  transform: rotate(180deg);
+} /*henchman image*/
+.hen {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+} /*henchman*/
+#not {
+  pointer-events: none;
+  font-size: 32px;
+  font-family: system-ui;
+  color: rgb(238, 56, 32, 1);
+  z-index: 1000000;
+  width: 100%;
+  position: absolute;
+  top: 10%;
+  text-align: center;
+} /*notification*/
+
+#not div[sub]{
+  font-family: monospace;
+  font-size: 12px;
+  color: #fff;
+  max-width: 300px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.b-q {
+  width: 10px;
+  height: 6px;
+  border: 1px solid rgb(248, 190, 28);
+  background: rgba(248, 190, 28, 0.5);
+  filter: blur(1px);
+} /*bullet quantum*/
+.b-p {
+  width: 36px;
+  height: 7px;
+  border: 1px solid rgb(132, 255, 255);
+  background: rgba(132, 255, 255, 0.5);
+  border-radius: 0px;
+  filter: blur(3px);
+}
+.b-t {
+  pointer-events: none;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgb(255, 73, 49);
+  filter: blur(2px);
+  background: rgba(255, 73, 49, 0.2);
+  border-radius: 50%;
+}
+.b-b {
+  width: 10px;
+  height: 6px;
+  border: 1px solid rgb(255, 255, 255);
+  background: rgba(255, 255, 255, 0.3);
+  filter: blur(1px);
+}
+</style>
+  </head>
+
+  <body>
+    <!-- Critial Scripts -->
+    <script>const html = (v) => v;
+</script>
+    <script>function inside_rect(ir/*inside rect*/,or/*outside rect*/) {
+    function inside(x,y) {
+        return x > or.left && x < or.left+or.width
+        && y>or.top&&y<or.top+or.height;
+    }
+    var _in = inside(/*A: x,y*/ ir.left,ir.top)
+      ||   inside(/*B: x,y*/ ir.left+ir.width,ir.top)
+      ||   inside(/*C: x,y*/ ir.left,ir.top+ir.height)
+      ||   inside(/*D: x,y*/ ir.left+ir.width,ir.top+ir.height);
+    var x_within = ir.left>or.left && ir.left+ir.width<or.left+or.width;
+    var y_within = ir.top>or.top && ir.top+ir.height<or.top+or.height;
+    var y_surrounds=(ir.top<or.top&&ir.top+ir.height>or.top)||(ir.top<or.top+or.height&&ir.top+ir.height>or.top+or.height);
+    var x_surrounds=(ir.left<or.left&&ir.left+ir.width>or.left)||(ir.left<or.left+or.width&&ir.left+ir.width>or.left+or.width);
+    return _in || (
+            x_within && y_surrounds
+        ) || (
+            y_within && x_surrounds
+    );
+}
+function rects_collide(r1,r2) {
+    return inside_rect(r1,r2)||inside_rect(r2,r1);
+}
+</script>
+    <script>LOADING_SCENE = "loading-scene";
+GAME_SCENE = "game-scene";
+
+ALL_SCENES = [
+    LOADING_SCENE,
+    GAME_SCENE
+];
+
+G/*AME_DATA*/ = {
+  towers: "@M*O",//"*@M0OADY",
+  waves: ["111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"],
+  wave: 0,
+  ei: 0,//enemy index (usage: waves[wave][ei])
+  bullets: [],
+  allScenes : [...ALL_SCENES],
+  cs: LOADING_SCENE,
+  gameOver: false,
+  pDamage: 9,
+  bDamage: 10,
+  tDamage: 6,
+  qDamage: 16,
+  tower_types : [
+    "blaster",
+    "thermal",
+    "phaser",
+    "quantum",
+  ]
+};
+
+
+</script>
+    <script>function tower_decode(tower_char) {
+  var tc = tower_char;
+  var bit_str = tc.charCodeAt(0).toString(2).padStart(8, "0");
+  return bit_str;
+}
+function removeOrphanBullets() {
+  var rmidx = -1;
+  G.bullets.forEach((bullet, i) => {
+    if (!bullet.tower.isConnected) {
+      rmidx = i;
+    }
+  });
+
+  while (rmidx > -1) {
+    var b = G.bullets[rmidx];
+    G.bullets.splice(rmidx, 1);
+    document.body.removeChild(b);
+    rmidx = -1;
+    G.bullets.forEach((bullet, i) => {
+      if (!bullet.tower.isConnected) {
+        rmidx = i;
+      }
+    });
+  }
+}
+
+function create_bullet(tow, chg_x = 1, chg_y = 0) {
+  var b = dcr("div");
+  b.tower = tow;
+  G.bullets.push(b);
+  // bullet defaults
+  b.idx = G.bullets.length - 1;
+  b.style.position = "absolute";
+  b.style.zIndex = "0";
+  b.damage = 3;
+
+  if (tow.getAttribute("quantum") !== null) {
+    // higher damage for quantum towers
+    // bullet rotation (ai aim assist)
+    b.classList.add("b-q");
+    b.damage = G.qDamage;
+  }
+
+  if (tow.getAttribute("phaser") !== null) {
+    // laser beam straight line for phaser towers
+    b.classList.add("b-p");
+    b.damage = G.pDamage;
+    b.slow = 0.00001; // percent pixel move per game loop iteration
+  }
+
+  if (tow.getAttribute("thermal") !== null) {
+    // aoe attack but lower damage for thermal towers
+    b.classList.add("b-t");
+    b.damage = G.tDamage;
+  }
+
+  if (tow.getAttribute("blaster") !== null) {
+    b.damage = G.bDamage;
+    b.classList.add("b-b");
+  }
+
+  var rect = tow.getBoundingClientRect();
+  var x = rect.x + rect.width / 2.0;
+  var y = rect.y + rect.height / 2.0;
+  b.style.left = x + "px"; //tow.parentNode.offsetLeft + 28 + "px";
+  b.style.top = y + "px"; //tow.parentNode.offsetTop + 36 + "px";
+  b.ox = x;
+  b.oy = y;
+  b.x = x;
+  b.y = y;
+  var tag = tow.parentNode.parentNode.parentNode.parentNode.parentNode.tagName; //td //tr //tbody //table //l-g or r-g
+  b.lefttower = tag.toUpperCase() == "L-G";
+  dba(b);
+  var mid_x = document.body.getBoundingClientRect().width / 2.0;
+  b.style.zIndex = "100000";
+  setInterval(() => {
+    var reset = false;
+    if (rect.y > b.y) {
+      b.style.transform = b.lefttower ? "rotate(-45deg)" : "rotate(45deg)";
+    } else if (rect.y < b.y - 50) {
+      b.style.transform = b.lefttower ? "rotate(45deg)" : "rotate(-45deg)";
+    }
+    if (!b.lefttower && b.x < mid_x - 63) {
+      b.x = b.ox;
+      b.y = b.oy;
+      reset = true;
+    }
+    if (!b.lefttower && b.x >= mid_x - 63) {
+      b.x -= chg_x;
+      b.y += chg_y;
+    }
+    if (b.lefttower && b.x > mid_x + 63) {
+      b.x = b.ox;
+      b.y = b.oy;
+      reset = true;
+    }
+    if (b.lefttower && b.x <= mid_x + 63) {
+      b.x += chg_x;
+      b.y += chg_y;
+    }
+    if (b.reset) {
+      b.reset = false;
+      b.x = b.ox;
+      b.y = b.oy;
+      b.style.left = b.x + "px";
+      b.style.top = b.y + "px";
+    }
+
+    if ((reset || b.reset) && window?.ene?.recentHits.includes(b.idx)) {
+      b.reset = false;
+      b.x = b.ox;
+      b.y = b.oy;
+      for (var i = 0; i < window?.ene?.recentHits.length; i++) {
+        if (window?.ene?.recentHits[i] == b.idx) {
+          window.ene.recentHits[i] = -1;
+        }
+      }
+    }
+
+    b.style.left = b.x + "px";
+    b.style.top = b.y + "px";
+  }, 10);
+}
+function create_tower(attrs, tss /*tower set string*/) {
+  var tow = dcr("div");
+  var span = dcr("span");
+  span.style.borderRadius = "50%";
+  tow.appendChild(span);
+  span.setAttribute("one", ""); //levels[li],"");
+  if (tss.length == 1) {
+    span.style.width = "65px";
+    span.style.height = "65px";
+    span.style.backgroundImage = "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAMAAADW3miqAAAAllBMVEUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6C80qAAAAMXRSTlMA9OaI+BQKUyaADfvwzXYQBtO3nKBrVzwuA+vZv3JlTOCyo5eEXEI2NBnHjHpOSB8b2y9iVQAAAUBJREFUOMvFk8dywkAQRGcDK6GckBA5GnDu//85S4sWChutDxzoW3e9mhnNrOi5qjLGssrOOD4a+Y6NiQNoBbEF2qPT3gJFBoosUGkg21De5MxMPLLoQ3+dXJJVxxAIj/SPhsCQHocG+RkqBv3MmIOiNI0I3O2twxGQVoBpX60cwbgrGSDvKSQxokRwLhIaQd4v5YApEmgkSLGey0RtC95CnKjouXH5SVeIlmXPkxOeaeftfp+4djaZcOvF5Dr4HHxRu2JdmFOrmb78FADrduiyxqSyzTOlky2MVg59N5k6UbmC0ZsuxDrH3lUsJAtDJndKDS9x0m4XnWZE8Vbq1vmAaGbydoQvY9Z67c587uhlZyY/tS7tzIJuNOriULsXX5vX+hZKQh3Lis7UFPAL78+vs/GBtLp49xDffRcHl56gH9KFMcnlum55AAAAAElFTkSuQmCC)";
+    span.style.backgroundRepeat = "no-repeat";
+    span.style.backgroundPosition = "14px 11px";
+    tow.style.zIndex = "1";
+  }
+  tow.rot = 0;
+  var typidx =
+    parseInt(attrs[5] + "" + attrs[6] + "" + attrs[7], 2) %
+    G.tower_types.length;
+  tow.setAttribute(G.tower_types[typidx], "");
+  setTimeout(() => {
+    create_bullet(tow);
+  });
+  return tow;
+}
+</script>
+    <script>var t4 = dcr("template",document);
+
+t4.innerHTML = ` <l-s><style>l-s {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+}
+
+l-s > div {
+  font-size: 14px;
+  margin-top: 4px;
+}
+</style> <img src="data:image/gif;base64,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" /> <div>Loading...</div></l-s> `;
+
+class LoadingScene extends HTMLElement {
+  connectedCallback() {
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+      this.shadowRoot.appendChild(t4.content.cloneNode(true));
+    }
+  }
+}
+
+customElements.define("sd-loading-scene", LoadingScene);
+</script>
+
+    <!-- Async Scripts -->
+    <!-- Web Components -->
+    <script defer>var t2 = document.createElement("template");
+
+let showingNotification = false;
+let notifications = [];
+setNotification = (text, subtext, timeout, color) => {
+  if (showingNotification) {
+    if (text !== notifications?.[0]?.text) {
+      notifications.push({ text, subtext, timeout, color });
+    }
+    return;
+  }
+  try {
+    showingNotification = true;
+    var n = dcr("a");
+    n.id = "not";
+    n.innerHTML = `<div>${text}</div><div sub>${subtext}</div>`;
+    n.style.color = color;
+    dba(n);
+    setTimeout(() => {
+      n.remove();
+      showingNotification = false;
+      if (notifications.length > 0) {
+        setNotification(
+          notifications[0].text,
+          notifications[0].subtext,
+          notifications[0].timeout,
+          notifications[0].color
+        );
+        notifications.shift();
+      }
+    }, timeout);
+  } catch (_) {}
+};
+
+t2.innerHTML = html`
+  <style>:host {
+  color: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+}
+
+t-a {
+  display: flex;
+  align-items: center;
+  height: 25px;
+  width: 100%;
+  background: green;
+  justify-content: space-between;
+}
+
+t-a > span {
+  padding: 0 12px;
+  position: absolute;
+}
+
+t-b {
+  height: 65px;
+  display: flex;
+  justify-content: space-between;
+  background: #000;
+  color: #f5f5f5;
+  align-items: center;
+}
+
+s-c {
+  display: grid;
+  grid: "left middle right" / 1fr 200px 1fr;
+  height: calc(100vh - 85px);
+}
+
+m-g {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+r-w {
+  display: flex;
+  width: 200px;
+  height: calc(100vh - 85px);
+  filter: blur(38px);
+  background-color: #212121;
+  background-color: #212121;
+}
+
+s-p {
+  height: calc(17vh - 65px);
+  width: calc(17vh - 65px);
+  border-radius: 50%;
+  filter: blur(2px);
+  background: #f89133a6;
+  position: absolute;
+  bottom: 24px;
+}
+
+l-g,
+r-g {
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  r-w {
+    width: 65px;
+  }
+  s-c {
+    display: grid;
+    grid: "left middle right" / 1fr 100px 1fr;
+  }
+}
+
+table {
+  border-spacing: 0;
+  position: absolute;
+}
+
+div.tower {
+  pointer-events: none;
+}
+
+td {
+  font-size: 44px;
+  text-align: center;
+  border: 1px solid #212121;
+  width: 100px;
+  height: 100px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+  background: #000;
+}
+
+td:hover {
+  transition: 0.1s ease-out;
+  background: #111;
+  border-color: rgb(238, 150, 34);
+}
+
+div[menu] {
+  width: 95px;
+  height: 95px;
+  bottom: 100%;
+  overflow-y: auto;
+  top: 0;
+  background: #000;
+  color: #f5f5f5;
+  position: absolute;
+  z-index: 2;
+}
+
+div[menu-item] {
+  font-size: 11px;
+  color: #f5f5f5;
+  height: 25px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent; /* make scrollbar transparent */
+}
+
+div[menu-item]:hover {
+  transition: 0.1 ease-out;
+  background: #333;
+}
+div[menu-item]:hover td {
+  border-color: #000 !important;
+}
+
+div[money] {
+  font-size: 17px;
+  color: #f5f5f5;
+  padding-right: 12px;
+}
+
+div[main-title] {
+  padding-right: 12px;
+  color: rgba(238, 153, 18, 1);
+}
+
+div[legend] {
+  font-size: 13px;
+  text-transform: uppercase;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  max-height: 45px;
+  overflow-y: auto;
+}
+
+div[legend] span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: block;
+  margin: 0 6px;
+}
+div[quantum]:not([menu-item]),
+div[blaster]:not([menu-item]),
+div[particle]:not([menu-item]),
+div[phaser]:not([menu-item]),
+div[satellite]:not([menu-item]),
+div[thermal]:not([menu-item]) {
+  display: flex;
+  align-items: center;
+  margin-left: 24px;
+}
+div[thermal] span[one] {
+  background: rgb(245, 80, 75);
+}
+div[thermal] span[two] {
+  background: rgb(255, 76, 52);
+}
+div[thermal] span[three] {
+  background: rgb(221, 43, 19);
+}
+
+div[phaser] span[one] {
+  background: rgb(142, 246, 246);
+}
+div[phaser] span[two] {
+  background: rgb(82, 230, 288, 1);
+}
+div[phaser] span[three] {
+  background: rgb(27, 166, 221);
+}
+
+div[blaster] span[one] {
+  background: rgba(80, 80, 80, 1);
+}
+div[blaster] span[two] {
+  background: rgb(209, 208, 208);
+}
+div[blaster] span[three] {
+  background: rgba(255, 255, 255, 1);
+}
+
+div[quantum] span[one] {
+  background: rgb(255, 227, 65);
+}
+div[quantum] span[two] {
+  background: rgb(251, 194, 34);
+}
+div[quantum] span[three] {
+  background: rgb(221, 142, 15);
+}
+
+span[sell] {
+  background: rgb(26, 114, 67);
+}
+
+</style>
+  <t-a><span>PLANET HEALTH</span>
+</t-b>
+</t-a>
+  <t-b
+    ><div legend>
+      <div
+        blaster
+        title="Single target turret. Standard space defense engineer issue."
+      >
+        Blaster 1<span one></span> 2<span two></span> 3<span three></span>
+      </div>
+      <div
+        thermal
+        title="Hot. Hot. Hot. High area of effect damage that literally incinerates enemies."
+      >
+        Thermal Detonator 1<span one></span> 2<span two></span> 3<span
+          three
+        ></span>
+      </div>
+      <div
+        phaser
+        title="Lazer turret that blasts enemies in a line and disintegrates them."
+      >
+        Phaser 1<span one></span> 2<span two></span> 3<span three></span>
+      </div>
+      <div
+        quantum
+        title="Quantum drive that provides a damage boost and well as AI programming for rotation of attached turrets."
+      >
+        Quantum Drive 1<span one></span> 2<span two></span> 3<span three></span>
+      </div>
+    </div>
+    <div>
+    <div main-title>Space Defense Engineer</div>
+    <div money></div>
+</div>
+    </t-b
+  ><s-c
+    ><l-g></l-g><m-g><r-w></r-w><s-p></s-p></m-g><r-g></r-g
+  ></s-c>
+`;
+
+class GameScene extends HTMLElement {
+  buildTable(query, side, ctx) {
+    setNotification(
+      `Attack ${G.wave + 1}`,
+      "Build towers to defend this planet from invasion",
+      6000,
+      "rgba(238, 153, 18, 1)"
+    );
+    const gc = ctx.shadowRoot.querySelector(query);
+    var tbl = document.createElement("table");
+
+    var tbd = document.createElement("tbody");
+    tbl.appendChild(tbd);
+    var cw = gc.clientWidth;
+    var ch = gc.clientHeight;
+    var lead = 0;
+    while (cw % 100 != 0) {
+      cw -= 1;
+      lead += 1;
+    }
+    var leadY = 0;
+    while (ch % 100 != 0) {
+      ch -= 1;
+      leadY += 1;
+    }
+    if (side === "left") {
+      tbl.style.left = lead + "px";
+    } else {
+      tbl.style.right = lead + "px";
+    }
+    tbl.style.top = leadY / 2 + "px";
+    tbl.style.bottom = leadY / 2 + "px";
+    for (var i = 0; i < ch / 100; i++) {
+      var tr = dcr("tr", document);
+      for (var j = 0; j < cw / 100; j++) {
+        var td = dcr("td", document);
+        td.setAttribute(
+          "cost",
+          side === "left" ? (j + 1) * 100 : (cw / 100 - j) * 100
+        );
+        tr.appendChild(td);
+      }
+      tbd.appendChild(tr);
+    }
+    gc.appendChild(tbl);
+    return ctx.buildTable;
+  }
+
+  closeMenu() {
+    const previousMenu = this.shadowRoot.querySelector("div[menu]");
+    const previousMenuParent = previousMenu?.parentElement;
+    if (previousMenu && previousMenuParent) {
+      previousMenuParent.removeChild(previousMenu);
+    }
+  }
+
+  buildMenu() {
+    this.shadowRoot.querySelectorAll("td").forEach((td) => {
+      td.addEventListener("click", (e) => {
+        this.closeMenu();
+        const el = e.srcElement;
+        const menu = dcr("div");
+        menu.setAttribute("menu", true);
+        let towers = G.towers.split("");
+        let isUpgrading = false;
+        const s = td.querySelector("span");
+        let nextLevel =
+          s?.getAttribute("one") === ""
+            ? "two"
+            : s?.getAttribute("two") === ""
+            ? "three"
+            : s?.getAttribute("three") === ""
+            ? "four"
+            : null;
+        if (!nextLevel) {
+          nextLevel = "one";
+        }
+
+        if (Boolean(td.towers)) {
+          towers = towers.filter((l) => td.towers.includes(l));
+          isUpgrading = true;
+        }
+
+        if (nextLevel === "four") {
+          towers = [];
+        }
+
+        towers.forEach((t) => {
+          const mi = dcr("div");
+          var dt = tower_decode(t);
+          var typidx =
+            parseInt(dt[5] + "" + dt[6] + "" + dt[7], 2) % G.tower_types.length;
+          var type = G.tower_types[typidx];
+          mi.setAttribute(type, "");
+          mi.setAttribute("legend", "");
+          const tpCost = Number(td.getAttribute("cost"));
+          const cost =
+            type === "blaster"
+              ? tpCost
+              : type === "thermal"
+              ? tpCost * 1.5
+              : type === "phaser"
+              ? tpCost * 2
+              : tpCost * 2.5;
+          mi.innerHTML = `<span ${nextLevel}></span> ${cost}`;
+          mi.setAttribute("menu-item", true);
+          mi.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (cost > this.money) {
+              setNotification(
+                `Insufficient Funds`,
+                "Defeating waves will earn you money",
+                4000,
+                "red"
+              );
+              this.closeMenu();
+              return;
+            }
+            const amt = this.money - cost;
+            this.setMoney(amt);
+            if (td.towers == null) td.towers = "";
+            if (td.towers.includes(t)) {
+              //upgrade
+              for (var i = 0; i < td.childNodes.length; i++) {
+                var cn = td.childNodes[i]; //child node
+                if (cn.towerId === t) {
+                  cn.childNodes[0].removeAttribute("one");
+                  cn.childNodes[0].removeAttribute("two");
+                  if (cn.level === undefined) cn.level = 1;
+                  cn.level += 1;
+                  var levels = ["zero", "one", "two", "three"];
+                  cn.childNodes[0].setAttribute(levels[cn.level], "");
+                  var chg = [
+                    -999,
+                    { x: 1, y: 1 },
+                    { x: 1, y: -1 },
+                    { x: 2, y: 0 },
+                  ][((parseInt(cn.level) + 1) % 3) + 1];
+                  create_bullet(cn, chg.x, chg.y);
+                  break;
+                }
+              }
+              for (var i = 0; i < G.bullets.length; i++) {
+                var bu = G.bullets[i]; //bullet upgrade
+                bu.damage += 1.3;
+              }
+              this.closeMenu();
+              return;
+            } else td.towers += t;
+
+            var div = create_tower(tower_decode(t), td.towers); //dcr("div");
+            div.towerId = t;
+            div.classList.add("tower");
+            td.appendChild(div);
+            td.style.position = "relative";
+            this.closeMenu();
+          });
+          menu.appendChild(mi);
+        });
+
+        if (isUpgrading) {
+          const cost = Number(td.getAttribute("cost"));
+          const mi = dcr("div");
+          mi.setAttribute("blaster", "");
+          mi.setAttribute("legend", "");
+          mi.style.color = "red";
+          mi.innerHTML = `<span sell></span> sell ${cost}`;
+          mi.setAttribute("menu-item", true);
+          mi.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const amt = this.money + cost;
+            this.setMoney(amt);
+            td.towers = "";
+            td.children[0].remove();
+            removeOrphanBullets();
+            this.closeMenu();
+          });
+          menu.appendChild(mi);
+        }
+        el.appendChild(menu);
+      });
+    });
+  }
+
+  setMoney(amt) {
+    this.money = amt;
+    const moneyEl = this.shadowRoot.querySelector("div[money]");
+    if (amt < 1000) {
+      moneyEl.style.color = "red";
+    } else if (amt < 3000) {
+      moneyEl.style.color = "yellow";
+    } else {
+      moneyEl.style.color = "green";
+    }
+    moneyEl.innerText = `$${amt.toFixed(2)}`;
+  }
+
+  connectedCallback() {
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+      this.shadowRoot.appendChild(t2.content.cloneNode(true));
+      this.setMoney(this.clientWidth * (this.clientWidth > 1200 ? 8 : 4));
+
+      setTimeout(() => {
+        this.buildTable("l-g", "left", this)("r-g", "right", this);
+        this.buildMenu();
+        setTimeout(() => {
+          var top = dcr("div");
+          top.id = "sst";
+          var mid = dcr("div");
+          mid.id = "ssm";
+          var bot = dcr("div");
+          bot.id = "ssb";
+          /*var */ window.ene = dcr("div");
+          ene.velocity = 1; // 1px per game loop iteration
+          ene.velocityTrack = 1.0;
+          ene.health = 100;
+          ene.id = "ene";
+          ene.width = 30;
+          ene.height = 30;
+          mid.style.backgroundColor = "white"; //"green";
+          top.appendChild(mid);
+          mid.appendChild(bot);
+          ene.appendChild(top);
+          var brect = document.body.getBoundingClientRect();
+          ene.style.left = brect.width / 2.0 - 15 + "px";
+          ene.style.top = "40px";
+          ene.y = 40;
+          ene.x = brect.width / 2.0 - 15;
+          ene.recentHits = [];
+          dba(ene);
+          let wave = 3;
+          let sPassed = 0;
+          // game loop
+          var gmLpId = setInterval(() => {
+            if (G.gameOver) return;
+            this.shadowRoot.querySelector(
+              "[main-title]"
+            ).innerText = `Space Defense Engineer (level ${Math.floor(
+              wave / 3
+            )}/${G.waves?.[0].length / 3})`;
+            if (ene.y > document.body.getBoundingClientRect().height) {
+              sPassed += 1;
+              const pHP = this.shadowRoot.querySelector("t-a");
+              pHP.style.width = `${100 - sPassed * 5}%`;
+              if (sPassed >= 20) {
+                gameOver(false);
+              }
+            }
+            if (
+              ene.y > document.body.getBoundingClientRect().height ||
+              ene.health <= 0
+            ) {
+              G.ei += 1;
+              ene.y = 40;
+              ene.recentHits = [];
+              ene.health = 100 + (wave / 3) * 15;
+              console.log(ene.health);
+
+              if (wave < G.waves[0].length) {
+                wave++;
+                if (wave % 3 === 0) {
+                  setNotification(
+                    `Level ${wave / 3}`,
+                    `Contract Paid + $${
+                      this.clientWidth * (this.clientWidth > 1200 ? 2 : 1.5)
+                    }`,
+                    3000,
+                    "rgba(238, 153, 18, 1)"
+                  );
+                  this.setMoney(
+                    this.money +
+                      this.clientWidth * (this.clientWidth > 1200 ? 2 : 1.5)
+                  );
+                }
+              } else {
+                gameOver(true);
+              }
+            }
+            function gameOver(win) {
+              clearInterval(gmLpId);
+              G.gameOver = true;
+              setNotification(
+                win ? "Success!" : "Fired!",
+                win
+                  ? "You have fulfilled your contract by successfully defending this planet."
+                  : "You have failed to defend this planet.",
+                250000,
+                win ? "green" : "red"
+              );
+              return;
+            }
+
+            //draw henchmen ships
+            function drawHenchmenShips() {
+              function createHench() {
+                var h = dcr("div");
+                h.classList.add("hen");
+                var img = dcr("img");
+                img.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAMAAADXqc3KAAAAbFBMVEUAAAD///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8+T+BWAAAAI3RSTlMA4wVx+ep+FfLRzMWeYk5JHwmvDNe2pZZ2UkE5NSoa3NqwDeTXEe4AAAC1SURBVCjPpdA3FoMwFAVRlMkmOAccZv97NGoAf1zZah5n7kGFkn/OsNsN33qjQDXrrjOKgkyvwPPoX3e87K3jnCRnXCvgRBGn4CTggNkotTEcBORcFKgLuQBFiBBQAlJ0vEqTCrDoOBorwBHiBJyAjGucK5l4kD1V3Iq9/uhHQxk/SsxxKXV+w41BO255vYCOZssYarYN3dyDxRsAMB4bJjCkvn1asF3rU8wEZdXPv/dVmfx03pw8DKK4zI4qAAAAAElFTkSuQmCC";
+                img.classList.add("hei");
+                h.appendChild(img);
+                h.width = 12;
+                h.height = 12;
+                dba(h);
+                h.deg = 0; //0-360
+                return h;
+              }
+              function renderHench(h, i, active) {
+                if (ene.y <= 50) h.dead = null;
+                if (active && h.dead == null) h.style.visibility = "visible";
+                else {
+                  h.style.visibility = "hidden";
+                  h.dead = true;
+                }
+                var offsets = [
+                  [-15, 0],
+                  [-15, -15],
+                  [0, -15],
+                  [15, -15],
+                  [15, 0],
+                  [15, 15],
+                  [0, 15],
+                  [-15, 15],
+                ];
+                var xs = offsets[i][0] >= 0 ? 1 : -1; //x-sign
+                var ys = offsets[i][1] >= 0 ? 1 : -1; //y-sign
+                var cxo = xs * (ene.width / 2.0) + xs * (h.width / 2.0); //characters x offsets
+                var cyo = ys * (ene.height / 2.0) + ys * (h.height / 2.0); //characters y offsets
+                var x = ene.x + cxo + xs * offsets[i][0];
+                var y = ene.y + cyo + ys * offsets[i][1];
+                h.x = x;
+                h.y = y;
+                h.style.left = x + "px";
+                h.style.top = y + "px";
+              }
+              var orbHenchCnt = 3;
+              var stcHenchCnt = 3;
+              if (window.stcHench == null) window.stcHench = [];
+              if (window.orbHench == null) window.orbHench = [];
+              while (stcHench.length < 4) {
+                stcHench.push(createHench());
+              }
+              while (orbHench.length < 4) {
+                orbHench.push(createHench());
+              }
+              for (var i = 0; i < 8; i++) {
+                var h = i < 4 ? stcHench[i] : orbHench[i % 4];
+                var active =
+                  i < 4 ? stcHenchCnt >= i + 1 : orbHenchCnt >= (i % 4) + 1;
+                renderHench(h, i, active);
+              }
+            }
+            drawHenchmenShips();
+
+            if (ene.health < 50) ene.style.color = "red";
+            else ene.style.color = "green";
+
+            if (ene.health > 80) {
+              mid.style.backgroundColor = "green";
+            } else if (ene.health > 50) {
+              mid.style.backgroundColor = "yellow";
+            } else {
+              mid.style.backgroundColor = "red";
+            }
+            mid.style.width = ene.health / 4;
+
+            ene.y += Math.min(Math.floor(ene.velocityTrack), 1); //1;
+            ene.velocityTrack += ene.velocityTrack;
+            ene.velocityTrack = Math.min(ene.velocityTrack, 1);
+            ene.style.top = ene.y + "px";
+            var removeidx = -1;
+            for (var i = 0; i < G.bullets.length; i++) {
+              var b = G.bullets[i];
+              var brect = b.getBoundingClientRect(); //bullet rect
+              var srect = ene.getBoundingClientRect(); //ship rect
+              for (var j = 0; j < 8 /*orbHench.length*/; j++) {
+                var h = j < 4 ? stcHench[j] : orbHench[j % 4];
+                if (h.dead) continue;
+                if (
+                  rects_collide(
+                    {
+                      left: h.x,
+                      top: h.y + h.height,
+                      width: h.width,
+                      height: h.height,
+                    },
+                    brect
+                  )
+                ) {
+                  removeidx = i;
+                  h.dead = true;
+                  break;
+                }
+              }
+              if (removeidx > -1) {
+                b.reset = true;
+                b.x = b.ox;
+                b.y = b.oy;
+                b.style.left = b.x + "px";
+                b.style.top = b.y + "px";
+                break;
+              }
+              if (rects_collide(brect, srect)) {
+                if (ene.recentHits.includes(i)) continue;
+                if (b.phase) {
+                  ene.y -= 8;
+                }
+                ene.health -= b.damage; //20;
+                removeidx = i;
+                //hit
+                if (b.slow != null) {
+                  ene.velocityTrack = b.slow;
+                }
+                break;
+              }
+            }
+            if (removeidx > -1 && !ene.recentHits.includes(removeidx)) {
+              ene.recentHits.push(removeidx);
+            }
+            if (ene.health < 0) ene.health = 0;
+          }, 14);
+        }, 6000);
+      }, 1000);
+    }
+  }
+}
+
+customElements.define("sd-game-scene", GameScene);
+</script>
+
+    <!-- Main -->
+    <script>changeScene = (scene) => {
+  cs = G.allScenes.find((s) => s === scene);
+  if (cs) {
+    G.cs = cs;
+    const os = document.querySelector("[in-progress]");
+    if (os) {
+      document.body.removeChild(os);
+    }
+
+    switch (cs) {
+      case GAME_SCENE:
+        renderWebComponent("sd-game-scene");
+        break;
+      case LOADING_SCENE:
+      default:
+        renderWebComponent("sd-loading-scene");
+        break;
+    }
+  }
+};
+
+renderWebComponent = (tagname) => {
+  let el = dcr(tagname,document);
+  el.setAttribute("in-progress", true);
+  el.style.cssText = "opacity: 0; display: block; transition: opacity .3s";
+  dba(el,document);
+  setTimeout(() => {
+    el.style.opacity = "1";
+  }, 200);
+};
+
+changeScene(LOADING_SCENE);
+addEventListener("scene-change", (e) => {
+  changeScene(e.detail);
+});
+
+Promise.all(
+  ["sd-game-scene"].map((component) =>
+    customElements.whenDefined(component)
+  )
+).then((p) => {
+  setTimeout(() => {
+    changeScene(GAME_SCENE);
+  }, 1000);
+});
+
+addEventListener("show-game", (e) => changeScene(GAME_SCENE));
+addEventListener("show-controls", (e) => alert("coming soon"));
+</script>
+  </body>
+</html>

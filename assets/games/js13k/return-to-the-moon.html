@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<meta charset="utf-8">
+	<meta name="description" content="game for js13k 2019">
+	<meta name="author" content="Luke Nickerson">
+	<style>html, body {
+	margin: 0; height: 100%; overflow: hidden;
+	background: rgb(12, 19, 19);
+	font-family: 'Courier New', Courier, monospace;
+	color: rgb(162, 169, 169);
+}
+
+polygon {
+	stroke-width: 2px;
+	stroke: rgb(192, 199, 199);
+	fill: rgb(22, 29, 29);
+}
+
+polygon.red {
+	stroke: rgb(192, 60, 60);
+}
+
+dl {
+	position: absolute;
+	opacity: 0;
+	top: 1em;
+}
+.on {
+	display: block;
+	opacity: 1;
+}
+dt, dd {
+	display: inline-block;
+	min-width: 5em;
+}
+.info-left {
+	left: 1em;
+}
+.info-right {
+	right: 1em;
+	text-align: right;
+}
+b {
+	position: absolute;
+	top: 20%;
+	left: 20%; right: 20%;
+	padding: 1em;
+	display: none;
+	border: solid 2px rgb(162, 169, 169);
+}
+</style>
+</head>
+<body scroll="no">
+
+<!-- <canvas id=terrain width=800 height=600></canvas> -->
+
+<svg id=display width=100% height=100%>
+	<!-- <polygon points="0 600, 0 450,
+		100 400, 0 0, 20 0, 120 400,
+		680 400, 780 0, 800 0, 700 400,
+		800 450, 800 600" /> -->
+</svg>
+<dl class="info-left">
+	<dt>FUEL</dt><dd class="fuel"></dd><br>
+	<dt>INTEGRITY</dt><dd class="health"></dd>
+</dl>
+<dl class="info-right">
+	<dt>ALTITUDE</dt><dd class="altitude"></dd><br>
+	<dt>HORIZONTAL VELOCITY</dt><dd class="speedX"></dd><br>
+	<dt>VERTICAL VELOCITY</dt><dd class="speedY"></dd>
+</dl>
+<b class="intro">
+	<h1>Return to the Moon</h1>
+	<p>
+	In 1969, 50 years ago, humans first landed on the moon.
+	That very same year the first lunar lander game was made, which ended up spawning a popular genre of games.
+	This game is a tribute to both achievements.
+	</p>
+	<p>
+	You are headed BACK to the moon. Your only goal is to land very softly on the moon.
+	</p>
+	A,D,Left,Right = Rotate ... W,Up = Thrust ... v1.0
+	<p>PRESS UP or W TO BEGIN</p>
+</b>
+<b class="failure">You landed too hard and wrecked the lander. You'll never get back to Earth now.<br>Refresh the page to try again.</b>
+<b class="win">Success!<br>Refresh the page to try again.</b>
+
+
+<script>class Polygon {
+	constructor(arr, name) {
+		var p = this;
+		p.arr = arr;
+		p.name = name;
+	}
+
+	forEachPoint(callback) {
+		let a = this.arr;
+		for(let i = 0; i < a.length; i += 2) {
+			let more = (i < a.length - 2);
+			callback(a[i], a[i + 1], more);
+		}		
+	}
+
+	getPointsString() {
+		let s = '';
+		this.forEachPoint((x, y, more) => {
+			s += `${x} ${y}` + (more ? ',' : '');
+		});
+		return s;
+	}
+}</script>
+<script>class CompositePolygon {
+	constructor(parts = []) {
+		const s = this;
+		s.parts = [];
+		s.rotation = 0;
+		let partKeys = Object.keys(parts);
+		partKeys.forEach((key) => {
+			s.parts.push(new Polygon(parts[key], key));
+		});
+		s.pos = new XY();
+		s.center = new XY();
+		s.size = new XY();
+		s.halfSize = new XY();
+		s.innerRadius = 0;
+		s.outerRadius = 0;
+		s.setDimensions();
+	}
+
+	rotate(theta) {
+		this.rotation += theta;
+	}
+
+	setDimensions() {
+		const s = this;
+		let minX = Infinity, minY = minX;
+		let maxX = -Infinity, maxY = maxX;
+		s.parts.forEach((part) => {
+			part.forEachPoint((x, y) => {
+				if (x > maxX) { maxX = x; }
+				if (x < minX) { minX = x; }
+				if (y > maxY) { maxY = y; }
+				if (y < minY) { minY = y; }
+			});
+		});
+		s.size.y = maxY - minY; // height
+		s.size.x = maxX - minX; // width
+		s.halfSize = s.size.getMultiply(0.5);
+		s.innerRadius = Math.min(s.halfSize.x, s.halfSize.y);
+		s.outerRadius = Math.max(s.halfSize.x, s.halfSize.y);
+		s.center.x = minX + s.halfSize.x;
+		s.center.y = minY + s.halfSize.y;
+	}
+
+	getTransformStyle(offset = {}) {
+		let {x,y} = this.pos;
+		if (offset.x) { x += offset.x; }
+		if (offset.y) { y += offset.y; }
+		const hs = this.halfSize;
+		x -= hs.x;
+		y -= hs.y;
+		return `translate(${x},${y}) rotate(${this.rotation} ${hs.x} ${hs.y})`;
+	}
+}
+</script>
+<script>
+class Ship extends CompositePolygon {
+	constructor(parts = []) {
+		super(parts);
+		this.health = 100;
+		this.fuel = 500;
+		this.thrustMagnitude = 100000;
+	}
+	damage(n) {
+		this.health -= n;
+	}
+	dead() {
+		return this.health <= 0;
+	}
+	getAlertLevel() {
+		if (this.dead()) { return 'red'; }
+		return '';
+	}
+	getFacingUnitVector() {
+		const radians = (this.rotation - 90) * Math.PI / 180;
+		const x = Math.cos(radians);
+		const y = Math.sin(radians);
+		return new XY(x, y);
+	}
+	spin(theta) {
+		if (this.isColliding) {
+			theta = theta / 5;
+			this.damage(1);
+		}
+		return this.rotate(theta);
+	}
+	thrust(n) {
+		if (this.fuel < n || this.dead()) {
+			return false;
+		}
+		const unit = this.getFacingUnitVector();
+		const thrustForce = unit.getMultiply(n * this.thrustMagnitude);
+		this.fuel -= n;
+		// console.log(thrustForce.getMagnitude());
+		this.force.add(thrustForce);
+	}
+}
+</script>
+<script>class Input {
+	constructor() {
+		this.forwardBackward = 0;
+		this.leftRight 		= 0;
+		this.upDown 		= 0;
+		this.lookUp 		= false;
+		this.lookDown 		= false;
+		this.mousePosition 	= null;
+		this.keyPressed 	= false;
+		this.keyInstructions = {
+			'a':			'left',
+			65:				'left',
+			'ArrowLeft': 	'left',
+			37:				'left',
+			'd':			'right',
+			68:				'right',
+			'ArrowRight':	'right',
+			39:				'right',
+			'w':			'forward',
+			87:				'forward',
+			'ArrowUp':		'forward',
+			38:				'forward',
+			's':			'backward',
+			83:				'backward',
+			'ArrowDown':	'backward',
+			40:				'backward',
+			'r':			'up',
+			82:				'up',
+			'f':			'down',
+			70:				'down',
+			'e':			'lookUp',
+			69:				'lookUp',
+			'q':			'lookDown',
+			81:				'lookDown',
+			'z':			'zAction',
+			90:				'zAction',
+			'Enter': 'enter'
+		};
+		this.anyKeyDownAction = function() {};
+		this.updateCameraHorizon = function() {};
+		this.zAction = function() {};
+	}
+
+	init(canvas, document) {
+		canvas.onmousedown	= this.detectMouseDown.bind(this);
+		canvas.onmouseup	= this.detectMouseUp.bind(this);
+		canvas.onmousemove	= this.detectMouseMove.bind(this);
+		canvas.ontouchstart	= this.detectMouseDown.bind(this);
+		canvas.ontouchend	= this.detectMouseUp.bind(this);
+		canvas.ontouchmove	= this.detectMouseMove.bind(this);
+		document.addEventListener('keydown', this.detectKeysDown.bind(this));
+		document.addEventListener('keyup', this.detectKeysUp.bind(this));
+	}
+
+	getMousePosition(e) {
+		// fix for Chrome
+		if (e.type.startsWith('touch')) {
+			return [e.targetTouches[0].pageX, e.targetTouches[0].pageY];
+		} else {
+			return [e.pageX, e.pageY];
+		}
+	}
+
+	detectMouseDown(e) {
+		this.forwardBackward = 1.;
+		this.mousePosition = this.getMousePosition(e);
+		this.anyKeyDownAction();
+		return;
+	}
+
+	detectMouseUp() {
+		this.mousePosition = null;
+		this.forwardBackward = 0;
+		this.leftRight = 0;
+		this.upDown = 0;
+		return;
+	}
+
+	detectMouseMove(e) {
+		e.preventDefault();
+		if (this.mousePosition == null) { return; }
+		if (this.forwardBackward == 0) { return; }
+
+		const currentMousePosition = this.getMousePosition(e);
+
+		this.leftRight = (this.mousePosition[0] - currentMousePosition[0]) / window.innerWidth * 2;
+		this.upDown    = (this.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 10;
+
+		const cameraHorizon  = 100 + (this.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 500;
+		this.updateCameraHorizon(cameraHorizon);
+	}
+
+	getEventKeyInstruction(e) {
+		const key = e.key || e.keyCode;
+		const instruction = this.keyInstructions[key];
+		return instruction;	
+	}
+
+	detectKeysDown(e) {
+		this.keyPressed = true;
+		switch(this.getEventKeyInstruction(e)) {
+			case 'left':
+				this.leftRight = +1.;
+				break;
+			case 'right':
+				this.leftRight = -1.;
+				break;
+			case 'forward':
+				this.forwardBackward = 1.;
+				break;
+			case 'backward':
+				this.forwardBackward = -1.;
+				break;
+			case 'up':
+				this.upDown = +1.;
+				break;
+			case 'down':
+				this.upDown = -1.;
+				break;
+			case 'lookUp':
+				this.lookUp = true;
+				break;
+			case 'lookDown':
+				this.lookDown = true;
+				break;
+			case 'enter':
+				break;
+			default:
+				return;
+				break;
+		}
+		this.anyKeyDownAction();
+		e.preventDefault();
+		return false;
+	}
+
+	detectKeysUp(e) {
+		switch(this.getEventKeyInstruction(e)) {
+			case 'left':
+			case 'right':
+				this.leftRight = 0;
+				break;
+			case 'forward':
+			case 'backward':
+				this.forwardBackward = 0;
+				break;
+			case 'up':
+			case 'down':
+				this.upDown = 0;
+				break;
+			case 'lookUp':
+				this.lookUp = false;
+				break;
+			case 'lookDown':
+				this.lookDown = false;
+				break;
+			case 'zAction':
+				this.zAction();
+			default:
+				return;
+				break;
+		}
+		return false;
+	}
+}</script>
+<script>
+const BIG_G_DEFAULT = 50.1;
+const MIN_GRAVITY_RADIUS = 1;
+
+class XY {
+	constructor(x = 0, y = 0) {
+		this.x = x;
+		this.y = y;
+	}
+	add({x, y}) {
+		this.x += x || 0;
+		this.y += y || 0;
+		return this;
+	}
+	multiply(m) {
+		this.x *= m || 1;
+		this.y *= m || 1;
+		return this;
+	}
+	getDistance({x, y}) {
+		return Math.sqrt( Math.pow((this.x - x), 2) + Math.pow((this.y - y), 2) );
+	}
+	getUnitVector(xy){
+		let {x,y} = xy;
+		const d = Math.abs(this.getDistance(xy));
+		const dx = x - this.x;
+		const dy = y - this.y;
+		x = dx / d;
+		y = dy / d;
+		return new XY(x, y);
+	}
+	getMagnitude() {
+		return Math.sqrt( Math.pow(this.x, 2) + Math.pow(this.y, 2)	);
+	}
+	getMultiply(m) {
+		return new XY(this.x * m, this.y * m);
+	}
+	clone() {
+		return new XY(this.x, this.y);
+	}
+	clear() {
+		this.x = 0;
+		this.y = 0;
+	}
+}
+
+function physics(objects, t) {
+	// Loop through objects, apply gravity
+	objects.forEach((obj) => {
+		obj.collide(objects);
+		obj.gravitate(t, objects);
+		obj.move(t);
+		// obj.y += 0.01 * t;
+	});
+}
+
+physics.canCollide = (o) => ({
+	collide(objs) {
+		const innerRadius = (typeof o.innerRadius === 'number') ? o.innerRadius : 0;
+		o.isColliding = false;
+		o.colliding.length = 0;
+		const pushBack = (b, amount) => {
+			const pusher = (o.mass > b.mass) ? o : b;
+			const pushee = (pusher === o) ? b : o;
+			const push = pushee.pos.getUnitVector(pusher.pos).multiply(amount);
+			pushee.pos.add(push);
+		};
+		const doDamage = (m) => {
+			if (m < 1) { return; }
+			// (trial and error damage)
+			const velocityDamage = Math.ceil(Math.pow(m, 1.4) / 10);
+			// console.log('Damage', m, '-->', velocityDamage);
+			if (o.damage) {
+				o.damage(velocityDamage);
+			}
+		};
+		objs.forEach((b) => {
+			if (o === b) {
+				return false;
+			}
+			const r = o.pos.getDistance(b.pos);
+			const innerRadiusB = (typeof b.innerRadius === 'number') ? b.innerRadius : 0;
+			const edgeToEdgeDistance = r - innerRadius - innerRadiusB;
+			if (edgeToEdgeDistance > 0) {
+				return false;
+			}
+			o.colliding.push(b);
+			// Push back to avoid overlaps
+			// const pushAmount = edgeToEdgeDistance;
+			// pushBack(b, pushAmount);
+
+			// Bounce
+			// TODO: bounce ... see setNewCollisionVels
+
+			// Damage
+			const relativeVelocity = o.vel.clone().add(b.vel);
+			const velocityMag = relativeVelocity.getMagnitude();
+			doDamage(velocityMag);
+			return true;
+		});
+		o.isColliding = o.colliding.length > 0;
+		if (o.isColliding) {
+			o.vel.multiply(0.7);
+		}
+	}
+});
+
+physics.canMove = (o) => ({
+	move(t) {
+		const forceAcc = new XY((o.force.x / o.mass), (o.force.y / o.mass));
+		o.acc.add(forceAcc);
+		const deltaVel = o.acc.getMultiply(t); // new XY(o.acc.x * t, o.acc.y * t);
+		o.vel.add(deltaVel);
+		const deltaPos = o.vel.getMultiply(t/2); // new XY(o.vel.x * t / 2, o.vel.y * t / 2);
+		o.pos.add(deltaPos);
+		// clear because ongoing forces need to be re-applied
+		o.force.clear();
+		o.acc.clear();
+		// Sync base x,y if they exist
+		// if (o.x !== undefined) { o.x = o.pos.x; }
+		// if (o.y !== undefined) { o.y = o.pos.y; }
+	}
+});
+
+physics.canGravitate = (o, bigG = BIG_G_DEFAULT) => ({
+	gravitate(t, objs) {
+		if (o.mass === 0) { return false; }
+		const bigGMass = bigG * o.mass;
+		objs.forEach((b) => { return o.gravitateOne(b, bigGMass); });
+		// o.force.add(new XY(0,0.0001));
+	},
+	gravitateOne(b, bigGMass) { // Apply force of gravity due to one object
+		if (
+			b === o // can't get gravity from self
+			|| b.mass === 0 || o.mass === 0 // things without mass don't make gravity
+			|| o.isColliding // collisions cancel gravity with normal force
+		) {
+			return false;
+		}
+		const r = o.pos.getDistance(b.pos);
+		// Last resort to prevent black holes or super flinging
+		if (r < MIN_GRAVITY_RADIUS) {
+			// o.vel.multiply(0.2);
+			return false; 
+		}
+	
+		// F = G (m1 m2) / r^2
+		// See http://en.wikipedia.org/wiki/Newton's_law_of_universal_gravitation#Vector_form            
+		//console.log("Forces on", this.name, " due to ", b.name);
+		const unit = o.pos.getUnitVector(b.pos);
+		//console.log("unit vector", JSON.stringify(rv));
+		
+		const rSquared = Math.pow(r, 2);
+		const forceMagnitude = (rSquared == 0) ? 0 : ((bigGMass * b.mass)/rSquared);
+		const forceOfGravity = unit.getMultiply(forceMagnitude);
+		o.force.add(forceOfGravity);		
+		// console.log(o.name, o.pos, b.pos, rSquared, forceMagnitude);
+		return true;
+	}
+});
+
+physics.physical = (o) => {
+	Object.assign(
+		o,
+		{
+			mass: 1,
+			pos: new XY(),
+			force: new XY(),
+			acc: new XY(),
+			vel: new XY(),
+			colliding: [],
+		},
+		physics.canCollide(o),
+		physics.canMove(o),
+		physics.canGravitate(o, BIG_G_DEFAULT),
+	);
+	return o;
+	// TODO: add velocity, acceleration, etc.
+	// TODO: add mass, etc.
+};
+</script>
+<script>var g = (function(){
+
+const ship = physics.physical(new Ship({
+	top: [0, 10,  10, 0,  30, 0,  40, 10,  40, 30,  30, 40,  10, 40,  0, 30],
+	core: [0,40, 40,40, 40,56, 0,56],
+	engine: [15,56, 25,56, 30,70, 10,70],
+	leg1: [],
+	leg2: [],
+}));
+const moon = physics.physical(new CompositePolygon({ 
+	chunk: [
+		100,100, 300,0, 500,100, 
+		600,300, 
+		500,500, 300,600, 100,500,
+		0,300
+	]
+}));
+const physicalObjects = [moon, ship];
+
+ship.mass = 1000;
+moon.mass = 100000;
+
+ship.name = 'ship';
+moon.name = 'moon';
+
+moon.pos.x = 400;
+moon.pos.y = 500;
+
+ship.rotation = Math.random() * 45;
+ship.vel.y = -20 + Math.random() * -200;
+ship.vel.x = 50 + Math.random() * 300;
+ship.pos.x = -100;
+ship.pos.y = 100;
+// console.log(ship.pos, moon.pos);
+
+// ---------------------------------------------
+// Keyboard and mouse interaction
+
+const input = new Input();
+const worldSize = new XY(800, 600);
+const offset = new XY();
+let lastLoopTime = 0;
+let continueLoop = true;
+let disp;
+const elts = {};
+
+init();
+
+return {
+	input, ship, moon,
+	start, stop
+};
+
+function $(q) { return document.querySelectorAll(q); }
+
+function init() {
+	document.addEventListener('DOMContentLoaded', () => {
+		disp = $('#display')[0];
+		elts.health = $('.health')[0];
+		elts.speedX = $('.speedX')[0];
+		elts.speedY = $('.speedY')[0];
+		elts.fuel = $('.fuel')[0];
+		elts.altitude = $('.altitude')[0];
+		elts.intro = $('.intro')[0];
+		elts.intro.classList.add('on');
+		input.init(disp, document);
+		input.anyKeyDownAction = begin;
+	});
+}
+
+function begin() {
+	input.anyKeyDownAction = () => {};
+	elts.intro.classList.remove('on');
+	const dl = $('dl');
+	dl.forEach((elt) => { elt.classList.add('on'); });
+	lastLoopTime = performance.now();
+	continueLoop = true;
+	window.requestAnimationFrame(loop);
+}
+
+function getCompositePolygonSvg(compPoly, outerClass = '', innerClass = '') {
+	let svg = `<g class="${outerClass}" transform="${compPoly.getTransformStyle(offset)}" x="${compPoly.pos.x}" y="${compPoly.pos.y}">`;
+	compPoly.parts.forEach((part) => {
+		svg += getPolygonSvg(`${part.name} ${innerClass}`, part); // `<polygon class="${part.name} part" points="${part.polygon.getPointsString()}" />`;
+	});
+	svg += '</g>';
+	return svg;
+}
+
+function getPolygonSvg(classNames, polygon) {
+	return `<polygon class="${classNames}" points="${polygon.getPointsString()}" />`;
+}
+
+function draw(t) {
+	const partClass = 'part ' + ship.getAlertLevel();
+	disp.innerHTML = getCompositePolygonSvg(moon, 'moon') +  getCompositePolygonSvg(ship, 'ship', partClass);
+	disp.setAttribute('viewBox', `0 0 ${worldSize.x} ${worldSize.y}`);
+	elts.health.innerHTML = Math.ceil(ship.health);
+	elts.speedX.innerHTML = Math.round(ship.vel.x);
+	elts.speedY.innerHTML = Math.round(ship.vel.y);
+	elts.fuel.innerHTML = Math.round(ship.fuel);
+	elts.altitude.innerHTML = Math.round(getAltitude());
+}
+
+function getAltitude() {
+	const r = moon.pos.getDistance(ship.pos);
+	return r - moon.innerRadius - ship.innerRadius;
+}
+
+function loop(now) {
+	let deltaT = (now - lastLoopTime) / 1000;
+	if (input.leftRight) {
+		ship.spin(input.leftRight * -3);
+	}
+	if (input.forwardBackward > 0) {
+		ship.thrust(input.forwardBackward);
+	}
+	physics(physicalObjects, deltaT);
+	const desiredOffset = new XY(
+		(worldSize.x / 2) - ship.pos.x,
+		(worldSize.y / 2.5) - ship.pos.y
+	);
+	// offset.multiply(2);
+	offset.add(desiredOffset);
+	offset.multiply(1 / 2);
+	// console.log(ship.pos.x, ship.pos.y, offset);
+	draw(deltaT);
+	lastLoopTime = now;
+	if (continueLoop) {
+		window.requestAnimationFrame(loop);
+	}
+	if (ship.dead()) {
+		$('.failure')[0].classList.add('on');
+	} else if (getAltitude() < 0.5 && ship.vel.getMagnitude() < 0.5) {
+		$('.win')[0].classList.add('on');
+	}
+}
+
+function start() { continueLoop = true; }
+function stop() { continueLoop = false; }
+
+})();
+
+// console.log(g);
+</script>
+
+</body>
+</html>

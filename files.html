@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-E5kMajXmbdXPccLIwDoA3Vxt05ndwQTkZDRmvtCwxos='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-kLITZngTzu03ZQ5MIV0JUluTmTgfG0AxPsF/CblGcxY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- No referrer to anyone: a publisher this page links to learns nothing about where the click came from. -->
 <meta name="referrer" content="no-referrer">
@@ -13,12 +13,12 @@
 <!-- Link previews. The page is indexable; these tags shape what a shared link shows. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Classroom">
-<meta property="og:title" content="129 G@M£$ that still work when the network is blocked">
+<meta property="og:title" content="G@M£$ that still work when the network is blocked">
 <meta property="og:description" content="Every title on this page is an HTML file served from the same folder. No embed, no portal to get through, and they keep playing with the wi-fi off.">
 <meta property="og:image" content="https://funclassroom.github.io/assets/img/share/og-cover.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Classroom — 129 G@M£$ that still work when the network is blocked.">
+<meta property="og:image:alt" content="Classroom — G@M£$ that still work when the network is blocked.">
 <meta property="og:url" content="https://funclassroom.github.io/files.html">
 <link rel="canonical" href="https://funclassroom.github.io/files.html">
 <meta name="twitter:card" content="summary_large_image">
@@ -33,7 +33,7 @@
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
     })(window, document, "clarity", "script", "z0ayxg09fq");
 </script>
-<script src="assets/js/attribution.js?v=3"></script>
+<script src="assets/js/attribution.js?v=4"></script>
 </head>
 <body>
 <a class="skip" href="#files">Skip to the list</a>
@@ -114,6 +114,9 @@
   </div>
 
   <section id="files" class="files-grid" data-files-grid aria-label="Local titles"></section>
+  <div class="more-wrap">
+    <button type="button" class="btn btn-dark" data-files-more hidden>Show more</button>
+  </div>
 
   <p class="files-note" data-files-empty hidden>
     Nothing matches that filter.
@@ -172,8 +175,8 @@
   </div>
 </div>
 
-<script src="assets/js/local-games.js?v=4"></script>
-<script src="assets/js/feedback.js?v=3"></script>
+<script src="assets/js/local-games.js?v=5"></script>
+<script src="assets/js/feedback.js?v=4"></script>
 <script src="assets/js/pwa.js?v=2"></script>
 <script>
 (function () {
@@ -219,8 +222,12 @@
   // links resolve against the address bar, so it has to be exact.
   var home = window.location.pathname + window.location.search;
 
+  // The last segment of the path, so assets/games/js13k/foo.html and
+  // assets/games/foo.html both key off "foo" - one flat screenshot folder and
+  // one flat set of saved-recent keys. The importer refuses to add a game whose
+  // basename is already taken, so this cannot collide.
   function slugOf(file) {
-    return file.replace(/^assets\/games\//, "").replace(/\.html?$/, "");
+    return file.replace(/^.*\//, "").replace(/\.html?$/, "");
   }
 
   function bySlug(slug) {
@@ -271,7 +278,13 @@
     });
   }
 
-  ORDER.forEach(function (game) {
+  // Cards are built in batches. The list is a few thousand long now, and
+  // laying out every card before the first paint made the page feel stuck.
+  var BATCH = 120;
+  var built = 0;
+  var moreButton = document.querySelector("[data-files-more]");
+
+  function makeCard(game) {
     var card = document.createElement("article");
     card.className = "file-card";
     card.setAttribute("data-file", game.file);
@@ -323,8 +336,26 @@
     open.appendChild(art);
     open.appendChild(body);
     card.appendChild(open);
-    grid.appendChild(card);
-  });
+    return card;
+  }
+
+  function appendBatch() {
+    var frag = document.createDocumentFragment();
+    var end = Math.min(built + BATCH, ORDER.length);
+    for (var i = built; i < end; i += 1) frag.appendChild(makeCard(ORDER[i]));
+    grid.appendChild(frag);
+    built = end;
+    if (moreButton) moreButton.hidden = built >= ORDER.length;
+    return end - (built - BATCH);
+  }
+
+  appendBatch();
+  if (moreButton) {
+    moreButton.addEventListener("click", function () {
+      appendBatch();
+      applyFilter();
+    });
+  }
 
   function visibleCards() {
     return Array.prototype.filter.call(grid.children, function (card) {
@@ -332,8 +363,15 @@
     });
   }
 
+  // Searching or shuffling needs the whole list, not just what is on screen.
+  // Building the rest costs one pass and only happens on a real query.
+  function buildAll() {
+    while (built < ORDER.length) appendBatch();
+  }
+
   function applyFilter() {
     var q = (search.value || "").trim().toLowerCase();
+    if (q) buildAll();
     var shown = 0;
     Array.prototype.forEach.call(grid.children, function (card) {
       var button = card.querySelector("[data-open-file]");
@@ -491,6 +529,7 @@
 
   var surprise = document.querySelector("[data-surprise]");
   if (surprise) surprise.addEventListener("click", function () {
+    buildAll();
     var cards = visibleCards();
     if (!cards.length) return;
     var pick = cards[Math.floor(Math.random() * cards.length)];

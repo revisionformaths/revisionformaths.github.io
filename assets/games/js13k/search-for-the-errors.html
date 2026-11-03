@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <style>
+        td{
+            /*background-color: #7d7d7d;*/
+            background-color: white;
+            /*background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAA3NCSVQICAjb4U/gAAAAX3pUWHRSYXcgcHJvZmlsZSB0eXBlIEFQUDEAAAiZ40pPzUstykxWKCjKT8vMSeVSAANjEy4TSxNLo0QDAwMLAwgwNDAwNgSSRkC2OVQo0QAFmJibpQGhuVmymSmIzwUAT7oVaBst2IwAAAE9SURBVHic7d3BTQJRFEDRwUwBxAZwpP+ScKQBQwe4GIMYo+GuBpJzVi9/9XLz929zPp8HbjMOw3B8O669xgPYve7GZTq8H9Zd5c7tX/bD8rMWp4/Tesvcte3zdhnG69d5ntdY5q5N03SZn1bc4+GIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBWIFYgViBX8uBV2fReL375jXW6t8ZevWMv9Pv63cWb0dp9j9hPK4zmXbAAAAABJRU5ErkJggg==); */ 
+            min-width: 40px;
+            min-height: 90px;  
+            text-align: center;
+            font-weight: bold;
+        }
+
+        #ctxMenu{
+            display:none;
+            z-index:100;
+        }
+        #notepad{
+            position:absolute;
+            left:25%;
+            top:10%;
+            width:300px;
+            height:300px;
+            background-color:red;
+        }
+        menu {
+            position:absolute;
+            display:block;
+            left:0px;
+            top:0px;
+            height:20px;
+            width:20px;
+            padding:0;
+            margin:0;
+            border:1px solid;
+            background-color:white;
+            font-weight:normal;
+            white-space:nowrap;
+        }
+        menu:hover{
+            background-color:#eef;
+            font-weight:bold;
+        }
+        menu:hover > menu{
+            display:block;
+        }
+        menu > menu{
+            display:none;
+            position:relative;
+            top:-20px;
+            left:100%;
+            width:55px;
+        }
+        menu[title]:before{
+            content:attr(title);
+        }
+        menu:not([title]):before{
+            content:"\2630";
+        }
+
+       #hud{
+           margin-left: 5%;
+           position: fixed;
+           min-height: 20px;
+           width: 100em;
+           background-color: white;
+           border: 3px solid #73AD21; 
+           padding: 1%;
+           overflow: hidden;
+           font-family:Courier New; 
+        }
+    
+        a{
+            background-color: #8a3434;
+            color:white;
+            font-weight: bold;
+            text-decoration: none;
+            padding-top: 1%;
+            padding-bottom: 1%;
+            padding-left: 2%;
+            padding-right: 2%;
+        }
+    </style>
+</head>
+<body>
+
+<!--    <menu id="ctxMenu">
+        <menu title="File">
+            <menu title="Save"></menu>
+            <menu title="Save As"></menu>
+            <menu title="Open"></menu>
+        </menu>
+        <menu title="Edit">
+            <menu title="Cut"></menu>
+            <menu title="Copy"></menu>
+            <menu title="Paste"></menu>
+        </menu>
+    </menu>
+    <div id="notepad">
+    </div>-->
+        <div id="hud">
+            <div id="commentbox" style="width:40%;float: left;min-width: 70px; padding-top: 5%; text-align: center; "></div>
+            <div id="inventory" style="width:40%;float: left; min-width: 70px; padding: 5%; background-color: #363434; color: white; font-weight: bold; text-align: center;">Let's start the game! Collect all possible 404 error variations, to win the game!<br>Click on a tile to see how to use it!<br> Move on map by pressing wheel of mouse.</div>
+        </div>
+    <script type="text/javascript">  var x = document.createElement("TABLE");
+  x.setAttribute("id", "playground");
+  //x.setAttribute("style", "width:100%");
+  document.body.appendChild(x);
+
+var idx = 0;
+var elements = [];
+selected = {};
+
+var errors = ['404.0','404.1','404.2','404.3','404.4','404.5','404.6','404.7','404.8','404.9','404.10','404.11','404.12','404.13','404.14','404.15','404.16','404.17','404.18','404.19','404.20'];
+rows = {}
+            
+for (var i = 0; i < 100; i++) {
+	rows[i] = document.createElement("TR");
+	errorforthisrow = false;
+	for (var d = 0; d < 100; d++) {
+
+		cell = document.createElement("TD");
+		cell.setAttribute("id",idx);
+		img = document.createElement("IMG");
+		if (((i == 50)&&(d == 49))||((i == 50)&&(d == 51))) {
+			img.setAttribute("src", "cpu.png");
+			elements.push({"id":idx,"role":"CPU"});
+			cell.appendChild(img);
+		}
+		else if ((i == 50)&&(d == 50)) {
+			img.setAttribute("src", "pc.png");
+			var myBodyId = document.getElementById("commentbox");   
+		    var newBaitTag = document.createElement('a');
+		    var newBaitText = document.createTextNode("Start game!");
+		    //newBaitTag.setAttribute('href', "#"+idx);
+		    newBaitTag.setAttribute('href', "#4560");
+		    newBaitTag.setAttribute('id', "starter");
+		    // we create new things above
+		    // we append them to the page body below
+		    newBaitTag.appendChild(newBaitText);
+		    myBodyId.appendChild(newBaitTag); 
+		    //this part was from here: https://stackoverflow.com/a/43551068
+		    elements.push({"id":idx,"role":"HOME"});
+			cell.appendChild(img);
+		}
+		else if((rand = Math.floor(Math.random() * 20)) < 2){
+			switch(rand){
+				case 0: 
+					img.setAttribute("src", "cloud2.png");
+					elements.push({"id":idx,"role":"CLOUD"});
+						break;	
+				case 1: 
+					img.setAttribute("src", "trex.png");
+					elements.push({"id":idx,"role":"TREX"});
+					break;	
+			}
+			cell.appendChild(img);
+		}
+		else if((errors.length != 0) && (!errorforthisrow) && (Math.floor(Math.random()) * 900000 < 6)) {
+			error = errors.pop();
+			err = document.createElement("DIV");
+			err.appendChild(document.createTextNode(error));
+			elements.push({"id":idx,"role":"ERROR"});
+			cell.appendChild(err);	
+			errorforthisrow = true;
+		}
+		else{
+			img.setAttribute("src", "tile.png");
+			elements.push({"id":idx,"role":"tile"});
+			cell.appendChild(img);
+		}
+		idx++
+		rows[i].appendChild(cell);
+
+	}
+	document.getElementById("playground").appendChild(rows[i]);
+}
+
+var cpuselected = false;
+var cpuid = 0;
+document.getElementById("playground").addEventListener("click",function(event){
+    switch(elements[event.target.parentNode.id].role){
+    	case "HOME":
+    		document.getElementById("inventory").innerHTML="This is the home of the CPUs. This is your base.";
+    		cpuselected = false;
+    		break;
+    	case "CLOUD":
+    		document.getElementById("inventory").innerHTML="You can got one more piece of data from the cloud servers!";
+    		cpuselected = false;
+    		break;
+    	case "TREX":
+    		document.getElementById("inventory").innerHTML="This t-rex is dangerous! You can defeat one using a cloud data!<br>Be carefoul!";
+    		cpuselected = false;
+    		break;
+    	case "ERROR":
+    		document.getElementById("inventory").innerHTML="This is a piece of error what you are searching for!";
+    		cpuselected = false;
+    		break;
+    	case "tile":
+    		document.getElementById("inventory").innerHTML="Extract it with a CPU core, to know what is inside of it!";
+    		cpuselected = false;
+    		break;
+    	case "CPU":
+    		document.getElementById("inventory").innerHTML="Use your CPU cores to collect error fragments, extract cloud data or contents of tiles.<br>Select left click, go/extract nearby tile with right click.";
+    		cpuselected = true;
+    		cpuid = event.target.parentNode.id;
+    		break;
+    }
+	event.preventDefault();
+},false);
+
+var clouds = 0;
+var remaingerrors = errors.length;
+var bits = 0
+
+document.getElementById("starter").addEventListener("click",function(e) {
+	document.getElementById("commentbox").innerHTML = "clouds: ";
+	cloud = document.createElement("DIV");
+	cloud.setAttribute("id","cloud");
+	cloud.appendChild(document.createTextNode(clouds));
+	document.getElementById("commentbox").appendChild(cloud);
+	document.getElementById("commentbox").innerHTML += "<br>remaining errors: ";
+	errornr = document.createElement("DIV");
+	errornr.setAttribute("id","errors");
+	errornr.appendChild(document.createTextNode(remaingerrors));
+	document.getElementById("commentbox").appendChild(errornr);
+	document.getElementById("commentbox").innerHTML += "<br>collected bits: ";
+	collectedbit = document.createElement("DIV");
+	collectedbit.setAttribute("id","bits");
+	collectedbit.appendChild(document.createTextNode(bits));
+	document.getElementById("commentbox").appendChild(collectedbit);
+})
+
+document.getElementById("playground").addEventListener("contextmenu",function(event){
+    event.preventDefault();
+    if(cpuselected){
+    	if ((event.target.parentNode.id == cpuid +1)   ||
+    	    (event.target.parentNode.id == cpuid -1)   ||
+    	    (event.target.parentNode.id == cpuid -100) ||
+    	    (event.target.parentNode.id == cpuid +100) 
+    	   ){
+    		switch(elements[event.target.parentNode.id].role){
+		    	case "HOME":
+		    		document.getElementById("inventory").innerHTML="Not possible to move here!";
+		    		cpuselected = false;
+		    		break;
+		    	case "CLOUD":
+		    		document.getElementById(cpuid).innerHTML=" + ";
+		    		clouds += 1;
+		    		document.getElementById("cloud").innerHTML=clouds;
+		    		document.getElementById("inventory").innerHTML="You collected one more cloud data!";
+
+		    		img = document.createElement("IMG");
+					img.setAttribute("src", "cpu.png");
+					elements[event.target.parentNode.id].role = "CPU";
+					elements[cpuid].role = "tile";
+//					document.getElementById(event.target.parentNode.id).innerHTML="";
+		    		document.getElementById(event.target.parentNode.id).appendChild(img);
+		    		cpuselected = false;
+		    		break;
+		    	case "TREX":
+		    		document.getElementById("inventory").innerHTML="This t-rex is dangerous! You can defeat one using a cloud data!<br>Be carefoul!";
+		    		if (clouds == 0) {
+		    			document.getElementById("inventory").innerHTML="You don't have necessary cloud data to defeat this t-rex!";
+		    		} else {
+		    			clouds -= 1;
+		    			document.getElementById(cpuid).innerHTML=" + ";
+			    		document.getElementById("cloud").innerHTML=clouds;
+			    		document.getElementById("inventory").innerHTML="You defeated the t-rex!";
+
+			    		img = document.createElement("IMG");
+						img.setAttribute("src", "cpu.png");
+						elements[event.target.parentNode.id].role = "CPU";
+						elements[cpuid].role = "tile";
+	//					document.getElementById(event.target.parentNode.id).innerHTML="";
+			    		document.getElementById(event.target.parentNode.id).appendChild(img);
+		    		}
+		    		cpuselected = false;
+		    		break;
+		    	case "ERROR":
+		    		remaingerrors -= 1;
+	    			document.getElementById(cpuid).innerHTML=" + ";
+		    		document.getElementById("errors").innerHTML=remaingerrors;
+		    		document.getElementById("inventory").innerHTML="You have found one more 404 error type!";
+
+			    	img = document.createElement("IMG");
+					img.setAttribute("src", "cpu.png");
+					elements[event.target.parentNode.id].role = "CPU";
+					elements[cpuid].role = "tile";
+//					document.getElementById(event.target.parentNode.id).innerHTML="";
+			    	document.getElementById(event.target.parentNode.id).appendChild(img);
+		    		cpuselected = false;
+		    		break;
+		    	case "tile":
+		    		bits += 1;
+	    			document.getElementById(cpuid).innerHTML=" + ";
+		    		document.getElementById("bits").innerHTML=bits;
+		    		document.getElementById("inventory").innerHTML="You have found one more bit.";
+
+			    	img = document.createElement("IMG");
+					img.setAttribute("src", "cpu.png");
+					elements[event.target.parentNode.id].role = "CPU";
+					elements[cpuid].role = "tile";
+//					document.getElementById(event.target.parentNode.id).innerHTML="";
+			    	document.getElementById(event.target.parentNode.id).appendChild(img);
+		    		cpuselected = false;
+		    		break;
+		    	case "CPU":
+		    		document.getElementById("inventory").innerHTML="Can't merge two CPU different core!";
+		    		cpuselected = false;
+		    		break;
+    		}
+	    }else{
+	    	document.getElementById("inventory").innerHTML="WARNING <br> Moving is only possible to nearby areas!";
+	    }	
+    }
+},false);
+
+/*
+var notepad = document.getElementById("notepad");
+notepad.addEventListener("contextmenu",function(event){
+    event.preventDefault();
+    var ctxMenu = document.getElementById("ctxMenu");
+    ctxMenu.style.display = "block";
+    ctxMenu.style.left = (event.pageX - 10)+"px";
+    ctxMenu.style.top = (event.pageY - 10)+"px";
+},false);
+notepad.addEventListener("click",function(event){
+    var ctxMenu = document.getElementById("ctxMenu");
+    ctxMenu.style.display = "";
+    ctxMenu.style.left = "";
+    ctxMenu.style.top = "";
+},false);*/</script>
+</body>
+</html>

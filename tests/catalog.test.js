@@ -187,14 +187,24 @@ check(
 /* ---------- the local games ---------- */
 const filesPage = fs.readFileSync(path.join(ROOT, "files.html"), "utf8");
 const localGames = fs.readFileSync(path.join(ROOT, "assets/js/local-games.js"), "utf8");
-const listed = Array.from(localGames.matchAll(/(assets\/games\/[A-Za-z0-9._-]+\.html?)/g)).map((m) => m[1]);
+const listed = Array.from(localGames.matchAll(/(assets\/games\/[A-Za-z0-9._/-]+\.html?)/g)).map((m) => m[1]);
 const unique = Array.from(new Set(listed));
 
 check("the local page lists more than a dozen files", unique.length >= 12, String(unique.length));
 check("every listed file is in the folder", unique.every((rel) => fs.existsSync(path.join(ROOT, rel))));
 check(
   "the folder holds nothing the page hides",
-  fs.readdirSync(path.join(ROOT, "assets/games")).filter((n) => /\.html?$/.test(n)).length === unique.length
+  (() => {
+    const walk = (dir) =>
+      fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? walk(dir + "/" + entry.name)
+          : /\.html?$/.test(entry.name)
+          ? [dir + "/" + entry.name]
+          : []
+      );
+    return walk("assets/games").length === unique.length;
+  })()
 );
 check(
   "every local game has a card title",
@@ -206,9 +216,12 @@ check(
     const sandbox = { window: {} };
     vm.createContext(sandbox);
     vm.runInContext(localGames, sandbox);
-    return sandbox.window.LOCAL_GAMES.every(
-      (game) => typeof game.line === "string" && game.line.length > 20 && /[.!?]$/.test(game.line.trim())
-    );
+    return sandbox.window.LOCAL_GAMES.every((game) => {
+      if (typeof game.line !== "string" || game.line.trim().length < 8) return false;
+      // An imported file is credited, not described: "js13k 2026 · by X".
+      if (game.file.indexOf("assets/games/js13k/") === 0) return /^js13k \d{4} · by \S/.test(game.line);
+      return game.line.length > 20 && /[.!?]$/.test(game.line.trim());
+    });
   })()
 );
 check(
@@ -230,6 +243,11 @@ check(
   "each local game is a complete page",
   unique.every((rel) => {
     const file = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    // A jam entry is one 13 kB file with no <head> of its own: it needs a
+    // size floor and something that draws, not an HTML skeleton.
+    if (rel.indexOf("assets/games/js13k/") === 0) {
+      return Buffer.byteLength(file, "utf8") >= 1024 && /<canvas|<svg|<script/i.test(file);
+    }
     return /<html|<head|<body/i.test(file) && /<canvas|<div|<body/i.test(file) && file.length > 20000;
   })
 );
@@ -414,7 +432,18 @@ check("the page offers a way to wipe its own data", /data-reset/.test(index));
 check(
   "no page or bundled game carries Cloudflare code",
   [ "index.html", "files.html", "404.html", "sw.js", "manifest.webmanifest" ]
-    .concat(fs.readdirSync(path.join(ROOT, "assets/games")).map((name) => "assets/games/" + name))
+    .concat(
+      // walk the whole library, js13k/ included
+      (function walk(dir) {
+        return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((entry) =>
+          entry.isDirectory()
+            ? walk(dir + "/" + entry.name)
+            : /\.html?$/.test(entry.name)
+            ? [dir + "/" + entry.name]
+            : []
+        );
+      })("assets/games")
+    )
     .every((rel) => !/cloudflareinsights|cloudflare\.com|Cloudflare Web Analytics/i.test(fs.readFileSync(path.join(ROOT, rel), "utf8")))
 );
 check("Hanger 2 has no remote Cloudflare CDN dependency", !/cdnjs\.cloudflare\.com/.test(fs.readFileSync(path.join(ROOT, "assets/games/hanger-2.html"), "utf8")));
@@ -459,9 +488,13 @@ check(
 );
 check(
   "the bundled game files never carry an analytics tag",
-  fs.readdirSync(path.join(ROOT, "assets/games")).every((name) =>
-    !/clarity\.ms|z0ayxg09fq|posthog/i.test(fs.readFileSync(path.join(ROOT, "assets/games", name), "utf8"))
-  )
+  (function walk(dir) {
+    return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).every((entry) => {
+      if (entry.isDirectory()) return walk(dir + "/" + entry.name);
+      if (!/\.html?$/.test(entry.name)) return true;
+      return !/clarity\.ms|z0ayxg09fq|posthog/i.test(fs.readFileSync(path.join(ROOT, dir, entry.name), "utf8"));
+    });
+  })("assets/games")
 );
 // A pasted link is how most people arrive, so the preview tags are part of the
 // product, not decoration.
@@ -525,15 +558,22 @@ check(
     if (!fs.existsSync(file)) return false;
     const xml = fs.readFileSync(file, "utf8");
     const listed = (xml.match(/<loc>([^<]+)<\/loc>/g) || []).map((tag) => tag.slice(5, -6));
-    const expected = ["https://funclassroom.github.io/", "https://funclassroom.github.io/files.html"];
-    for (const name of fs.readdirSync(path.join(ROOT, "assets/games")).sort()) {
-      if (!/\.html?$/i.test(name)) continue;
-      const body = fs.readFileSync(path.join(ROOT, "assets/games", name), "utf8");
+    const expected = ["https://revisionformaths.github.io/", "https://revisionformaths.github.io/files.html"];
+    const walk = (dir) =>
+      fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? walk(dir + "/" + entry.name)
+          : /\.html?$/i.test(entry.name)
+          ? [dir + "/" + entry.name]
+          : []
+      );
+    for (const rel of walk("assets/games").sort()) {
+      const body = fs.readFileSync(path.join(ROOT, rel), "utf8");
       if (/noindex/i.test(body)) continue;
-      expected.push("https://funclassroom.github.io/assets/games/" + name);
+      expected.push("https://revisionformaths.github.io/" + rel);
     }
     return listed.length === expected.length && listed.every((url, i) => url === expected[i]) &&
-      listed.every((url) => /^https:\/\/funclassroom\.github\.io\//.test(url)) &&
+      listed.every((url) => /^https:\/\/revisionformaths\.github\.io\//.test(url)) &&
       /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/.test(xml);
   })()
 );
@@ -590,7 +630,7 @@ check(
 check(
   "the README never says \"game\" in its own prose",
   (() => {
-    const keep = ["KBH Games", "Offline HTML Games Pack", "Offline-HTML-Games-Pack", "game-request", "ClassroomGames", "World's Hardest Game"];
+    const keep = ["KBH Games", "Offline HTML Games Pack", "Offline-HTML-Games-Pack", "game-request", "ClassroomGames", "World's Hardest Game", "game.zip"];
     const escaped = keep.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const protectedSpan = new RegExp("`[^`\\n]*`|https?:\\/\\/\\S+|[\\w./-]*\\/[\\w./-]+|\\b(?:" + escaped.join("|") + ")\\b", "g");
     let prose = "";
@@ -605,9 +645,9 @@ check(
 );
 check(
   "the brand is what the copy actually uses",
-  /129 G@M£\$ that still work when the network is blocked/.test(index) &&
+  /G@M£\$ that still work when the network is blocked/.test(index) &&
     /These G@M£\$ play with the wi-fi off/.test(filesPage) &&
-    /129 G@M£\$ that keep playing when the network does not/.test(readme)
+    /G@M£\$ that keep playing when the network does not/.test(readme)
 );
 check(
   "the README lists a tagged link per channel",
@@ -784,6 +824,7 @@ check(
 );
 
 require("./security.test.js").securityChecks(check);
+require("./files.test.js").fileChecks(check);
 
 console.log("\n  DATA: " + pass + " passed, " + fail + " failed\n");
 if (fail) {

@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NekoDachi</title>
+<style>
+body{margin:0;width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;background:#222034;font-family:sans-serif;}
+div{box-sizing:border-box;}
+#b{display:flex;flex-direction:column-reverse;position:absolute;width:100%;height:100%;left:0;top:0;justify-content:space-between;pointer-events:none;}
+#sh{padding:0 4vw;display:none;position:absolute;width:100%;height:60%;left:0;top:5vh;pointer-events:none;overflow-y:scroll;}
+#li{padding:2vh 1vh 0 1vh;display:flex;flex-direction:column;flex-wrap:wrap;background:#69668280;}
+#_a{position:absolute;top:5vh;left:5vw;font-size: 8vh; color:#22203458}
+#bars{display:flex;flex-direction:row;position:relative;background:#ffc3ca;}
+#con{display:flex;justify-content:center;position:relative;height:100%;}
+#c{height:100%;image-rendering:pixelated;background:#222034;}
+#menu{display:flex;flex-direction:row;width:100%}
+button{flex:1;font-size:3vh;margin:.2em;background:#C458;border:2px solid pink;border-radius:5px;color:white;cursor:pointer;pointer-events:all;}
+button:active{background:#d568;transform:'translateY(-1vh)';}
+img{display:none;}
+label{font-size:4vh;margin:0 5px;}
+#l_m{position:absolute;top:0;right:0;}
+#bars::after{content:'';position:absolute;right:0;bottom:-1vh;width:100%;height:1vh;background-color:#ef5c6d;}
+</style>
+</head>
+<body>
+<div id="con">
+<canvas id="c"width="65"height="100"></canvas>
+<div id="b">
+<h1 id="_a"></h1>
+<div id="menu"><button id="b_l">Litter</button><button id="b_f">Feed $25</button><button id="b_s">Shop</button><button id="b_c">Cards</button></div>
+<div id="sh"><div id="li"></div></div>
+<div id="bars"><label id="l_m"></label><label id="l_s"></label><label id="l_h"></label><label id="l_a"></label></div>
+</div>
+</div>
+<img id="png" src="data:image/png;base64,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"></img>
+<script>window['f'] = ["base","room",0,0,0,65,98,0,0,"base","pic",0,114,0,12,16,46,7,"base","carpet",0,0,118,54,13,6,76,"base","box",0,0,98,54,20,7,77,"base","poop_1",0,54,98,9,4,43,83,"base","poop_2",0,54,102,8,4,26,81,"base","poop_3",0,40,149,26,9,19,79,"base","base",0,65,0,49,41,10,45,"base","eyes",0,40,158,23,10,16,66,"base","feet",0,46,168,32,6,15,83,"base","lil_guy",0,97,146,17,15,30,77,"base","earring",0,126,0,4,3,39,57,"base","bowtie_tail",0,114,146,14,11,44,47,"base","collar",0,114,32,14,8,20,78,"base","beeg_headphones",0,65,41,53,35,4,43,"base","bowtie_head",0,118,40,11,10,38,56,"base","handle_stache",0,23,162,17,5,19,76,"base","pencil_stache",0,46,174,30,6,12,76,"base","fork",0,40,131,14,5,7,82,"base","spatula",0,110,167,15,5,6,82,"base","visor",0,54,117,42,21,7,47,"base","sunglasses",0,40,138,35,11,14,66,"base","business_tie",0,114,16,10,16,21,80,"base","bowtie_neck",0,117,114,13,8,20,79,"base","bowl",0,75,146,22,12,4,86,"base","food_1",0,110,172,14,4,8,86,"base","food_2",0,75,138,14,8,8,82,"base","food_3",0,114,157,14,10,8,80,"base","angy",0,21,131,19,31,13,36,"base","eepy",0,95,76,31,38,10,37,"base","happy",0,65,76,30,41,10,38,"base","back",0,0,131,21,32,0,0,"base","front",0,96,114,21,32,0,0,"base","k_red",0,59,106,5,6,3,3,"base","k_blk",0,117,122,5,6,3,3,"base","q_red",0,122,122,5,6,3,3,"base","q_blk",0,124,16,5,6,3,3,"base","j_red",0,124,22,5,6,3,3,"base","j_blk",0,125,68,5,6,3,3,"base","a_red",0,117,128,5,6,3,3,"base","a_blk",0,54,106,5,6,3,3,"base","diamond",0,118,50,8,6,10,3,"base","heart",0,118,56,8,6,10,3,"base","guy",0,118,68,7,6,11,3,"base","cat",0,118,62,8,6,10,3,"walk","base",0,65,0,49,41,10,45,"walk","base",1,65,0,49,41,10,45,"walk","base",2,65,0,49,41,10,45,"walk","base",3,65,0,49,41,10,45,"walk","eyes",0,40,158,23,10,16,66,"walk","eyes",1,40,158,23,10,16,66,"walk","eyes",2,40,158,23,10,16,66,"walk","eyes",3,40,158,23,10,16,66,"walk","feet",0,46,168,32,6,15,83,"walk","feet",1,76,177,33,5,14,84,"walk","feet",2,0,178,24,5,19,84,"walk","feet",3,78,171,32,6,15,83,"blink","base",0,65,0,49,41,10,45,"blink","base",1,65,0,49,41,10,45,"blink","base",2,65,0,49,41,10,45,"blink","base",3,65,0,49,41,10,45,"blink","base",4,65,0,49,41,10,45,"blink","eyes",0,40,158,23,10,16,66,"blink","eyes",1,86,161,23,10,16,66,"blink","eyes",2,0,163,23,10,16,66,"blink","eyes",3,23,168,23,10,16,66,"blink","eyes",4,63,158,23,10,16,66,"blink","feet",0,46,168,32,6,15,83,"blink","feet",1,46,168,32,6,15,83,"blink","feet",2,46,168,32,6,15,83,"blink","feet",3,46,168,32,6,15,83,"blink","feet",4,46,168,32,6,15,83]</script>
+<script>
+const gl = c.getContext("webgl2");
+
+function createShader(t, s) {
+  const shader = gl.createShader(t);
+  gl.shaderSource(shader, s);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    gl.deleteShader(shader);
+  }
+  return shader;
+}
+
+function createProgram(v, f) {
+  const program = gl.createProgram();
+  gl.attachShader(program, v);
+  gl.attachShader(program, f);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    gl.deleteProgram(program);
+  }
+  return program;
+}
+
+function createBuffer(b, s, u) {
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(b, buffer);
+  gl.bufferData(b, s, u);
+  return buffer;
+}
+
+const program = createProgram(
+  createShader(
+    gl.VERTEX_SHADER,
+    `#version 300 es
+in vec2 a_xy;
+in vec2 a_uv;
+in vec4 a_tint;
+
+out vec2 v_uv;
+out vec4 v_tint;
+
+uniform mat4 u_mat;
+
+void main() {
+  gl_Position = vec4(u_mat * vec4(a_xy, 1.0, 1.0)); // remove .0 test
+  v_uv = a_uv;
+  v_tint = a_tint;
+}
+`),
+  createShader(
+    gl.FRAGMENT_SHADER,
+    `#version 300 es
+precision highp float;
+in vec2 v_uv;
+in vec4 v_tint;
+
+uniform sampler2D u_image;
+out vec4 outColor;
+
+void main() {
+  outColor = texture(u_image, v_uv);
+}
+`));
+
+const texture = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, texture);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, png);
+
+// x, y, u, v, rgba
+const VERTEX_SIZE = 4 * 2 + 4 * 2 + 4;
+const MAX_BATCH = 10922;
+const MAX_STACK = 100;
+const MAT_SIZE = 6;
+const VERTS_PER_QUAD = 6;
+const MAT_STACK_SIZE = MAX_STACK * MAT_SIZE;
+const VERTS_DATA_SIZE = VERTEX_SIZE * MAX_BATCH * 4;
+const INDEX_DATA_SIZE = MAX_BATCH * (2 * VERTS_PER_QUAD);
+const w = c.width;
+const h = c.height;
+
+// stores positions, uv, tint
+const vd = new ArrayBuffer(VERTS_DATA_SIZE);
+const vpd = new Float32Array(vd);
+const vid = new Uint16Array(INDEX_DATA_SIZE);
+const ibo = createBuffer(gl.ELEMENT_ARRAY_BUFFER, vid.byteLength, gl.STATIC_DRAW);
+const vbo = createBuffer(gl.ARRAY_BUFFER, vd.byteLength, gl.DYNAMIC_DRAW);
+
+let count = 0; // verticies
+
+// prettier-ignore
+let mat = new Float32Array([
+  1, 0,
+  0, 1,
+  0, 0,
+]);
+let stack = new Float32Array(100);
+let stackPointer = 0;
+var {round,cos,sin,abs,floor,ceil,random,min,max} = Math;
+
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+gl.enable(gl.BLEND);
+
+gl.useProgram(program);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+const MAX_VERTS = MAX_BATCH * VERTS_PER_QUAD;
+for (let i = (j = 0); i < MAX_VERTS; i += VERTS_PER_QUAD, j += 4) {
+  vid[i + 0] = j;
+  vid[i + 1] = j + 1;
+  vid[i + 2] = j + 2;
+  vid[i + 3] = j;
+  vid[i + 4] = j + 3;
+  vid[i + 5] = j + 1;
+}
+
+gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, vid);
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+const pal = gl.getAttribLocation(program, "a_xy");
+const txal = gl.getAttribLocation(program, "a_uv");
+const tnal = gl.getAttribLocation(program, "a_tint");
+gl.enableVertexAttribArray(pal);
+gl.vertexAttribPointer(pal, 2, gl.FLOAT, 0, VERTEX_SIZE, 0);
+gl.enableVertexAttribArray(txal);
+gl.vertexAttribPointer(txal, 2, gl.FLOAT, 0, VERTEX_SIZE, 8);
+gl.enableVertexAttribArray(tnal);
+gl.vertexAttribPointer(tnal, 4, gl.UNSIGNED_BYTE, 1, VERTEX_SIZE, 16);
+
+const rx = 2 / w;
+const ry = -2 / h;
+gl.uniformMatrix4fv(gl.getUniformLocation(program, "u_mat"), 0, new Float32Array([rx,0,0,0,0,ry,0,0,0,0,1,1,-1,1,0,0]));
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, texture);
+
+const render = {
+  gl,
+  c,
+  color: 0xffffffff, //white (argb)
+  bkg(r, g, b) {
+    gl.clearColor(r / 255, g / 255, b / 255, 1);
+  },
+  clear() {
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  },
+  translate(x, y) {
+    mat[4] = (mat[0] * x) + (mat[2] * y) + mat[4];
+    mat[5] = (mat[1] * x) + (mat[3] * y) + mat[5];
+  },
+  scale(x, y) {
+    mat[0] *= x;
+    mat[1] *= x;
+    mat[2] *= y;
+    mat[3] *= y;
+  },
+  rotate(r) {
+    const a = mat[0];
+    const b = mat[1];
+    const c = mat[2];
+    const d = mat[3];
+    const sr = sin(r);
+    const cr = cos(r);
+    mat[0] = a * cr + c * sr;
+    mat[1] = b * cr + d * sr;
+    mat[2] = a * -sr + c * cr;
+    mat[3] = b * -sr + d * cr;
+  },
+  push() {
+    stack[stackPointer + 0] = mat[0];
+    stack[stackPointer + 1] = mat[1];
+    stack[stackPointer + 2] = mat[2];
+    stack[stackPointer + 3] = mat[3];
+    stack[stackPointer + 4] = mat[4];
+    stack[stackPointer + 5] = mat[5];
+    stackPointer += 6;
+  },
+  pop() {
+    stackPointer -= 6;
+    mat[0] = stack[stackPointer + 0];
+    mat[1] = stack[stackPointer + 1];
+    mat[2] = stack[stackPointer + 2];
+    mat[3] = stack[stackPointer + 3];
+    mat[4] = stack[stackPointer + 4];
+    mat[5] = stack[stackPointer + 5];
+  },
+  quad(x, y, w, h, u, v, uw = w, uh = h) {
+    const x0 = x;
+    const y0 = y;
+    const x1 = x + w;
+    const y1 = y + h;
+    const x2 = x;
+    const y2 = y + h;
+    const x3 = x + w;
+    const y3 = y;
+
+    const u0 = u / png.width;
+    const v0 = v / png.height;
+    const u1 = (u + uw) / png.width;
+    const v1 = (v + uh) / png.height;
+
+    const [a, b, c, d, e, f] = mat;
+    const argb = render.color;
+    let offset = 0;
+
+    if (count + 1 >= MAX_BATCH) {
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vd);
+      gl.drawElements(gl.TRIANGLES, count * VERTS_PER_QUAD, gl.UNSIGNED_SHORT, 0);
+      count = 0;
+    }
+
+    offset = count * VERTEX_SIZE;
+    // Vertex Order XY|UV|ARGB
+    // Vertex 1
+    vpd[offset++] = x0 * a + y0 * c + e;
+    vpd[offset++] = x0 * b + y0 * d + f;
+    vpd[offset++] = u0;
+    vpd[offset++] = v0;
+    vpd[offset++] = 0xffffffff;
+
+    vpd[offset++] = x1 * a + y1 * c + e;
+    vpd[offset++] = x1 * b + y1 * d + f;
+    vpd[offset++] = u1;
+    vpd[offset++] = v1;
+    vpd[offset++] = 0xffffffff;
+
+    vpd[offset++] = x2 * a + y2 * c + e;
+    vpd[offset++] = x2 * b + y2 * d + f;
+    vpd[offset++] = u0;
+    vpd[offset++] = v1;
+    vpd[offset++] = 0xffffffff;
+
+    vpd[offset++] = x3 * a + y3 * c + e;
+    vpd[offset++] = x3 * b + y3 * d + f;
+    vpd[offset++] = u1;
+    vpd[offset++] = v0;
+    vpd[offset++] = 0xffffffff;
+
+    if (++count >= MAX_BATCH) {
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, vd);
+      gl.drawElements(gl.TRIANGLES, count * VERTS_PER_QUAD, gl.UNSIGNED_SHORT, 0);
+      count = 0;
+    }
+  },
+  flush() {
+    if (count == 0) return;
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vpd.subarray(0, count * VERTEX_SIZE));
+    gl.drawElements(gl.TRIANGLES, count * VERTS_PER_QUAD, gl.UNSIGNED_SHORT, 0);
+    count = 0;
+  },
+};
+
+window["render"] = render;</script>
+<script>class Frame {
+  static map = new Map();
+  static byIds = i => i.map(x => Frame.map.get(x.includes(".")?x:x+".base"));
+  static import(f = window.f) {
+    for (let i = 0; i < f.length; i += 9) {
+      const n = new Frame(...f.slice(i, i + 9));
+      const frames = Frame.map.get(n.sid) || [];
+      frames[n.frame] = n;
+      Frame.map.set(n.sid, frames);
+    }
+  }
+
+  constructor(t, n, f, ax, ay, w, h, spx, spy) {
+    this.sid = `${n}.${t}`;
+    this.name = n;
+    this.tag = t;
+    this.frame = f;
+    this.u = ax;
+    this.v = ay;
+    this.w = w;
+    this.h = h;
+    this.x = spx;
+    this.y = spy;
+  }
+
+  get quad() {
+    const f = this;
+    return [f.x, f.y, f.w, f.h, f.u, f.v, f.w, f.h];
+  }
+}
+
+Frame.import();
+console.log(Frame.map);
+
+
+const lerp=(a,b,t=0.5,e=1,d=abs(b-a))=>(d<e)?b:a+t*(b-a);
+const randi=(b,a=0)=>floor(random()*(floor(b)-ceil(a))-ceil(a)); // NON INCLUSIVE
+const shuf=(a,i=a.length-1)=>{
+  for(;i>0;i--){
+    var j = floor(random() * i+1),
+    temp = a[i];
+    a[i] = a[j];
+    a[j] = temp;
+  }
+  return a;
+}
+
+class Go {
+  static root = [];
+  x = 0;
+  y = 0;
+  sx = 1;
+  sy = 1;
+  r = 0;
+  index = 0;
+  v = 1;
+  l = 0; // lerping
+  ld = 0;
+  le = 0;
+  lms = 0;
+  lx = 0;
+  ly = 0;
+  tx = 0;
+  ty = 0;
+  e = 0;
+  lcb = null;
+
+  lerp(ms, e, tx = this.x, ty = this.y, cb) {
+    this.l = true;
+    this.tx = tx;
+    this.ty = ty;
+    this.e = e;
+    this.lms = ms;
+    this.lcb = cb;
+  }
+
+  /** @type {Frame[]} */
+  frames = [];
+  /** @type {Go[]} */
+  children = [];
+
+  constructor(frameIds = [], position = [0, 0]) {
+    this.set(frameIds);
+    this.children = [];
+    this.x = position[0];
+    this.y = position[1];
+    this.w = this.frames[0]?.[0].w;
+    this.h = this.frames[0]?.[0].h;
+  }
+
+  set(fs) {
+    this.frames = Frame.byIds(fs)
+    return this;
+  }
+
+  aabb(px, py) {
+    const {x,y,w,h}=this;
+    return (px>=x&&px<=x+w&&py>=y&&py<=y+h);
+  }
+
+  render(fc, ts) {
+    const { x, y, r, sx, sy, v, frames, index, children, target, l, lms, tx, ty, e } = this;
+    if (l) {
+      if (lms) {
+        this.ld = lms;
+        this.le = ts + lms;
+        this.lms = 0;
+        this.lx = x;
+        this.ly = y;
+      }
+      const ld = 1 - clamp(this.le - ts, 0, this.ld) / this.ld;
+
+      if (x != tx) {
+        this.x = lerp(this.lx, tx, ld, e);
+      }
+
+      if (y != ty) {
+        this.y = lerp(this.ly, ty, ld, e);
+      }
+
+      if (y == ty && x == tx) {
+        this.l = 0;
+        this.ld = 0;
+        this.lms = 0;
+        this.le = 0;
+        this.lx = x;
+        this.ly = y;
+        this.lcb?.();
+        this.lcb = null;
+      }
+    }
+
+    render.push();
+    render.translate(Math.round(x), Math.round(y));
+    render.rotate(r);
+    render.scale(sx, sy);
+
+    if (v) {
+      for (const frame of frames) {
+        render.quad(...frame[index].quad);
+      }
+
+      for (const go of children) {
+        go.render(fc, ts);
+      }
+    }
+
+    render.pop();
+  }
+}
+
+
+class Ago extends Go {
+  constructor(layers = [], anims = []) {
+    super([]);
+    this.frameSets = Object.fromEntries(
+      anims.map((anim) => [anim, Frame.byIds(layers.map((layer) => `${layer}.${anim}`))])
+    );
+    this.frames = this.frameSets.base;
+    this.length = 1;
+    this.animate = this.animate.bind(this);
+  }
+
+  frameTime = 100;
+  timestamp = 0;
+  playing = false;
+  timeoutId = 0;
+
+  play(anim, time = 100) {
+    const animFrameSet = this.frameSets[anim];
+    if (!animFrameSet) return;
+    this.frames = animFrameSet;
+    this.length = animFrameSet.length;
+    if (this.playing) return;
+    this.playing = true;
+    this.animate();
+  }
+
+  animate() {
+    if (this.playing) {
+      this.index = (this.index + 1) % this.length; // Nora's kickflip
+      this.timeoutId = setTimeout(this.animate, this.frameTime);
+    } else {
+      this.index = 0;
+    }
+  }
+
+  stop() {
+    this.playing = false;
+    this.index = 0;
+    this.frame = this.frameSets.base;
+    this.length = 0;
+    clearTimeout(this.timeoutId);
+  }
+}
+
+const world = new Go();
+Go.root = [world];
+
+const att = {
+  lil_guy: new Go(["lil_guy"]),
+  earring: new Go(["earring"]),
+  bowtie_tail: new Go(["bowtie_tail"]),
+  collar: new Go(["collar"]),
+  beeg_headphones: new Go(["beeg_headphones"]),
+  bowtie_head: new Go(["bowtie_head"]),
+  handle_stache: new Go(["handle_stache"]),
+  pencil_stache: new Go(["pencil_stache"]),
+  fork: new Go(["fork"]),
+  spatula: new Go(["spatula"]),
+  visor: new Go(["visor"]),
+  sunglasses: new Go(["sunglasses"]),
+  business_tie: new Go(["business_tie"]),
+  bowtie_neck: new Go(["bowtie_neck"]),
+  eepy: new Go(["eepy"]),
+  angy: new Go(["angy"]),
+  hapy: new Go(["happy"]),
+}
+
+const emotes = [att.eepy, att.angy, att.hapy];
+const cat = new Ago(["base", "eyes", "feet"], ["base", "walk", "blink"]);
+cat.children = [...Object.values(att)];
+cat.emote = (k, t=100) => {
+  emotes.map(a => a.v=0);
+  att[k].v = 1;
+  setTimeout(() => att[k].v = 0, t);
+}
+cat.attc = () => cat.children.reduce((c, a) => c+a.v, 0)
+cat.children.map((g) => (g.v = 0));
+// angy.visible = 1;
+cat.v = 1;
+
+const rooms = new Go();
+rooms.change = (tr, cb) => {
+  if (r == tr) return;
+  d = 1;
+  cat.play('walk');
+  if (tr>r)(cat.sx=-1,cat.x=65);
+  rooms.lerp(1000,1,65-65*tr,δ,() => {// Nora's kickflip 2
+    r=tr;
+    d=0;
+    cat.stop();
+    cat.sx = 1;
+    cat.x = 0;
+    cb?.();
+  });
+}
+world.children = [rooms, cat];
+
+const bathroom = new Go(["room", "box"], [-65, 0]);
+const poop_1 = new Go(["poop_1"]);
+const poop_2 = new Go(["poop_2"]);
+const poop_3 = new Go(["poop_3"]);
+bathroom.children = [poop_1, poop_2, poop_3];
+
+const pic = new Go(["pic"]);
+const center = new Go(["room", "carpet"]);
+const bowl = new Go(["bowl"]);
+
+const food_1 = new Go(["food_1"]);
+const food_2 = new Go(["food_2"]);
+const food_3 = new Go(["food_3"]);
+
+bowl.children = [food_1, food_2, food_3];
+center.children = [pic, bowl];
+
+const cr = {
+  f: ['ba','bk','bq','bj','ra','rk','rq','rj'],
+  b: ["back"],
+  ba: ['front', 'cat', 'a_blk'],
+  bk: ['front', 'cat', 'k_blk'],
+  bq: ['front', 'cat', 'q_blk'],
+  bj: ['front', 'cat', 'j_blk'],
+  ra: ['front', 'heart', 'a_red'],
+  rk: ['front', 'heart', 'k_red'],
+  rq: ['front', 'heart', 'q_red'],
+  rj: ['front', 'heart', 'j_red'],
+}
+
+const card_0 = new Go(cr.b, [0, 7]);
+const card_1 = new Go(cr.b, [22, 7]);
+const card_2 = new Go(cr.b, [44, 7]);
+const card_3 = new Go(cr.b, [0, 40]);
+const card_4 = new Go(cr.b, [22, 40]);
+const card_5 = new Go(cr.b, [44, 40]);
+
+const b = new Go(["room"], [65, 0]);
+b.shuf = (o=[...cr.f],p=[0,0,0].map(x=>o.splice(randi(o.length),1)[0])) => b.p=shuf([...p, ...p]);
+b.flip = (i, r=0) => (b.children[i].set(r?cr.b:cr[b.p[i]]), b.children[i].f=1-r, i);
+b.flipped = (i) => b.children[i].f;
+b.done = () => {
+  for (const c of b.children) {
+    console.log(c);
+    if (!c.f) return false;
+  }
+  return true;
+};
+b.reset = () => b.children.map((c, i) => (c.set(cr.b),c.f=0));
+b.click = ((px, py, i = -1) => {
+  for(var c of b.children) { i++; if (c.aabb(px, py)) return i; }
+});
+b.children = [card_0,card_1,card_2,card_3,card_4,card_5,];
+rooms.children = [bathroom, center, b];
+
+window["world"] = world;
+</script>
+<script>const ᕦò_óˇᕤ = "ಠ_ಠ";
+const ΣδΔ = "sdΔ";
+var æ = 'textContent';
+const δ = undefined;
+
+c.rect = c.getBoundingClientRect.bind(c);
+const el = (t, id, text) => {
+  const e = document.createElement(t);
+  e.id = id;
+  e.innerText = text;
+  return e;
+};
+const clamp = (x, mn = VMIN, mx = VMAX) => max(mn, min(mx, x));
+const roll = (name, x, r = random() * 100) => {
+  console.log(`roll to ${name} ${r > x ? "⭕" : "❌"}`, x, r);
+  return r > x;
+};
+const onclick = (e, f) => (e.addEventListener("click", (v) => !d && f(v)), e);
+
+const CAT_STATE = {
+  IDLE: 0,
+  EAT: 1,
+  POOP: 2,
+  SLEEP: 3,
+  PLAY: 4,
+};
+
+const items = [
+  ["bowtie_neck", 10, 0],
+  ["business_tie", 10, 0],
+  ["sunglasses", 10, 0],
+  ["visor", 10, 0],
+  ["spatula", 20, 0],
+  ["fork", 20, 0],
+  ["pencil_stache", 30, 0],
+  ["handle_stache", 30, 0],
+  ["bowtie_head", 35, 0],
+  ["beeg_headphones", 50, 0],
+  ["collar", 10, 0],
+  ["bowtie_tail", 10, 0],
+  ["earring", 75, 0],
+  ["lil_guy", 80, 0],
+];
+
+const VMIN = 0;
+const VMAX = 100;
+const TICK_DURATION = 500 * 5;
+const IDLE_INCOME_RATE = 1;
+const IDLE_HUNGER_RATE = 1;
+const IDLE_STAMINA_RATE = -1;
+const TUMMY_HURT = 3;
+
+var cat_state = 0,
+  mony = 1, // money
+  monyRate = 1,
+  hungry = 0, // hunger
+  hungryRate = 0,
+  litter = 1, // poop
+  litterRate = 0,
+  stamina = 100,
+  staminaRate = -1,
+  anger = 50, // anger
+  angerRate = 0,
+  food = 0,
+  toys = 0,
+  full = 0,
+  //mini
+  g = 0,
+  cards = [],
+  s = 0,
+  d = 0,
+  r = 1,
+  last_state = CAT_STATE.IDLE,
+  state_counter = 0,
+  paused = false,
+  mite = 0,
+  frame = 0,
+  lts = 0,
+  renderTimestamp = 0;
+
+function load() {
+  items.forEach(i => {
+    var [n, p, o] = i;
+    li.appendChild(
+      onclick(el("button", n, `${n}: $${p}`), ({target: t}) => {
+        if (i[2]) {
+          att[n].v = !att[n].v;
+          t.textContent = `${n} ${att[n].v?'✅':''}`;
+        } else {
+          if (mony >= p) {
+            mony = mony - p;
+            i[2] = 1;
+            cat.emote('hapy', 500);
+            t.textContent = `${n}`;
+          }
+        }
+      })
+    );
+  });
+
+  onclick(b_l, () => {
+    if (r != 0) rooms.change(0);
+    else {
+      litter = 0;
+      cat.emote('hapy', 500);
+    }
+  });
+
+  onclick(b_f, () => {
+    if (r!=1) rooms.change(1);
+    else {
+      if (mony >= 25 && food < 3) {
+        mony = mony - 25;
+        food = clamp(food + 1, 0, 3);
+        cat.emote('hapy', 500);
+      }
+    }
+  });
+
+  onclick(b_s, () => {
+    s = !s;
+    sh.style.display = s ? "block" : "none";
+  });
+
+  onclick(b_c, () => {
+    if (r == 2) minigame_start();
+    else {
+      rooms.change(2, () => {
+        minigame_start();
+      });
+    }
+  });
+  
+  let c1;
+  onclick(c, (e, t=e.target) => {
+    if (r == 2 && g == 1) {
+      var { width, height } = c.rect();
+      const px = round((e.offsetX / width)*w);
+      const py = round((e.offsetY / height)*h);
+      const ci = b.click(px,py)??-1; 
+      if (ci>=0) {
+        var flipped = b.flipped(ci)
+        if (flipped) return;
+        b.flip(ci);
+        if (c1==δ) { c1 = ci; return;}
+        if (ci != c1) {
+          if (b.p[ci] == b.p[c1]) {
+            c1 = δ;
+            mony += 10;
+            var done = b.done();
+            if (done) {
+              d = 1;
+              mony += 10;
+              cat.emote('hapy');
+              setTimeout(() => {
+                b.reset();
+                b.shuf();
+                d = 0;
+              }, 500);
+            }
+          } else {
+            d = 1;
+            setTimeout(() => {
+              mony = clamp(mony-20);
+              d = 0;
+              b.flip(c1, 1);
+              b.flip(ci, 1);
+              c1 = δ;
+            }, 500)
+          }
+        }
+      }
+    }
+  });
+}
+
+function minigame_start() {
+  g = 1;
+  b.reset();
+  b.shuf();
+}
+
+function start() {
+  paused = false;
+  render.bkg(75, 105, 47);
+  requestAnimationFrame(draw);
+}
+
+function update() {
+  mite++;
+  if (last_state != cat_state) {
+    last_state = cat_state;
+    state_counter = 1;
+  }
+
+  const no_food = food == 0;
+  const any_food = food > 0;
+  const tired = stamina < 10;
+  const rested = stamina > 80;
+  const starved = hungry > 90;
+  const mad = anger > 95;
+  const min_frame = state_counter > 3;
+
+  // determine state transitions
+  switch (cat_state) {
+    case CAT_STATE.EAT:
+      if (no_food || roll("stop eat", 50)) {
+        cat_state = CAT_STATE.IDLE;
+        break;
+      }
+
+    case CAT_STATE.POOP:
+      if (!full) {
+        cat_state = CAT_STATE.IDLE;
+        break;
+      }
+
+    case CAT_STATE.IDLE:
+      if (min_frame && roll("poop", 99-(full*33))) {
+        cat_state = CAT_STATE.POOP;
+        rooms.change(0);
+        break;
+      }
+
+      if (min_frame && any_food && hungry && roll("eat", 50)) {
+        if (full >= TUMMY_HURT) {
+          cat_state = CAT_STATE.POOP;
+          rooms.change(0);
+        }
+        else {
+          cat_state = CAT_STATE.EAT;
+          rooms.change(1);
+        }
+        break;
+      }
+
+      if (!(mad||starved) && min_frame && (tired || roll("sleep", g==1?50:25))) {
+        cat_state = CAT_STATE.SLEEP;
+        break;
+      }
+
+    // case CAT_STATE.PLAY:
+    //   if (min_frame && roll("bored", 75)) {
+    //     cat_state = CAT_STATE.IDLE;
+    //     break;
+    //   }
+
+    case CAT_STATE.SLEEP:
+      if (min_frame && roll("wake", rested || g!=1 ? 50 : 78)) {
+        cat_state = CAT_STATE.IDLE;
+        break;
+      }
+  }
+
+  if (last_state == cat_state) state_counter++;
+  else {
+    last_state = cat_state;
+    state_counter = 1;
+  }
+
+  att.eepy.v = 0;
+  // set state base rates
+  switch (cat_state) {
+    case CAT_STATE.IDLE:
+      monyRate = IDLE_INCOME_RATE;
+      hungryRate = IDLE_HUNGER_RATE;
+      staminaRate = -2;
+      if (anger < 50 || hungry > 75) {
+        angerRate = 1;
+      }
+      break;
+
+    case CAT_STATE.POOP:
+      full = 0;
+      litter = clamp(litter + 1, 0, 3);
+      break;
+
+    case CAT_STATE.SLEEP:
+      att.eepy.v = 1;
+      staminaRate = 3;
+      hungryRate = 3;
+      angerRate = -1;
+      break;
+
+    case CAT_STATE.EAT:
+      food = clamp(food - 1, 0, 3);
+      full = clamp(full + 1, 0, 3);
+      hungry = clamp(hungry - 40);
+      cat.emote('hapy')
+      staminaRate = -5;
+      if (hungry < 75) {
+        angerRate = -5;
+      }
+      break;
+
+    // case CAT_STATE.PLAYING:
+    //   monyRate = 2;
+    //   staminaRate = -5;
+    //   angerRate = -5;
+    //   break;
+  }
+
+  // add conditional modifiers
+  if (hungry > 25) {
+    angerRate += 1;
+  }
+
+  if (hungry > 50) {
+    staminaRate -= 4;
+    angerRate += 1;
+  }
+
+  if (hungry > 80) {
+    // staminaRate -= 3;
+    angerRate += 1;
+  }
+
+  if (litter > 3) {
+    angerRate += 3;
+  }
+  
+  const acc = cat.attc();
+  angerRate -= clamp(acc-1, 0, 3);
+
+  if (anger > 90) {
+    staminaRate -= 5;
+  }
+
+
+  // execute
+  stamina = clamp(stamina + staminaRate);
+  mony = clamp(mony + monyRate);
+  hungry = clamp(hungry + hungryRate);
+  anger = clamp(anger + angerRate);
+  mony = clamp(mony + monyRate);
+
+  if (anger > 90) {
+    emotes.map(e => e.v = 0);
+    att.angy.v = 1;
+  }
+}
+
+function draw(ts) {
+  if (paused) return;
+  frame++;
+  if (ts - lts >= TICK_DURATION) {
+    lts = ts;
+    update();
+  }
+  if (g==1 && r!=2) {
+    g=0;
+  }
+
+  dui();
+  dgfx(frame, ts);
+  requestAnimationFrame(draw);
+}
+
+const fv = v =>`${v}`.padStart(2,'0');
+function dui() {
+  console.log(`${[...Object.keys(CAT_STATE)][cat_state]} ${mite} ${full ? `💩${full}` : ""} `);
+  food_1.v = food >= 1;
+  food_2.v = food >= 2;
+  food_3.v = food >= 3;
+  poop_1.v = litter >= 1;
+  poop_2.v = litter >= 2;
+  poop_3.v = litter >= 3;
+  l_m.textContent = `${mony}🪙`;
+  l_s.textContent = `⚡${fv(stamina)}`;
+  l_h.textContent = `🍴${fv(hungry)}`;
+  l_a.textContent = `😊${fv(50 - anger)}`;
+  b_l.textContent = r == 0 ? "Clean":"Litter";
+  b_f.textContent = r == 1 ? "Feed $25":"Center";
+  b_c.textContent = r == 2 ? (g == 0 ? 'Play':'Pick'):'Cards';
+}
+
+function dgfx(frame, ts) {
+  render.clear();
+  world.render(frame, ts);
+  render.flush();
+}
+
+load();
+start();
+</script>
+</body>
+</html>

@@ -1,0 +1,2592 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>TextGames</title>
+    <style>@property --extra {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+html,
+body {
+  font-family: sans-serif;
+  margin: 0;
+  height: 100%;
+  overflow: clip;
+  font-size: min(1.5vh, 1.5vw);
+  background-color: #fff;
+
+  --cT0: #000;
+  --cT1: #f00;
+  --cT2: #ff7f00;
+  --cT3: #ff0;
+  --cT4: #0f0;
+  --cT5: #00f;
+  --cT6: #4b0082;
+  --cT7: #8f00ff;
+  --cT8: #000;
+
+  --cB0: #000;
+  --cB1: #800000;
+  --cB2: #994000;
+  --cB3: #808000;
+  --cB4: #008000;
+  --cB5: #000080;
+  --cB6: #2a004a;
+  --cB7: #4a006a;
+  --cB8: #000;
+}
+
+.scene {
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  position: absolute;
+  box-sizing: border-box;
+  perspective: 800px;
+  background: transparent;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.scene * {
+  transform-style: preserve-3d;
+}
+
+#menu {
+  position: absolute;
+  animation: menuFadeIn 1s ease forwards;
+
+  &.hide {
+    animation: menuFadeOut 0.5s ease forwards;
+  }
+  z-index: 1;
+
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  padding-top: 4vh;
+  padding-bottom: 4vh;
+  display: flex;
+  justify-content: space-between;
+
+  background: linear-gradient(
+    to bottom,
+    var(--cB0) 0%,
+    var(--cB1) 5%,
+    var(--cB1) 16%,
+    var(--cB2) 19%,
+    var(--cB2) 29%,
+    var(--cB3) 32%,
+    var(--cB3) 42%,
+    var(--cB4) 45%,
+    var(--cB4) 55%,
+    var(--cB5) 58%,
+    var(--cB5) 68%,
+    var(--cB6) 71%,
+    var(--cB6) 81%,
+    var(--cB7) 84%,
+    var(--cB7) 94%,
+    var(--cB8) 100%
+  );
+
+  #menui {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  #gn {
+    writing-mode: vertical-rl;
+    font-size: 10rem;
+    color: #000a;
+    text-align: center;
+    text-shadow:
+      0 0 4px #000,
+      0 0 8px #000,
+      0 0 12px #000;
+    transform-origin: 0 0;
+    transform: rotateZ(-5deg);
+  }
+  #sig {
+    writing-mode: vertical-rl;
+    background: #000a;
+    color: #fff8;
+    padding: 2em 0.5em;
+    border-radius: 1rem 0 0 1rem;
+    font-size: 1.5rem;
+  }
+  .lev {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: inset 0 0 1em 0 #000a;
+    color: #fff;
+    text-align: center;
+    min-width: 50vw;
+    font-size: 2.5rem;
+    border-radius: 10vh;
+    padding: 1rem 5rem;
+    cursor: pointer;
+    &.lock {
+      opacity: 0.3;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    div {
+      font-size: 50%;
+    }
+  }
+}
+
+@keyframes menuFadeOut {
+  0% {
+    opacity: 1;
+    pointer-events: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes menuFadeIn {
+  0% {
+    opacity: 0;
+    display: flex;
+  }
+  100% {
+    opacity: 1;
+    pointer-events: all;
+    display: flex;
+  }
+}
+
+@keyframes starFlash {
+  0% {
+    transform: scale(1);
+    color: #fff;
+  }
+  100% {
+    color: #ff0;
+    transform: scale(1.5);
+  }
+}
+
+.wall,
+.dlayer,
+.letter {
+  /* Isolates rendering boundaries so child transforms don't force full-page reflows */
+  contain: layout style;
+  -webkit-font-smoothing: antialiased;
+}
+
+.map {
+  font-size: 20rem;
+  line-height: calc(1.2 * var(--extra, 1));
+
+  --zHeight: 5rem;
+  --dct: #fff;
+  --dcb: #000;
+  position: relative;
+
+  --gridX: calc(1ch * var(--extra, 1));
+  --gridY: calc(1lh / 2);
+  --gridXO: calc(var(--gridX) / 2);
+  background-size: var(--gridX) var(--gridY);
+
+  width: calc(var(--gridXF, 1) * var(--gridX));
+  height: calc(var(--gridYF, 1) * var(--gridY));
+
+  --viewX: 0;
+  --viewY: 0;
+  --viewRZ: 0;
+  --viewS: 1;
+  transform-origin: left top;
+
+  min-width: 100%;
+  transform: translate3d(50vw, 50vh, 0.1rem)
+    rotateZ(calc(var(--viewRZ) * 90deg))
+    scale3d(var(--viewS, 1), var(--viewS, 1), 1)
+    translate3d(
+      calc(((var(--viewX, 0) * var(--gridX) + var(--gridX)) * -1)),
+      calc((var(--viewY, 0) * var(--gridY) + var(--gridXO)) * -1),
+      0rem
+    );
+  background-position: var(--gridXO) 0;
+  background-imagex:
+    linear-gradient(to right, rgba(0, 0, 0, 0.15) 2px, transparent 2px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.15) 2px, transparent 2px);
+  --extra: 0.95;
+  transition: --extra 1s ease-in;
+
+  &.paused {
+    --extra: 1.2;
+    transition: --extra 1s ease-in;
+  }
+
+  .ga {
+    border-radius: 0 50% 50% 50%;
+    top: calc(var(--gridY) / 2);
+    left: var(--gridXO);
+    position: absolute;
+    transform: translate3d(
+      calc(var(--gX, 0) * var(--gridX) + var(--gridXO)),
+      calc(var(--gY, 0) * var(--gridY)),
+      calc(var(--zHeight, 0) * (var(--gridZ, 0) + 0.5))
+    );
+
+    .arch .letter {
+      --letZ: calc(
+        (-4 * var(--lir, 0) * var(--lir, 0) + 4 * var(--lir, 0)) * 2rem
+      );
+    }
+
+    .rbow .letter {
+      color: oklch(0.3 0.2 calc(var(--lir) * 360));
+    }
+
+    .sprite {
+      transform: rotateZ(calc(var(--gRZ, 0) * -90deg))
+        rotateY(calc(var(--gRY, 0) * 180deg));
+    }
+
+    .marker {
+      font-size: 1rem;
+    }
+  }
+
+  .wall {
+    position: absolute;
+
+    top: 0;
+    left: 0;
+    transform: translateX(calc(var(--col, 0) * var(--gridX)));
+    span.deco {
+      color: #0002;
+    }
+  }
+}
+
+.map::after {
+  content: "";
+  position: absolute;
+
+  /* Extend beyond the parent using negative inset values */
+  top: -200vh;
+  left: -200vw;
+  right: -200vw;
+  bottom: -200vh;
+
+  /* Place the element visually behind the parent content */
+  z-index: -1;
+
+  /* Define your radial fill */
+  background: linear-gradient(
+    to bottom,
+    var(--trc) 0,
+    var(--trc) 180vh,
+    var(--dcb) calc(200vh + var(--gridX) * 4),
+    var(--dcb) calc(100% - 200vh - var(--gridX) * 4),
+    var(--brc) calc(100% - 180vh),
+    var(--brc) 100%
+  );
+  transform: translateZ(-10px);
+  pointer-events: none;
+}
+
+pre {
+  margin: 0;
+  padding: 0;
+  margin-block: 0;
+}
+
+.base {
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.dlayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate3d(
+    0,
+    0,
+    calc(var(--i, 0) * var(--zHeight, 1em) + var(--zOffset, 0em))
+  );
+  color: color-mix(
+    in oklch,
+    var(--dct, currentcolor) calc((var(--i, 0)) * 100%),
+    var(--dcb, #000)
+  );
+}
+
+.dlayer.AB {
+  color: color-mix(
+    in oklch,
+    var(--dct, currentcolor) calc((1 - abs(var(--i, 0))) * 100%),
+    transparent
+  );
+  transform: translate3d(
+      0,
+      0,
+      calc(var(--i, 0) * var(--zHeight, 1em) + var(--zOffset, 0em))
+    )
+    scale3d(
+      calc(1 - 0.1 * abs(var(--i, 0))),
+      calc(1 - 0.1 * abs(var(--i, 0))),
+      1
+    );
+}
+
+.letter {
+  position: absolute;
+  transform: translate3d(
+      calc(var(--letX, 0) - (1ch / 2)),
+      calc(var(--letY, 0) - (1lh / 2)),
+      var(--letZ, 0)
+    )
+    rotateZ(var(--letRZ, 0)) scale3d(1, var(--letHS, 1), 1);
+}
+
+.uni {
+  font-size: 1rem;
+  --dct: #ccc;
+  color: #0008;
+  --zHeight: 0.5rem;
+
+  .limb {
+    &.rear {
+      font-size: 2rem;
+    }
+    &.f {
+      transform: translateZ(0.5rem);
+    }
+    &.b {
+      transform: translateZ(-0.5rem);
+    }
+  }
+  .horn {
+    color: #fff;
+    --dct: #fff;
+    font-weight: bold;
+    font-size: 1rem;
+  }
+  .bd {
+    font-size: 2rem;
+    --zHeight: 2rem;
+  }
+  .head {
+    font-size: 1.2rem;
+    color: #fff;
+    --dct: #0008;
+  }
+  .tail {
+    color: #000;
+    --dct: #fff2;
+    font-weight: bold;
+    font-size: 1rem;
+  }
+}
+
+.prz {
+  --zHeight: 1rem;
+  font-size: 2.5rem;
+  font-weight: bold;
+  --dct: #fff2;
+  .c {
+    color: #000a;
+    font-size: 0.7rem;
+  }
+}
+
+.vgn {
+  --zHeight: 1rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #fff;
+  --dct: #0008;
+}
+
+.ext {
+  --zHeight: 0.5rem;
+  font-size: 2.5rem;
+  font-weight: bolder;
+  --dct: #fff4;
+}
+
+.brg {
+  --zHeight: 1rem;
+  font-size: 2rem;
+  color: #fff4;
+  font-weight: bold;
+}
+
+#topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fffa;
+  font-size: min(4vw, 4vh);
+  #tbox {
+    position: relative;
+    box-shadow: inset 0 0 5em 0 #000;
+    background: #0008;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-radius: 0 0 1rem 1rem;
+  }
+  #cmds {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.5em;
+    div {
+      display: none;
+      text-align: center;
+      flex-direction: column;
+      box-shadow: inset 0 0 1em 0 #000;
+      border: #fff5 1px solid;
+      border-radius: 2rem;
+      padding: 0.2em 1.5em;
+      cursor: pointer;
+      font-size: 60%;
+      &.p {
+        font-size: 120%;
+      }
+      &.a {
+        display: flex;
+      }
+    }
+  }
+  #best {
+    font-size: 50%;
+    padding: 1em;
+    color: #aaa;
+    transition: font-size 1s;
+  }
+  #title {
+    left: 0.5em;
+    position: absolute;
+    padding: 0.25em;
+    font-size: 100%;
+    transition: font-size 1s;
+  }
+  #top {
+    padding: 0.1rem 2rem;
+    margin-top: 1em;
+    transition: margin-top 1s;
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    align-items: center;
+    .st {
+      text-align: center;
+      div {
+        font-size: 40%;
+      }
+      &.set {
+        animation: starFlash 0.5s 6 alternate;
+      }
+    }
+    .st.set::before {
+      content: "★";
+    }
+    .st::before {
+      content: "☆";
+    }
+    #time {
+      font-size: 120%;
+      padding: 0.25em;
+      width: 4em;
+      text-align: center;
+      border-radius: 2em;
+      border: 1px #fff8 solid;
+
+      box-shadow: inset 0 0 1em 0 #000;
+    }
+  }
+}
+
+#topbar.hide {
+  display: none;
+}
+
+#topbar.closed {
+  #cmds {
+    display: none;
+  }
+  #best {
+    font-size: 1%;
+  }
+  #top {
+    margin-top: 0;
+  }
+  #title {
+    font-size: 40%;
+  }
+  #tbox {
+    background: transparent;
+    box-shadow: inset 0 0 1em 0 #000a;
+  }
+}
+
+#ctls {
+  &.disable {
+    opacity: 0.1;
+    pointer-events: none;
+  }
+  &.hide {
+    opacity: 0.1;
+  }
+  position: absolute;
+  bottom: 0.25rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 1rem;
+  padding: 0.1rem;
+  justify-content: center;
+
+  &:focus {
+    outline: none;
+  }
+
+  div {
+    font-size: 4rem;
+    width: 1lh;
+    text-align: center;
+    padding: 0.5em;
+    color: #fff;
+    border-radius: 50%;
+    user-select: none;
+    touch-action: none;
+    box-shadow: inset 0 0 1em 0 #000a;
+
+    &.active {
+      background: #fff8;
+    }
+  }
+}
+</style>
+  </head>
+  <script>const buildDepth = (el, layers) => {
+  const content = el.innerHTML;
+  el.innerHTML = "";
+  const base = document.createElement("div");
+  base.innerHTML = content;
+  el.appendChild(base);
+  base.classList.add("base");
+  return [...Array(layers)].map((_, i) => {
+    const span = document.createElement("div");
+    span.innerHTML = content;
+    span.style.setProperty("--i", i / layers);
+    span.classList.add("dlayer");
+    base.appendChild(span);
+    return span;
+  });
+};
+
+const buildA_B = (el, num) => {
+  //builds num layer above and a layer below to thicken the object
+  const content = el.innerHTML;
+  el.innerHTML = "";
+  const base = document.createElement("div");
+  base.innerHTML = content;
+  el.appendChild(base);
+  base.classList.add("base", "AB");
+  [...Array(num)].forEach((_, i) => {
+    const e1 = document.createElement("div");
+    e1.innerHTML = content;
+    e1.style.setProperty("--i", (i + 1) / num / 2);
+    e1.classList.add("dlayer", "AB");
+    base.appendChild(e1);
+    const e2 = document.createElement("div");
+    e2.innerHTML = content;
+    e2.style.setProperty("--i", -(i + 1) / num / 2);
+    e2.classList.add("dlayer", "AB");
+    base.appendChild(e2);
+  });
+};
+</script>
+  <script>mkCtl = (par, text, dn, up) => {
+  const c = {
+    el: document.createElement("div"),
+    down: 0,
+    dtime: 0,
+    utime: 0,
+    wasDown: 0,
+  };
+  c.el.textContent = text;
+  c.el.classList.add("ctl");
+  par.appendChild(c.el);
+
+  const setActive = (v) => {
+    c.el.classList.toggle("active", v);
+    c.down = v;
+    if (v) c.dtime = Date.now();
+    else c.utime = Date.now();
+  };
+
+  c.el.addEventListener("pointerdown", (e) => {
+    c.el.setPointerCapture(e.pointerId); // Captures release events even off-element
+    setActive(true);
+    dn?.();
+  });
+
+  c.el.addEventListener("pointerup", () => {
+    setActive(false);
+    up?.();
+  });
+
+  // Revert if interaction is interrupted (e.g., system gesture, call, drag cancel)
+  c.el.addEventListener("pointercancel", () => setActive(false));
+  c.el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+  });
+
+  return c;
+};
+
+mkCtls = (par, endLevel) => {
+  const buts = {
+    ld: mkCtl(par, "↙"),
+    lu: mkCtl(par, "↖"),
+    l: mkCtl(par, "←"),
+    c: mkCtl(par, "☰", () => ctl.pause()),
+    v: mkCtl(
+      par,
+      "⛶",
+      () => ctl.showF(),
+      () => ctl.hideF(),
+    ),
+    r: mkCtl(par, "→"),
+    ru: mkCtl(par, "↗"),
+    rd: mkCtl(par, "↘"),
+  };
+
+  const kmap = [
+    {
+      //special mappings if facing right
+      b: [65, 37, "l", "lu", "ld"],
+      f: [68, 39, "r"],
+      u: [87, 38, "ru"],
+      d: [83, 40, "rd"],
+    },
+    {
+      //special mappings if facing left
+      f: [65, 37, "l"],
+      b: [68, 39, "r", "ru", "rd"],
+      u: [87, 38, "lu"],
+      d: [83, 40, "ld"],
+    },
+  ];
+  //attach keyboard to parent
+  par.onkeydown = function (e) {
+    e = e || window.event;
+    buts[e.keyCode] = {
+      ...buts[e.keyCode],
+      down: true,
+      dtime: Date.now(),
+    };
+  };
+  par.onkeyup = function (e) {
+    e = e || window.event;
+    buts[e.keyCode] = {
+      ...buts[e.keyCode],
+      down: false,
+      utime: Date.now(),
+    };
+  };
+  par.focus();
+  const ctl = {
+    base: par,
+    topbar: document.getElementById("topbar"),
+    buts,
+    cli: 0,
+    przCount: 0,
+    stTime: 0,
+    time: 0,
+    wasDownTime: 0,
+    timerOn: false,
+    status: 0, //new level
+    down(i) {
+      return !!(this.buts[i]?.down || this.buts[i]?.wasDown);
+    },
+    anyDown(a) {
+      return a.some((i) => this.down(i));
+    },
+    setWasDown() {
+      //first check through them hoping for a currently active
+      let bl = [
+        65,
+        37,
+        "l",
+        "lu",
+        "ld",
+        68,
+        39,
+        "r",
+        87,
+        38,
+        "ru",
+        83,
+        40,
+        "rd",
+      ];
+      let dc = 0,
+        maxt = 0,
+        maxi = "";
+      bl.forEach((i) => {
+        let b = this.buts[i];
+        if (!b) return;
+        if (b.down) {
+          b.wasDown = true;
+          dc += 1;
+        } else {
+          b.wasDown = false;
+          if (b.utime > maxt) {
+            maxt = b.utime;
+            maxi = i;
+          }
+        }
+      });
+      if (!dc && maxt > this.wasDownTime + 100) this.buts[maxi].wasDown = true; //if nothing is currently down look at the last one
+      this.wasDownTime = Date.now();
+    },
+
+    act(c, d) {
+      return this.anyDown(kmap[d % 2][c]);
+    },
+    startUp(li) {
+      document.getElementById("tl1").textContent = "<" + levs[li].time1 + "s";
+      document.getElementById("tl2").textContent = "<" + levs[li].time2 + "s";
+      document.getElementById("title").textContent = levs[li].title;
+      this.cli = li;
+      this.status = 0;
+      pChimes(levs[li].m);
+      return this.start();
+    },
+
+    start(go) {
+      document.getElementById("bst").textContent = lastT(this.cli);
+      document.getElementById("scene").innerHTML = "";
+      this.status = 0; //new game
+      if (this.map) this.map.isDead = 1;
+      this.map = mkMap(levs[this.cli], this, document.getElementById("scene"));
+      this.przCount = 0;
+      this.stTime = Date.now();
+      this.time = 0;
+      if (go) this.cont();
+      else this.pause();
+      return this.map;
+    },
+    updateTB() {
+      if (this.timerOn) this.time += (Date.now() - this.stTime) / 1000;
+      this.stTime = Date.now();
+      for (let i = 0; i < 5; i += 1) {
+        document
+          .getElementById("s" + i)
+          .classList.toggle("set", this.przCount > i);
+      }
+      document.getElementById("time").textContent = this.time.toFixed(1) + "s";
+      document.getElementById("C_C").classList.toggle("a", this.status == 1);
+      document.getElementById("C_S").classList.toggle("a", this.status == 0);
+      document.getElementById("C_R").classList.toggle("a", this.status != 0);
+      document.getElementById("C_N").classList.toggle("a", this.status == 2);
+    },
+    tkPrz() {
+      this.przCount += 1;
+    },
+    showF() {
+      this.timerOn = false;
+      this.updateTB();
+      this.base.classList.toggle("hide", true);
+      this.topbar.classList.toggle("hide", true);
+      this.map.lookAt(this.map.gridXF / 2, this.map.gridYF / 2);
+      this.map.setVPW(this.map.gridYF + 3);
+    },
+    hideF() {
+      this.timerOn = true;
+      this.updateTB();
+      this.base.focus();
+      this.topbar.classList.toggle("closed", true);
+      this.topbar.classList.toggle("hide", false);
+      this.base.classList.toggle("hide", false);
+      this.map.setVPW(6);
+      this.map.doFollow();
+    },
+    pause() {
+      this.timerOn = false;
+      this.updateTB();
+      this.topbar.classList.toggle("closed", false);
+      this.base.classList.toggle("disable", true);
+      this.map.base.classList.toggle("paused", true);
+      this.map.lookAt(this.map.gridXF / 2, this.map.gridYF / 2);
+      this.map.setVPW(this.map.gridYF + 2);
+    },
+    cont() {
+      this.status = 1;
+      this.timerOn = true;
+      this.updateTB();
+      this.base.focus();
+      this.topbar.classList.toggle("closed", true);
+      this.base.classList.toggle("disable", false);
+      this.map.base.classList.toggle("paused", false);
+      this.map.setVPW(6);
+      this.map.doFollow();
+    },
+    exit() {
+      pChimes();
+      endLevel();
+    },
+    end(isFinal = false) {
+      //freeze and unzoom the camera
+      if (this.przCount >= 3) {
+        if (this.time < levs[this.cli].time1) this.przCount += 1;
+        if (this.time < levs[this.cli].time2) this.przCount += 1;
+      }
+      this.status = 2; //done
+      this.isFinal = isFinal;
+      this.timerOn = false;
+      this.updateTB();
+      this.topbar.classList.toggle("closed", false);
+      this.base.classList.toggle("disable", true);
+      if (!isFinal) {
+        this.map.lookAt(this.map.follow.gx, this.map.follow.gy + 2);
+        this.map.setVPW(6);
+      }
+      if (this.przCount >= 3) {
+        if ((loc[this.cli + "t"] ?? 10000) > this.time)
+          loc[this.cli + "t"] = this.time;
+      }
+      if ((loc[this.cli + "p"] ?? 0) < this.przCount)
+        loc[this.cli + "p"] = this.przCount;
+      saveLoc();
+    },
+  };
+  //launch score board and timer updater.
+  everyX(100, () => {
+    ctl.updateTB();
+    return true;
+  });
+  //bind the button handlers
+  document.getElementById("C_C").onclick = () => ctl.cont();
+  document.getElementById("C_S").onclick = () => ctl.cont();
+  document.getElementById("C_R").onclick = () => ctl.start(1);
+  document.getElementById("C_X").onclick = () => ctl.exit();
+  document.getElementById("C_N").onclick = () => ctl.startUp(ctl.cli + 1);
+
+  return ctl;
+};
+</script>
+  <script>const makeLetters = (el, text, cb) => {
+  const letters = text.split("");
+  //for each letter, create a div element and append it to the element
+  return letters.map((letter, i) => {
+    const s = document.createElement("div");
+    s.classList.add("letter");
+    s.style.setProperty("--li", i);
+    s.style.setProperty("--lir", i / (letters.length - 1));
+    s.textContent = letter;
+    el.appendChild(s);
+    cb?.(s, letter, i, letters.length);
+    return s;
+  });
+};
+
+const updateCurveLetterPos = (el, t, [x1, y1, x2, y2, x3, y3, w1, w2, w3]) => {
+  const u = 1 - t;
+  const x = u * u * x1 + 2 * u * t * x2 + t * t * x3;
+  const y = u * u * y1 + 2 * u * t * y2 + t * t * y3;
+  const dx = 2 * u * (x2 - x1) + 2 * t * (x3 - x2);
+  const dy = 2 * u * (y2 - y1) + 2 * t * (y3 - y2);
+  const angle = Math.atan2(dy, dx);
+  //these are not used yet but are the normalised normal vector
+  const len = Math.hypot(dx, dy);
+  const nx = len === 0 ? 0 : -dy / len;
+  const ny = len === 0 ? 0 : dx / len;
+
+  el.style.setProperty("--letX", x + "rem");
+  el.style.setProperty("--letY", y + "rem");
+  el.style.setProperty("--letRZ", angle + "rad");
+
+  //Widths
+  const w = t < 0.5 ? inter(t * 2, w1, w2, so) : inter(t * 2 - 1, w2, w3, si);
+  el.style.setProperty("--letHS", w);
+};
+
+const mkAnimatedCurve = (c, parentEl, numPos, is = 0) => {
+  fillUp(c.pos, numPos, []).forEach((a) => fillFrom(c.pos[0], a)); //fill in extra pos numbers if we have to
+  const ctl = document.createElement("div");
+  ctl.className = c.style + " curvebit";
+  parentEl?.appendChild(ctl);
+  const curve = {
+    ctl: ctl,
+    letters: makeLetters(ctl, c.text),
+    pos: c.pos,
+    state: is,
+    position(pos) {
+      this.letters.forEach((l, li) =>
+        updateCurveLetterPos(
+          l,
+          clamp(0, 1, li / (this.letters.length - 1)),
+          pos,
+        ),
+      );
+    },
+    positionR(r, os, ns, func) {
+      this.position(interA(r, this.pos[os], this.pos[ns], func));
+    },
+  };
+  if (c.layers) {
+    curve.letters.forEach((l) => buildA_B(l, c.layers));
+  }
+  curve.position(curve.pos[is]);
+  return curve;
+};
+</script>
+  <script>const addSprite = (c, map, gx = 0, gy = 0, rz = 0, is = 0, next) => {
+  const ctl = document.createElement("div");
+  ctl.className = "sprite " + c.style;
+  const bits = c.bits.map((b) =>
+    mkAnimatedCurve(b, ctl, c.bits[0].pos.length, is),
+  );
+  sp = {
+    ctl,
+    bits,
+    state: is,
+    moveTF: 1, //Scales the time it takes to make a move
+    moves: c.moves,
+    ga: map.addA(ctl, gx, gy), //adds it to the map and gets a grid anchor node
+    gx, //actual displayed co-ordinates
+    gy,
+    rz: rz + 100,
+    ry: 0,
+    f: 0, //flipped into the alt world?
+    cgx: gx, //current game co-ordinates (always ordinal)
+    cgy: gy,
+    crz: rz + 100,
+    cry: 0,
+    cf: 0,
+    dirX(x, y) {
+      return (
+        x * [1, 0, -1, 0][this.crz % 4] * (this.cry % 2 ? -1 : 1) +
+        y * [0, 1, 0, -1][this.crz % 4]
+      );
+    },
+    dirY(x, y) {
+      return (
+        x * [0, -1, 0, 1][this.crz % 4] * (this.cry % 2 ? -1 : 1) +
+        y * [1, 0, -1, 0][this.crz % 4]
+      );
+    },
+
+    moveBit(mb) {
+      const ix = this.gx;
+      const iy = this.gy;
+      const irz = this.rz;
+      const iry = this.ry;
+      const fx = this.cgx + this.dirX(mb.tx || 0, mb.ty || 0);
+      const fy = this.cgy + this.dirY(mb.tx || 0, mb.ty || 0);
+      const frz = this.crz + (mb.trz || 0) * (this.cry % 2 ? -1 : 1);
+      const fry = this.cry + (mb.try || 0);
+      const ff = (this.cf + (mb.tf || 0)) % 2;
+      if (mb.sVP && map.followOn) map.setVPW(mb.sVP); //move has a scale suggestion
+
+      if (mb.sS) snd[mb.sS](((mb.sSt ?? mb.t) * this.moveTF) / 1000); //play a sounds
+
+      if (mb.sZ) {
+        //set our lift offset
+        this.ga.style.setProperty("--gridZ", mb.sZ);
+      }
+
+      return animateOver(
+        mb.t * this.moveTF,
+        (r) => {
+          bits.forEach((b) => b.positionR(r, this.state, mb.ts));
+          this.setP(
+            inter(r, ix, fx),
+            inter(r, iy, fy),
+            inter(r, irz, frz),
+            inter(r, iry, fry),
+          );
+        },
+        () => {
+          bits.forEach((b) => b.positionR(1, this.state, mb.ts));
+          this.state = mb.ts;
+          this.setP(fx, fy, frz, fry);
+          this.f = ff; //maybe flipped?
+        },
+      );
+    },
+    async start() {
+      while (!map.isDead && (await this.move(next?.(this))));
+    },
+    async move(mn) {
+      if (!mn) return false;
+      this.cgx = this.gx;
+      this.cgy = this.gy;
+      this.crz = this.rz;
+      this.cry = this.ry;
+      this.cf = this.f;
+      for (const bit of this.moves[mn]) await this.moveBit(bit);
+      //update currents to last position
+      this.cgx = this.gx;
+      this.cgy = this.gy;
+      this.crz = this.rz;
+      this.cry = this.ry;
+      this.cf = this.f;
+      return true;
+    },
+    setP(x, y, rz, ry) {
+      this.gx = x;
+      this.gy = y;
+      this.rz = rz;
+      this.ry = ry;
+      this.ga.style.setProperty("--gX", x);
+      this.ga.style.setProperty("--gY", y);
+      this.ga.style.setProperty("--gRZ", rz);
+      this.ga.style.setProperty("--gRY", ry);
+    },
+
+    animateToState(ns, time, func = id) {
+      return animateOver(
+        time,
+        (r) => {
+          bits.forEach((b) => b.positionR(r, this.state, ns));
+        },
+        () => {
+          bits.forEach((b) => b.positionR(1, this.state, ns));
+          this.state = ns;
+        },
+      );
+    },
+  };
+  sp.setP(sp.gx, sp.gy, sp.rz, sp.ry);
+  sp.start();
+  return sp;
+};
+
+const addUni = (map, ctl, gx = 0, gy = 0, rz = 0, is = 0) => {
+  const sol = (sp, x, y) =>
+    map.g_solid(sp.gx + sp.dirX(x, y), sp.gy + sp.dirY(x, y)) ^ sp.f; //XOR turns solid to empty if the world is flipped.
+  const fsol = (sp, x, y) => sol(sp, x, y) & 8;
+  const stk = (sp, x, y) =>
+    map.g_stick(sp.gx + sp.dirX(x, y), sp.gy + sp.dirY(x, y));
+  const flp = (sp, x, y) =>
+    map.g_flp(sp.gx + sp.dirX(x, y), sp.gy + sp.dirY(x, y));
+
+  const emp = (sp, x, y) => !sol(sp, x, y);
+  let active = true;
+  let idle = 0;
+
+  const sA = (s) => {
+    let oidle = idle;
+    idle = 0;
+    if (!active) return null;
+    if (ctl.status == 2) {
+      //level ended
+      active = false;
+      return ctl.isFinal ? "xf" : "x";
+    }
+    if (!ctl.timerOn) return "p";
+    if (flp(s, 0, 0) && sol(s, 1, 1)) return "f"; //can always flip from a bridge into rock
+    if (ctl.act("b", s.cry)) return "tb"; //can always turn
+
+    if (ctl.act("u", s.cry) && sol(s, 1, 0) && emp(s, 1, -1)) return "u1";
+    if (ctl.act("u", s.cry) && sol(s, 2, 0) && emp(s, 2, -1)) return "u1l";
+    if (
+      ctl.act("u", s.cry) &&
+      sol(s, 2, -1) &&
+      emp(s, 2, -2) &&
+      emp(s, 0, -1) &&
+      emp(s, 1, -1) &&
+      emp(s, 1, -2)
+    )
+      return "u2";
+    if (
+      ctl.act("u", s.cry) &&
+      sol(s, 2, 1) &&
+      emp(s, 1, 0) &&
+      emp(s, 1, -1) &&
+      emp(s, 2, 0)
+    )
+      return "j2";
+    if (
+      ctl.act("u", s.cry) &&
+      sol(s, 3, 1) &&
+      emp(s, 3, 0) &&
+      emp(s, 1, 0) &&
+      emp(s, 1, -1) &&
+      emp(s, 2, 0) &&
+      emp(s, 2, -1)
+    )
+      return "j3";
+    if (ctl.act("d", s.cry) && sol(s, 1, 2) && emp(s, 1, 1)) return "d1";
+    if (ctl.act("d", s.cry) && sol(s, 2, 2) && emp(s, 2, 1)) return "d1l";
+    if (
+      ctl.act("d", s.cry) &&
+      sol(s, 2, 3) &&
+      emp(s, 1, 0) &&
+      emp(s, 1, 1) &&
+      emp(s, 2, 1) &&
+      emp(s, 2, 2)
+    )
+      return "d2";
+    if (
+      ctl.act("d", s.cry) &&
+      sol(s, 2, 4) &&
+      emp(s, 1, 0) &&
+      emp(s, 1, 1) &&
+      emp(s, 1, 2) &&
+      emp(s, 1, 3) &&
+      emp(s, 2, 1) &&
+      emp(s, 2, 2) &&
+      emp(s, 2, 3)
+    )
+      return "d3";
+    if (ctl.act("f", s.cry) && sol(s, 1, 1) && emp(s, 1, 0)) return "fd";
+    if (ctl.act("f", s.cry) && stk(s, 0, 0) && sol(s, 1, 0) && !fsol(s, 1, 0))
+      return "ru";
+    if (ctl.act("f", s.cry) && stk(s, 0, 0) && emp(s, 1, 1) && stk(s, 1, 1))
+      return "rd";
+
+    //no more legal moves
+    //if we're holding controls we can deny
+    if (ctl.act("f", s.cry)) return "fx";
+    if (ctl.act("u", s.cry)) return "ux";
+    if (ctl.act("d", s.cry)) return "dx";
+    idle = oidle + 1;
+    if (idle < 20) {
+      return rnd(1, 3); //randomly return 1,2,3
+    }
+    if (!rnd(0, 10)) idle = 0;
+    return "i";
+  };
+
+  let mom = 0;
+  let uniE = addSprite(uni, map, gx, gy, rz, is, (s) => {
+    ctl.setWasDown();
+    const m = sA(s);
+    //lets change momentum.
+    if (["fd", "ru", "rd", "jf"].includes(m)) mom = clamp(0, 5, mom + 1);
+    if (["u2", "d3", "f"].includes(m)) mom = clamp(0, 5, mom - 1);
+    if (["i", "tb", "ux", "dx", "fx", "x", "xf"].includes(m)) mom = 0;
+
+    //set the timescale
+    s.moveTF = 1 - (0.6 * mom) / 5;
+
+    return m;
+  });
+  map.setCameraFollow(uniE);
+  return uniE;
+};
+
+addNBSprite = (c, map, x, y, rz, cb, r = 0.5) => {
+  let is = 0;
+  return addSprite(c, map, x, y, rz, 0, (sp) => {
+    if (is < 0) return null;
+    //check if we're near by
+    if (map.follow) {
+      let dist = Math.hypot(x - map.follow.gx, y - map.follow.gy);
+      if (dist < r && map.follow.rz % 4 == rz) {
+        is = -1;
+        cb?.();
+        return "f";
+      }
+    }
+    //otherwise
+    is += 1;
+    if (!c.moves[is]) is = 1;
+    return is;
+  });
+};
+
+addPrz = (map, ctl, x, y, rz) =>
+  addNBSprite(prz, map, x, y, rz, () => {
+    ctl.tkPrz();
+  });
+
+addExt = (map, ctl, x, y, rz) =>
+  addNBSprite(ext, map, x, y, rz, () => {
+    ctl.end();
+  });
+
+addVgn = (map, ctl, x, y, rz) =>
+  addNBSprite(
+    vgn,
+    map,
+    x,
+    y,
+    rz,
+    () => {
+      ctl.end(true);
+    },
+    2,
+  );
+
+const spriteFromCode = (c, map, ctl, x = 0, y = 0, rz = 0) =>
+  ({
+    "@": () => addUni(map, ctl, x, y, rz),
+    "#": () => addPrz(map, ctl, x, y, rz), //Makes a prz that does the idle motion
+    $: () => addPrz(map, ctl, x, y, rz), //Makes a prz that does the idle motion
+    "^": () => addExt(map, ctl, x, y, rz, 0), //Makes an exit that does the idle motion
+    V: () => addVgn(map, ctl, x, y, rz, 0), //Makes an exit that does the idle motion
+    "(": () => addSprite(brg, map, x, y, rz, 0, () => "i"), //Makes an exit that does the idle motion
+  })[c]?.();
+</script>
+  <script>const mkMap = (lev, ctls, parentEl, layers = 5) => {
+  const text = lev.map;
+  const base = document.createElement("pre");
+  base.classList.add("map");
+  base.style.setProperty("--dct", "var(--cT" + lev.col + ")");
+  base.style.setProperty("--dcb", "var(--cB" + lev.col + ")");
+  base.style.setProperty("--trc", "var(--cB" + (lev.col - 1) + ")");
+  base.style.setProperty("--brc", "var(--cB" + (lev.col + 1) + ")");
+
+  parentEl.appendChild(base);
+  const map = {
+    base,
+    scene: parentEl,
+    grid: mkGrid(text),
+    follow: null,
+    followOn: false,
+    camX: 0,
+    camY: 0,
+    camRZ: 0,
+    isDead: 0,
+
+    g_state(x, y) {
+      return this.grid?.[y]?.[x] ?? 8;
+    },
+    g_solid(x, y) {
+      return this.g_state(x, y) & (1 | 8);
+    },
+    g_stick(x, y) {
+      return this.g_state(x, y) & 2;
+    },
+    g_flp(x, y) {
+      return this.g_state(x, y) & 4;
+    },
+
+    addA(content, gx, gy) {
+      const a = document.createElement("div");
+      a.classList.add("ga");
+      base.appendChild(a);
+      a.appendChild(content);
+      if (gx) {
+        a.style.setProperty("--gX", gx);
+      }
+      if (gy) {
+        a.style.setProperty("--gY", gy);
+      }
+      return a;
+    },
+    lookAt(x, y) {
+      this.setCamera(x, y, 0);
+      if (this.followOn) {
+        this.followOn = false;
+        this.camX = this.follow.gx;
+        this.camY = this.follow.gy;
+        this.camRZ = this.follow.rz;
+      }
+      let srz = this.camRZ - (this.camRZ % 4);
+      animateOver(
+        500,
+        (r) =>
+          this.setCamera(
+            inter(r, this.camX, x),
+            inter(r, this.camY, y),
+            inter(r, this.camRZ, srz),
+          ),
+        () => {
+          this.camX = x;
+          this.camY = y;
+          this.camZ = srz;
+        },
+      );
+    },
+    setVPW(w) {
+      let s = 6 / w; //typically the view shows 6 rows
+      this.base.style.setProperty("--viewS", s);
+    },
+    setCamera(x, y, rz) {
+      this.base.style.setProperty("--viewX", x);
+      this.base.style.setProperty("--viewY", y);
+      this.base.style.setProperty("--viewRZ", rz);
+    },
+    setCameraFollow(sp) {
+      this.follow = sp;
+    },
+
+    doFollow() {
+      if (this.followOn) return;
+      let followCD = 1000;
+      this.followOn = true;
+      let srz = this.follow.rz - (this.follow.rz % 4);
+      eachFrame((_, ft) => {
+        if (!this.followOn) return false;
+        let r = followCD / 1000;
+        followCD -= ft;
+        let trz = this.follow.rz;
+        this.setCamera(
+          inter(r, this.follow.gx, this.camX),
+          inter(r, this.follow.gy, this.camY),
+          inter(r, trz, srz),
+        );
+        return true;
+      });
+    },
+  };
+  addSprites(map, ctls, text);
+  mkWalls(map, text);
+
+  return map;
+};
+
+const mkWalls = (map, text) => {
+  const lines = text.replace(/[\^($@#V]/g, "─").split("\n");
+  const numCols = Math.max(...lines.map((l) => l.length));
+  const w = [];
+
+  map.gridXF = numCols;
+  map.gridYF = lines.length * 2;
+
+  //set up width and height of board in grids
+  map.base.style.setProperty("--gridXF", numCols);
+  map.base.style.setProperty("--gridYF", lines.length * 2);
+
+  //for each column create an element
+  for (c = 0; c < numCols; c += 1) {
+    const e = document.createElement("div");
+    e.classList.add("wall");
+    e.innerHTML = lines
+      .map((l) => l[c] ?? " ")
+      .join("\n")
+      .replace(/[?&*↓→:~<>.]/g, "<span class=deco>$&</span>");
+    map.base.appendChild(e);
+    e.style.setProperty("--col", c);
+    buildDepth(e, 5);
+    w.push(e);
+  }
+  map.gCols = w;
+  return w;
+};
+
+const mkGridRow = (l, top) => {
+  let s = 1;
+  let fs = 0;
+  return [...l].map((c) => {
+    if ((top && "│┤├└┘╯╰".includes(c)) || (!top && "│├┐┤┌╭╮".includes(c)))
+      s = 1 - s;
+    if ("▐▌".includes(c)) fs = 1 - fs;
+    return s | (fs * 8);
+  });
+};
+
+const mkGrid = (text) => {
+  const lines = text.split("\n");
+  const grid = lines.reduce(
+    (a, l, i) => [...a, mkGridRow(l, true), mkGridRow(l, false)],
+    [],
+  );
+  const mks = (x, y, v) => {
+    grid[y][x] |= v;
+  };
+  lines.forEach((l, y) =>
+    [...l].forEach((c, x) => {
+      if ("╭╮╯╰".includes(c)) {
+        //makes them all sticky in open space
+        mks(x, y * 2, 2);
+        mks(x, y * 2 + 1, 2);
+        mks(x - 1, y * 2, 2);
+        mks(x - 1, y * 2 + 1, 2);
+      }
+      if ("(".includes(c)) {
+        //makes some bridge spaces
+        mks(x, y * 2, 4);
+        mks(x, y * 2 + 1, 4);
+      }
+    }),
+  );
+  return grid;
+};
+
+const addSprites = (map, ctls, text) => {
+  const lines = text.split("\n");
+  lines.forEach((l, y) =>
+    [...l].forEach((c, x) => {
+      //inside Codes
+      let i = "$".includes(c) ? 1 : 0; //place it in the solid if you can
+      if (map.g_solid(x, y * 2) ^ i)
+        spriteFromCode(c, map, ctls, x, y * 2 + 1, 2);
+      else spriteFromCode(c, map, ctls, x, y * 2);
+    }),
+  );
+};
+
+//HACK: DEBUG CODE ONLY
+const addGridDisplay = (map) => {
+  map.grid.forEach((r, y) => {
+    r.forEach((v, x) => {
+      const base = document.createElement("div");
+      base.classList.add("marker");
+      base.textContent = v + "{" + x + "," + y + "}";
+      map.addA(base, x, y);
+    });
+  });
+};
+</script>
+  <script>//interpolation, curves and clamping
+const siso = (r) => 3 * r * r - 2 * r * r * r;
+const so = (r) => 2 * r - r * r;
+const si = (r) => r * r;
+const id = (r) => r;
+
+const clamp = (s, e, v) => (v < s ? s : v > e ? e : v);
+const inter = (r, st, end, func = id) => {
+  r = func(clamp(0, 1, r));
+  return r * end + (1 - r) * st;
+};
+
+rnd = (s, e) => s + ((Math.random() * (e - s + 1)) | 0);
+randA = (a) => a[Math.floor(Math.random() * a.length)]; //select a random element of array
+ranR = (s, e) => s + Math.random() * (e - s); //random in range s to e smooth
+
+//array handling
+const fillFrom = (s, t) => s.forEach((v, i) => (t[i] = t[i] ?? s[i]));
+const fillUp = (arr, x, y) => Array.from({length: x}, (_, i) => arr[i] ?? y);
+const interA = (r, st, end, func) =>
+  st.map((_, i) => inter(r, st[i], end[i], func)); //like inter across each element in an array
+
+//weird quick directional things
+const dirX = (d) => (d % 2 ? (d % 4 == 1 ? 1 : -1) : 0);
+const dirY = (d) => (d % 2 ? 0 : d % 4 == 0 ? 1 : -1);
+
+//frame runners
+
+//call each frame
+var _onFrameList = [];
+var _lastFrameT = 0;
+const onFrame = (f) => _onFrameList.push(f);
+
+const frame = (t) => {
+  if (!_lastFrameT) _lastFrameT = t - 10;
+  const ft = t - _lastFrameT;
+  _lastFrameT = t;
+  const ofl = _onFrameList;
+  _onFrameList = [];
+  ofl.forEach((f) => f(t, ft));
+  requestAnimationFrame(frame);
+};
+
+requestAnimationFrame(frame);
+
+animateOver = (time, each, end) => {
+  var startTime = 0;
+  var endTime = 0;
+  return new Promise((resolve, reject) => {
+    const func = (t, ft) => {
+      if (!startTime) {
+        startTime = t;
+        endTime = t + time;
+      }
+      var r = clamp(0, 1, (t - startTime) / time);
+      each(r, t, ft);
+      if (r < 1) onFrame(func);
+      else {
+        if (end) end();
+        resolve();
+      }
+    };
+    onFrame(func); //call it the first time
+  });
+};
+
+eachFrame = (on) => {
+  const func = (t, ft) => {
+    if (on(t, ft)) onFrame(func);
+  };
+  onFrame(func); //call it the first time
+};
+
+everyX = (time, on) => {
+  const func = (t, ft) => {
+    if (on(t, ft)) setTimeout(func, time);
+  };
+  func(); //call it the first time
+};
+
+//local storage
+loc = JSON.parse(localStorage.getItem("Glyphicon") ?? "{}");
+saveLoc = () => {
+  localStorage.setItem("Glyphicon", JSON.stringify(loc));
+};
+
+//Text builders
+lastT = (li) => {
+  let ps = loc[li + "p"] ?? 0;
+  return (
+    "★".repeat(ps) +
+    "☆".repeat(5 - ps) +
+    (ps >= 3 ? " (" + (loc[li + "t"] ?? 1000).toFixed(1) + "s)" : "")
+  );
+};
+</script>
+  <script>const uni = {
+  style: "uni",
+  bits: [
+    {
+      text: "⦅GLYPH⦆",
+      style: "bd",
+      layers: 2,
+      pos: [
+        [-2, 0, 0, 0, 2, 0, 1.2, 0.8, 1.5], //stand
+        [, , 0, -0.2, , , 1], //stand (alt)
+        [-2.5, 2, -3, 0], //rear
+        [-2.5, , , , 2.5], //spread
+        [-2.5, , , , 2.5], //spread (alt)
+        [, , , , , 2, 2], //land
+        [, 0.5, , , , -0.25], //trot
+        [, -0.5, , , , 0.25], //trot (alt)
+        [, , , -2], //legs together
+        [, 1, , 1, 0.5, 1], //deny
+      ],
+    },
+    {
+      text: "ICORN⟫^°>>≍",
+      style: "head",
+      layers: 1,
+      pos: [
+        [2, 0, 3, -4, 5, -2, 0.2, 2, 1], //stand
+        [, , 2, , , -3], //stand alt
+        [, , 1, , 4, -5], //rear
+        [, , , -3], //spread
+        [, , 2, -3], //spread alt
+        [2, 2, 4, 0, 5, 2], //land
+        [, , 4, -4], //trot
+        [, , 4, -4], //trot alt
+        [], //legs together
+        [0, 1, 2, 0, 3, 2], //deny
+      ],
+    },
+    {
+      text: "*RUMPO====>>",
+      style: "limb f rear",
+      layers: 1,
+      pos: [
+        [-1, 0, 0, 2, -2, 4.5, 1, 1, 1], //stand
+        [, , , , -1.5, 4.3], //alt stand
+        [-3, 1.6, 2, 2, -2],
+        [-2, 0.5, -4, 3, -6, 2], //spread
+        [-2, 0.5, -4, 2, -6, 1], //spread (alt)
+        [-2, 0, 2, 3, -4, 1], //land
+        [-2, 1, , , -1], //trot
+        [-2, , , , -5], //trot (alt)
+        [-2, , , , 0], //legs together
+        [-2, 1, , -1], //deny
+      ],
+    },
+    {
+      text: "*RUMPO====>>",
+      style: "limb b rear",
+      layers: 1,
+      pos: [
+        [-1, 0, 0, 2, -2.2, 4, 1, 1, 1], //stand
+        [, , , , -2, 4.5], //alt stand
+        [-3, 1.6, 2, 2, -2], //rear
+        [-2, 0.5, -4, 2, -6, 1], //spread
+        [-2, 0.5, -4, 3, -6, 2], //spread (alt)
+        [-2, 0, 2.5, 3, -4, 2], //land
+        [-2, 1, , , -5], //trot
+        [-2, , , , -1], //trot (alt)
+        [, , , , 0], //legs together
+        [-2, 1, 1, 1], //deny
+      ],
+    },
+    {
+      text: "○≡≡≡≡○====>>",
+      style: "limb f front",
+      layers: 1,
+      pos: [
+        [2, 0, 4, 3, 2, 4, 2, 1.5, 1], //stand
+        [, , 3, , , 4.5], //stand alt
+        [, , , -2, 4, 2], //rear
+        [, , , 0, 6, 1], //spread
+        [, , , 0, 6, 1.5], //spread alt
+        [2, 2, , , , 5], //land
+        [, , , , 5], //trot
+        [, , , , 1], //trot alt
+        [, , , , 0], //legs together
+        [0, 1], //deny
+      ],
+    },
+    {
+      text: "○≡≡≡≡○====>>",
+      style: "limb b front",
+      layers: 1,
+      pos: [
+        [2, 0, 3, 3, 2, 4.5, 2, 1.5, 1], //stand
+        [, , 4, , , 4], //stand alt
+        [, , , -2, 4, 2], //rear
+        [, , , 0, 6, 2], //spread
+        [, , , 0, 6, 1], //spread (alt)
+        [2, 2, , , 1, 5], //land
+        [, , , , 1], //trot
+        [, , , , 5], //trot (alt)
+        [, , , , 0], //legs together
+        [0, 1], //deny
+      ],
+    },
+    {
+      text: "LOVE#",
+      style: "horn",
+      layers: 0,
+      pos: [
+        [4.5, -3.5, 5, -4, 6, -5, 1, 0.5, 0.1], //stand
+        [4, -4, 4.5, -5, 5, -6], //stand alt
+        [3, -5, 3, -5, 2.5, -7], //rear
+        [4.5, -3, , , 5.5], //spread
+        [4.5, -3, , , 5.5], //spread (alt)
+        [5, 1, 6, 0, 7, -2], //land
+        [5, -3, 6, -4, 7, -5], //trot
+        [5, -3, 6, -4, 7, -5], //trot (alt)
+        [], //legs together
+        [3, 1, 3.5, 1, 5, 0], //deny
+      ],
+    },
+    {
+      text: "<<TAIL##",
+      style: "tail rbow",
+      layers: 1,
+      pos: [
+        [-3, -3, -1, -2, -2, -1, 0.2, 1, 0.5], //stand
+        [-2, , -3], //stand alt
+        [-6, 3, -5, 4, -4, 3], //rear
+        [-5, -1, -4, 1, -2.5, -1], //spread
+        [-5, 0, -3, -2, -2.5, -1], //spread (alt)
+        [-2], //land
+        [-5, 0, -3, -2], //trot
+        [-5, -2, -3, 0], //trot alt
+        [, , -2], //legs together
+        [-4, 4, -3, 1, -3, 1.5], //deny
+      ],
+    },
+  ],
+  moves: {
+    1: [
+      //idle
+      {t: 300, ts: 1},
+    ],
+    2: [
+      //idle
+      {t: 400, ts: 0},
+    ],
+    3: [
+      //idle
+      {t: 200, ts: 8, tx: 0.02, ty: 0.02},
+      {t: 100, ts: 8, tx: 0, ty: 0},
+    ],
+    i: [
+      //idle
+      {t: 500, ts: 9, sVP: 15},
+    ],
+    p: [
+      //game paused
+      {t: 100, ts: 1},
+    ],
+    fd: [
+      {t: 250, ts: 6, tx: 0.25, sVP: 6, sS: "t", sSt: 1000},
+      {t: 250, ts: 1, tx: 0.5},
+      {t: 250, ts: 7, tx: 0.75},
+      {t: 250, ts: 0, tx: 1},
+    ],
+    j2: [
+      {t: 600, ts: 2, tx: 0},
+      {t: 300, ts: 3, tx: 0.5, ty: -0.3},
+      {t: 300, ts: 4, tx: 1, ty: -0.4},
+      {t: 600, ts: 5, tx: 1.7, ty: 0},
+      {t: 200, ts: 8, tx: 2, ty: 0, sS: "g", sSt: 400},
+    ],
+    j3: [
+      {t: 700, ts: 2, tx: 0},
+      {t: 300, ts: 3, tx: 0.5, ty: -0.3, sS: "w", sSt: 1000},
+      {t: 300, ts: 4, tx: 1.3, ty: -0.4},
+      {t: 300, ts: 3, tx: 2, ty: -0.5},
+      {t: 600, ts: 5, tx: 2.7, ty: -0.3},
+      {t: 400, ts: 8, tx: 3, ty: 0, sS: "g", sSt: 400},
+    ],
+    ru: [
+      {t: 200, ts: 2, trz: 0},
+      {t: 300, ts: 1, trz: 0.5, sS: "t"},
+      {t: 200, ts: 5, trz: 1},
+    ],
+    rd: [
+      {t: 600, ts: 5, tx: 0.7, ty: 0.33, trz: 0, sS: "t"},
+      {t: 800, ts: 8, tx: 0.9, ty: 0.66, trz: -0.5},
+      {t: 600, ts: 0, tx: 1, ty: 1, trz: -1, sS: "t"},
+    ],
+    tb: [
+      {t: 300, ts: 2, try: 0.25, sVP: 6},
+      {t: 300, ts: 2, try: 0.5},
+      {t: 300, ts: 2, try: 0.75},
+      {t: 300, ts: 0, try: 1},
+    ],
+    d1: [
+      {t: 600, ts: 8, tx: 0.5},
+      {t: 600, ts: 5, tx: 1, ty: 0.6, trz: -0.5},
+      {t: 600, ts: 4, tx: 1, ty: 1, trz: -0.5},
+      {t: 100, ts: 1, tx: 1, ty: 1, trz: 0, sS: "g", sSt: 400},
+    ],
+    d1l: [
+      {t: 400, ts: 8, tx: 0.5},
+      {t: 400, ts: 5, tx: 1, ty: 0.3},
+      {t: 400, ts: 3, tx: 1.5, ty: 0.5, trz: -0.5},
+      {t: 400, ts: 4, tx: 2, ty: 1, trz: -0.5},
+      {t: 400, ts: 1, tx: 2, ty: 1, trz: 0, sS: "g", sSt: 400},
+    ],
+    d2: [
+      {t: 400, ts: 8, tx: 0.5},
+      {t: 800, ts: 5, tx: 1, ty: 0.6, trz: -0.3},
+      {t: 800, ts: 4, tx: 1.6, ty: 2, trz: -0.3},
+      {t: 200, ts: 1, tx: 2, ty: 2, trz: 0, sS: "g", sSt: 400},
+    ],
+    d3: [
+      {t: 400, ts: 8, tx: 0.5},
+      {t: 500, ts: 5, tx: 1, ty: 0.6, trz: -0.3},
+      {t: 800, ts: 4, tx: 1.3, ty: 1.3, trz: -0.4},
+      {t: 800, ts: 3, tx: 1.6, ty: 3, trz: -0.4},
+      {t: 400, ts: 5, tx: 2, ty: 3, trz: 0, sS: "g", sSt: 400},
+    ],
+    u2: [
+      {t: 800, ts: 2, trz: 0.2},
+      {t: 500, ts: 4, ty: -0.3, tx: 0.2, trz: 0.7, sS: "o"},
+      {t: 1000, ts: 3, ty: -2.2, tx: 1, trz: 0.2},
+      {t: 500, ts: 5, ty: -2, tx: 1.8, trz: 0},
+      {t: 200, ts: 8, ty: -2, tx: 2, sS: "g", sSt: 400},
+    ],
+    u1: [
+      {t: 300, ts: 2, tx: -0.3, trz: 0.2},
+      {t: 500, ts: 3, ty: -0.4, tx: -0.1, trz: 0.4, sS: "o"},
+      {t: 500, ts: 5, ty: -1, tx: 0.4, trz: 0.2},
+      {t: 200, ts: 8, ty: -1, tx: 1, trz: 0, sS: "g", sSt: 400},
+    ],
+    u1l: [
+      {t: 400, ts: 2, tx: -0.3},
+      {t: 600, ts: 3, ty: -0.4, tx: 0.5, trz: 0.5, sS: "o"},
+      {t: 600, ts: 4, ty: -1.2, tx: 1.4, trz: 0.2},
+      {t: 200, ts: 8, ty: -1, tx: 2, trz: 0, sS: "g", sSt: 400},
+    ],
+
+    f: [
+      {t: 500, ts: 2, try: 0.2, sZ: 0.3},
+      {t: 800, ts: 4, tx: 0.5, ty: 0.5, try: 0.4, sZ: 0.6, sS: "w", sSt: 2000},
+      {
+        t: 800,
+        ts: 3,
+        tx: 1,
+        ty: 1,
+        trz: 1.5,
+        try: 0.6,
+        sZ: 0.8,
+        sS: "w",
+        sSt: 2000,
+      },
+      {t: 200, ts: 8, tx: 1, ty: 1, trz: 2, try: 1, sZ: 0.5},
+      {t: 500, ts: 1, tx: 1, ty: 1, trz: 2, try: 1, sZ: 0, tf: 1},
+    ],
+    x: [
+      {t: 1000, ts: 2, trz: 0, sZ: 0.3, sS: "w", sSt: 3000},
+      {t: 500, ts: 4, ty: 1, trz: -1, sZ: 0.6},
+      {t: 500, ts: 3, ty: 3, trz: -1, sZ: 0.8, sS: "w", sSt: 2000},
+      {t: 500, ts: 4, ty: 6, trz: -1, sZ: 1},
+    ],
+    xf: [
+      {t: 1000, ts: 1, sS: "w", sSt: 5000, sVP: 4},
+      {t: 1000, ts: 2, sS: "w", sSt: 4000},
+      {t: 1000, ts: 4, try: 0.7, sS: "w", sSt: 3000},
+      {t: 1000, ts: 2, try: 1.5, sS: "w", sSt: 2000},
+      {t: 1000, ts: 8, try: 2, sS: "w", sSt: 1000},
+      {t: 1000, ts: 9, try: 2, sS: "w", sSt: 500},
+      {t: 1000, ts: 2, try: 2, sS: "w", sSt: 500},
+      {t: 1000, ts: 9, try: 2, sS: "w", sSt: 4000},
+      {t: 1000, ts: 2, try: 2, sS: "w", sSt: 3000},
+    ],
+    ux: [
+      //up deny
+      {t: 500, ts: 2, tx: -0.3, sVP: 9},
+      {t: 800, ts: 9, tx: -0.1, sS: "n", sSt: 800},
+      {t: 200, ts: 1, tx: 0},
+    ],
+    dx: [
+      //down deny
+      {t: 500, ts: 5, tx: 0.3, sVP: 9},
+      {t: 200, ts: 9, tx: 0.1, sS: "n", sSt: 800},
+      {t: 400, ts: 9, tx: 0.1},
+      {t: 200, ts: 1, tx: 0},
+    ],
+    fx: [
+      {t: 200, ts: 1, tx: 0.3, sVP: 9},
+      {t: 200, ts: 9, tx: 0.1, sS: "n", sSt: 800},
+      {t: 400, ts: 9, tx: 0.1},
+      {t: 200, ts: 1, tx: 0},
+    ],
+  },
+};
+
+const prz = {
+  style: "prz",
+  bits: [
+    {
+      text: "★PRIZE★",
+      style: "rbow",
+      layers: 0,
+      pos: [
+        [-3, 2, 0, 2, 3, 2, 1, 1, 1],
+        [, , , , , , 1, 2, 1],
+        [, , , , , , 2, 2, 2],
+        [, , , , , , 6, 6, 6],
+      ],
+    },
+    {
+      text: "!!Mac--",
+      style: "c",
+      layers: 0,
+      pos: [
+        [-3, 1, 0, -1, 3, 1, 1, 1, 2],
+        [, , , , , , 1, 2, 1],
+        [, , , 0, , , 2, 2, 2],
+        [],
+      ],
+    },
+    {
+      text: "Guffin",
+      style: "c",
+      layers: 0,
+      pos: [
+        [3, 3, 0, 5, -3, 3, 1, 1, 1],
+        [, , , , , , 1, 2, 1],
+        [, , , 4, , , 2, 2, 2],
+        [],
+      ],
+    },
+  ],
+  moves: {
+    1: [{t: 100, ts: 0, try: 0.05}],
+    2: [{t: 100, ts: 1, try: 0.1}],
+    3: [{t: 100, ts: 2, try: 0.15}],
+    f: [
+      {
+        t: 1000,
+        try: 2,
+        ts: 3,
+        ty: -1,
+      },
+      {
+        t: 3000,
+        try: 6,
+        ts: 0,
+        ty: -6,
+      },
+      {
+        t: 100,
+        ts: 0,
+        try: 0,
+        ty: -50,
+      },
+    ],
+  },
+};
+
+const vgn = {
+  style: "vgn",
+  bits: [
+    {
+      text: "THEVIRGIN",
+      style: "bd",
+      layers: 1,
+      pos: [
+        [0, 0, 0, 2, 0, 5, 0.3, 1.8, 0.8],
+        [, , , , , , 0.2, 1.9, 0.4],
+        [2, 0, -3],
+      ],
+    },
+    {
+      text: "(.)|>:;",
+      style: "c",
+      layers: 0,
+      pos: [
+        [0, -0.7, 0, -2, 0, -3, 1, 1, 1],
+        [, , , , 1],
+        [2, 0, 3, 0, 5, 0],
+      ],
+    },
+  ],
+  moves: {
+    1: [{t: 100, ts: 0}],
+    2: [{t: 100, ts: 1}],
+    f: [
+      {
+        t: 1000,
+        ts: 2,
+      },
+      {
+        t: 1000,
+        ts: 2,
+        try: 1,
+      },
+      {
+        t: 500,
+        ts: 1,
+        tx: -0.5,
+        try: 1,
+      },
+      {
+        t: 2000,
+        ts: 2,
+        try: 1,
+      },
+      {
+        t: 1000,
+        ts: 0,
+        try: 1,
+      },
+      {
+        t: 1000,
+        ts: 1,
+        try: 1,
+      },
+    ],
+  },
+};
+
+const brg = {
+  style: "brg arch",
+  bits: [
+    {
+      text: "➤FLIP➤➤FLIP➤",
+      style: "m",
+      layers: 1,
+      pos: [
+        [3, -3, 3, -2, 3, 12, 1, 1, 1],
+        [, , , 3],
+        [, , , 6],
+      ],
+    },
+    {
+      text: "➤FLIP➤➤FLIP➤",
+      style: "m",
+      layers: 1,
+      pos: [
+        [-3, 12, -3, 6, -3, -3, 1, 1, 1],
+        [, , , 0],
+        [, , , -2],
+      ],
+    },
+  ],
+  moves: {
+    i: [
+      //idle
+      {t: 500, ts: 1},
+      {t: 500, ts: 2},
+      {t: 100, ts: 0},
+    ],
+  },
+};
+const ext = {
+  style: "ext arch",
+  bits: [
+    {
+      text: ">>>>PROGRESSION>>>>",
+      style: "rbow",
+      layers: 1,
+      pos: [
+        [0, 0, 0, 5, 0, 10, 4, 1, 1],
+        [, , , 6, , , 1, 4, 1],
+        [, , , 9, , 20, 1, 1, 4],
+        [, , , 20, , 40, 6, 6, 6],
+      ],
+    },
+  ],
+  moves: {
+    1: [{t: 500, ts: 1}],
+    2: [{t: 500, ts: 2}],
+    3: [{t: 100, ts: 0}],
+    f: [{t: 5000, ts: 3}],
+  },
+};
+
+const myMap = `\
+ ┌───────────────┐   
+ └@───┐          │ 
+      └─┐        │ 
+        └─┐ ╭────╯
+          │ │
+          
+      ▐█▌┐└── ┌   │ 
+    ▐█▌ │ 
+ └──  ───┘ `;
+
+const arena = `\
+ ┌────────────────^#────(──╮   
+ └─#──(──╮                 ╰─╮
+         ╰─╮                 │    
+          ┌┘        ▐▌     ╭@╯
+          │▐██▌▐▌ ▐▌▐▌▐▌ ▐▌│
+          ╰───────┐     ▐▌╭╯
+                  ╰──#────╯`;
+
+const map1 = `\
+T┌───────^─╮ ╭───#───┐   
+e│         ╰─╯       │   
+e│                   │ 
+x│   ╭──┐     ╭─┐    │ 
+t└─┐ │  │     └─╯    │ 
+i╭─┘ └#─╯ []         │ 
+c╰───┐ ┌╮  ┌@─(──#───┘ 
+onXXX└─┘╰─#┘ 
+012345678901234567890            `;
+
+const map2 = `\
+     ╭───────#─────^───┐   
+     │ ╭──────(─╮      │ 
+     │ │  → →   ╰#───┐ │
+     │ │        ┌────┘ │  
+ ┌───╯ └#────(──╯      │ 
+ ╰@┐ ↑ ┌───────────────┘
+   └───╯
+                      `;
+
+const map3 = `\
+     ╭───────#─────^───┐   
+     │ ╭──────(─╮       │ 
+     │ │ :XXX:  ╰#───┐  │
+     │ │        ┌────┘  │  
+ ┌───╯ └#────(──╯  ▐█▌  │ 
+ ╰─┐   ┌──────────@────▐▌
+   └───╯
+                      `;
+
+//HACK: DESIGN SPACE
+const mapD = `\
+D┌──────  ───┐   
+e└────)─┐  └── ┌   │ 
+s╭───  ▐█▌┐└── ┌   │ 
+    ▐█▌ │ 
+ └──  ───┘ `;
+</script>
+  <script>//TODO: The List
+/*
+ * Last Shit:
+ *
+ * Maps
+ *
+ * Tidy Code (5)
+ *
+ */
+
+async function start() {
+  buildScreen();
+  //play(5);
+  //showSprite(vgn, "f");
+}
+
+function play(li) {
+  const controls = mkCtls(document.getElementById("ctls"), () => 0);
+  map = controls.startUp(li);
+  //map.base.style.setProperty("--viewS", 0.25);
+  addGridDisplay(map);
+}
+
+//HACK: Design time code only - remove
+async function showSprite(config, mn) {
+  const map = mkMap(
+    {
+      map: mapD,
+      col: 2,
+    },
+    null,
+    document.getElementById("scene"),
+  );
+  //addGridDisplay(map);
+  //map.base.style.setProperty("--viewS", 0.75);
+  map.setVPW(6);
+
+  map.setCamera(3, 3, 0);
+  config.bits[0].pos.forEach((_, i) => addSprite(config, map, i + 1, 2, 0, i));
+  if (mn) {
+    let t = addSprite(config, map);
+    while (true) {
+      t.setP(2, 4, 100, 0);
+      let mns = mn.split(" ");
+      for (let i = 0; i < mns.length; i += 1) await t.move(mns[i]);
+    }
+  }
+}
+</script>
+  <script>buildLevelMenu = (p, sl) => {
+  return {
+    update: () => {
+      p.innerHTML = "";
+      levs.forEach((l, i) => {
+        const ctl = document.createElement("div");
+        let allow = i == 0 || (loc[i - 1 + "p"] ?? 0) > 0;
+        ctl.classList = "lev " + (allow ? "" : "lock");
+        ctl.textContent = l.title;
+        ctl.innerHTML = `${l.title}<div>${lastT(i)}</div>`;
+        ctl.onclick = () => {
+          snd.g();
+          sl(i);
+        };
+        p.appendChild(ctl);
+      });
+    },
+    show: () => {
+      p.parentElement.style.display = "inherit";
+      p.parentElement.classList.toggle("hide", false);
+    },
+    hide: () => {
+      p.parentElement.classList.toggle("hide", true);
+      setTimeout(() => (p.parentElement.style.display = "none"), 500);
+    },
+  };
+};
+
+buildScreen = () => {
+  const menu = buildLevelMenu(document.getElementById("menui"), (li) => {
+    document.documentElement.requestFullscreen();
+    ctls.startUp(li);
+    menu.hide();
+  });
+  menu.update();
+  menu.show();
+
+  const ctls = mkCtls(document.getElementById("ctls"), () => {
+    menu.update();
+    menu.show();
+  });
+};
+</script>
+  <script>const levs = [
+  {
+    map: `\
+ ┌──────────────┐   
+ └@───┐         │ 
+    ↓ └#┐       │
+       ↓└─┐ ╭──#┘
+         ↓│ │↓
+       ┌─#┘ ╰──╮ 
+       │       │↓ 
+       └───^───╯ `,
+    col: 1,
+    title: "Into the Rainbow",
+    time1: 60,
+    time2: 33,
+    m: {
+      t: 4,
+      o: [2, 3, 3, 4, 5],
+      d: [10, 10, 10, 10, 40],
+      vs: 0.1,
+      ve: 0.5,
+      gs: 0.2,
+      ge: 1,
+    },
+  },
+  {
+    col: 2,
+    map: `
+  ╭───────────────┐
+  │  ▐▌     ▐▌┌─@─┘
+  └#─┐ ▐▌ ▐█▌ │ 
+     │╭───(──╮│
+   ╭─┘╰─$#───╯│
+   ╰────────^─╯
+                 `,
+    title: "Flippin Out",
+    time1: 70,
+    time2: 50,
+    m: {
+      t: 0,
+      o: [2, 3, 3, 3, 4],
+      vs: 0.1,
+      ve: 1,
+      gs: 0.2,
+      ge: 1,
+    },
+  },
+  {
+    col: 3,
+    map: `
+  ╭───────────────────┐ 
+  │ ╭─@──(───╮  FLIP  │ 
+  │ │ ?   ?  ╰─#┐     │
+  │ │   ?    ┌──╯╭──(─┘
+  │ └#─(─────╯  ╭┘      
+  └──^────(──$──╯
+                 `,
+    title: "The Flip Side",
+    time1: 100,
+    time2: 75,
+    m: {
+      t: 3,
+      o: [2, 3, 3, 4, 5],
+      d: [25, 25, 25, 10],
+      vs: 0.1,
+      ve: 1,
+      gs: 1,
+      ge: 1,
+    },
+  },
+  {
+    map: `\
+                        
+    :         ╭────(─╮  
+    :      ▐█▌╰────@─╯  
+    :    ▐█▌   
+       ▐█▌   
+ ╭───────╮    
+ ╰───$───╯▐█▌  ╭───────╮  
+            ▐█▌╰───$───╯  
+    ~~~       ▐█▌    
+     ~~~        ▐█▌╭──$─╮  
+      ~~~          ╰(─╮ │  
+       ~~~        ╭───╯ │  
+                  ╰─^───╯  
+                            `,
+    col: 4,
+    title: "Below Stairs",
+    time1: 180,
+    time2: 102,
+  },
+
+  {
+    col: 5,
+    map: `
+  ╭──────────────────┐
+  │  ╭───────────╮ ┌@┘
+  │  │ ╭──┐ ╭─$┐ │ │
+  │  │ ╰─$╯ └──╯ │ │
+  │  │  ▐▌ * ▐▌  │ │
+  │  │▐▌   *   ▐▌│ │
+  │  ╰──(─╮ ╭────╯ │
+  │       ╰─╯      │
+  │     > ▐█▌ <    │
+  │       ┌─╮      │
+  ╰───#───╯ ╰────^─╯
+                 `,
+    title: "Inside Your Head",
+    time1: 150,
+    time2: 110,
+    m: {
+      t: 2,
+      o: [3, 3, 4, 5, 6],
+      d: [5, 10, 15],
+      vs: 0.1,
+      ve: 0.5,
+      gs: 0.2,
+      ge: 0.5,
+    },
+  },
+
+  {
+    map: `\
+     ╭───────────@────╮
+     │   ▐█▌          │ 
+     │ ┌─#╮ ▐▌   :::  │ 
+     │ ╰──┘   ▐▌     ▐█▌ 
+     │  ▐█▌    ▐▌  ▐▌  │ 
+     │           ▐▌    │ 
+     └──╮▐▌ ▐▌┌#──┐    │ 
+        │     └$(─╯ .. │ 
+        ╰─────────┐┌───╯
+                  │└───╮
+                  ╰──^─╯
+`,
+    col: 6,
+    title: "Around the Blocks",
+    time1: 180,
+    time2: 110,
+    m: {
+      t: 1,
+      o: [2, 3, 3, 3, 4],
+      d: [10, 20, 25],
+      vs: 0.1,
+      ve: 1,
+      gs: 0.1,
+      ge: 2,
+    },
+  },
+
+  {
+    map: `\
+     ╭────────╮ ┌──@─╮
+     │      ▐▌╰─╯    │ 
+     │    ▐▌ ┌$─╮    │ 
+     │  ▐▌   │ .│    │ 
+     │    ▐▌ │. │    │ 
+     │  ▐▌   │ .│▐▌  │ 
+     │▐▌  ┌──┘. └──┐ │ 
+     │  ▐▌└#$┐  ┌(─╯ │
+     │       │▐▌│    │ 
+     │  ▐▌   │▐▌│    │ 
+     │  ╭──╮ │  │    │ 
+     │  ╰──┘ └(─╯    │ 
+     │▐█▌            │ 
+     └────────────V──┘          
+`,
+    col: 7,
+    title: "Hard Core",
+    time1: 400,
+    time2: 300,
+    m: {
+      t: 3,
+      o: [2, 3, 3, 4, 5],
+      d: [10, 15, 25],
+      vs: 0.1,
+      ve: 1,
+      gs: 1,
+      ge: 2,
+    },
+  },
+];
+</script>
+  <script>const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+const mVolume = audioCtx.createGain(); //music master volume
+mVolume.connect(audioCtx.destination);
+mVolume.gain.setValueAtTime(0.2, audioCtx.currentTime);
+
+const fxVolume = audioCtx.createGain(); //fx master volume
+fxVolume.connect(audioCtx.destination);
+fxVolume.gain.setValueAtTime(0.8, audioCtx.currentTime);
+
+//make noiseBuffer
+const bufferSize = 2 * audioCtx.sampleRate;
+const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+const output = noiseBuffer.getChannelData(0);
+for (let i = 0; i < bufferSize; i++) {
+  output[i] = Math.random() * 2 - 1; // white noise
+}
+
+function noiseS() {
+  //creates a node for white noise
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = noiseBuffer;
+  noise.loop = true;
+  return noise;
+}
+
+function playHoof(time, volume = 1.0, pitch = 1) {
+  const osc = audioCtx.createOscillator();
+  const oscGain = audioCtx.createGain();
+  if (!time) time = audioCtx.currentTime;
+
+  // Low-frequency impact body
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(120 * pitch, time);
+  osc.frequency.exponentialRampToValueAtTime(30 * pitch, time + 0.08);
+
+  oscGain.gain.setValueAtTime(0.8 * volume, time);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+
+  osc.connect(oscGain);
+  oscGain.connect(fxVolume);
+
+  // Bandpass filter to sculpt the impact surface sound
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(800 * pitch, time);
+  filter.Q.setValueAtTime(1.5, time);
+
+  const noiseGain = audioCtx.createGain();
+  noiseGain.gain.setValueAtTime(0.5 * volume, time);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+
+  const noiseSource = noiseS();
+  noiseSource.connect(filter);
+  filter.connect(noiseGain);
+  noiseGain.connect(fxVolume);
+
+  osc.start(time);
+  osc.stop(time + 0.09);
+
+  noiseSource.start(time);
+  noiseSource.stop(time + 0.06);
+}
+
+function nay(dur, off = 0, fr = 600, fre = 400, rep = 10) {
+  const now = audioCtx.currentTime + off;
+
+  // Base vocal oscillator
+  const osc = audioCtx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(400, now); // base pitch (~cat meow)
+  osc.frequency.exponentialRampToValueAtTime(fr, now + dur * 0.2); // upward screech
+  osc.frequency.linearRampToValueAtTime(fre, now + dur * 0.8); // then settle
+
+  // First formant filter (throat resonance)
+  const formant1 = audioCtx.createBiquadFilter();
+  formant1.type = "bandpass";
+  formant1.frequency.value = 1000; // resonance frequency
+  formant1.Q.value = 4;
+
+  // Second formant filter (mouth resonance)
+  const formant2 = audioCtx.createBiquadFilter();
+  formant2.type = "bandpass";
+  formant2.frequency.value = 2500;
+  formant2.Q.value = 6;
+
+  // Add jittery modulation (for angry instability)
+  const lfo = audioCtx.createOscillator();
+  lfo.frequency.value = rep; // jitter speed
+  const lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 40; // +/- Hz
+  lfo.connect(lfoGain).connect(osc.frequency);
+  lfo.start(now);
+
+  // Amplitude envelope
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.exponentialRampToValueAtTime(5.0, now + dur * 0.05); // quick attack
+  gain.gain.setValueAtTime(4.0, now + dur * 0.5); // sustain
+  gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.2); // decay
+
+  // Connect chain: osc -> formants -> gain -> out
+  osc.connect(formant1).connect(formant2).connect(gain).connect(fxVolume);
+
+  // Start/stop
+  osc.start(now);
+  osc.stop(now + dur);
+}
+
+const snd = {
+  g: (l = 1) => {
+    let t = audioCtx.currentTime;
+    playHoof(t, 0.6, 0.85);
+    playHoof(t + l * 0.05, 1, 1);
+    playHoof(t + l * 0.2, 0.8, 1.15);
+  },
+  t: (l = 0.5) => {
+    let t = audioCtx.currentTime;
+    playHoof(t, 0.3, 1.1);
+    playHoof(t + l * 0.25, 0.4, 0.9);
+    playHoof(t + l * 0.55, 0.4, 0.9);
+    playHoof(t + l * 0.75, 0.2, 1);
+  },
+  n: (l = 1) => nay(l, 0, 600, 400, 10), //refusenay
+  o: (l = 1) => nay(l, 0, 600, 400, 30), //oomph
+  w: (l = 1.5) => nay(l, 0, 600, 850, 15), //weeeeee
+};
+
+function playGong(STC, oct, dur = 10, v = 1) {
+  //play a single chime
+  const baseFreq = 440 * Math.pow(2, (oct * 12 + STC - 57) / 12);
+  const now = audioCtx.currentTime;
+
+  const master = audioCtx.createGain();
+  master.gain
+    .setValueAtTime(0.2 * v, now)
+    .exponentialRampToValueAtTime(0.0001, now + dur);
+  master.connect(mVolume);
+
+  // Fundamental
+  makeTone(baseFreq, master, now, dur);
+
+  // Gong-like inharmonic partials
+  makeTone(baseFreq * 2.01, master, now, dur * 0.9);
+  makeTone(baseFreq * 2.62, master, now, dur * 0.7);
+  makeTone(baseFreq * 3.95, master, now, dur * 0.5);
+}
+
+// Helper: tone with exponential decay
+function makeTone(freq, destination, startTime, duration) {
+  const osc = audioCtx.createOscillator();
+  osc.frequency.setValueAtTime(freq, startTime);
+
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(1, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  osc.connect(gain).connect(destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
+var _c = null;
+
+var _k = [
+  [0, 2, 4, 7, 9], //0:Major
+  [0, 3, 5, 7, 10], //1:minor
+  [0, 2, 5, 7, 10], //2:egyptian
+  [0, 1, 5, 7, 10], //3:In Sen
+  [0, 2, 5, 7, 9], //4: Yo
+];
+
+function _chime() {
+  //time to strike a random chime
+  if (!_c) return;
+  playGong(
+    randA(_k[_c.t]),
+    randA(_c.o),
+    randA(_c.d || [10, 20, 25]),
+    ranR(_c.vs || 0.1, _c.ve || 0.5),
+  );
+  setTimeout(_chime, ranR(_c.gs || 0.5, _c.ge || 1) * 1000);
+}
+
+function pChimes(c = null) {
+  //start the chimes with a set up or null to silence
+  if (!_c) setTimeout(_chime, 10); //start it if we need to
+  _c = c;
+}
+</script>
+
+  <body onload="start()">
+    <div id="menu" class="hide">
+      <div id="gn">Glyphicorn</div>
+      <div id="menui"></div>
+      <div id="sig">
+        a platform puzzler for JS13kgames 2026 by elementalsystems
+      </div>
+    </div>
+    <div id="scene" class="scene"></div>
+    <div id="topbar" class="closed">
+      <div id="tbox">
+        <div id="title">Level Name</div>
+        <div id="top">
+          <div id="s0" class="st"><div>Prize</div></div>
+          <div id="s1" class="st"><div>Prize</div></div>
+          <div id="s2" class="st"><div>Prize</div></div>
+          <div id="s3" class="st"><div id="tl1">21s</div></div>
+          <div id="s4" class="st"><div id="tl2">18s</div></div>
+          <div id="time"></div>
+        </div>
+        <div id="best">Your best <span id="bst">★★★</span></div>
+      </div>
+      <div id="cmds">
+        <div id="C_C" class="p">▶ <small>Continue</small></div>
+        <div id="C_S" class="p">▶ <small>Start</small></div>
+        <div id="C_N" class="p">↓↓↓↓<small>Next</small></div>
+        <div id="C_R">⟲ <small>Restart</small></div>
+        <div id="C_X" class="a">✖<small>Menu</small></div>
+      </div>
+    </div>
+    <div id="ctls" tabindex="0"></div>
+  </body>
+</html>

@@ -1,0 +1,594 @@
+<html>
+    <head>
+        <style>#disable_scroll {
+    overflow: hidden;
+}
+
+#title {
+    font-size: 18px;
+    font-family: monospace;
+}
+
+#background {
+    position: absolute;
+    left: -8px;
+    top: -8px;
+    z-index: -99;
+}
+
+#backtrack {    
+    position: absolute;
+    font-family: monospace;
+    left: 8px;
+    top: 32px;
+    visibility: hidden;
+}
+
+#gold {
+    position: absolute;
+    font-size: 10px;
+    top: -16px;
+    left: 500px;
+}
+
+#drawGold {
+    position: relative;
+    top: 25px;
+}
+
+#goldAmount {
+    position: relative;
+    color: gold;
+    font-size: 15px;
+    top: -19px;
+    left: 33px;
+}
+
+#drawHero {
+    position: absolute;
+    left: 420px;
+    top: 400px;
+}
+
+#creepBox {
+    position: absolute;
+    left: 300px;
+    top: 0px;
+}
+
+#drawcreep {
+    position: relative;
+    visibility: visible;
+}
+
+#creepHpBar {
+    position: absolute;
+    left: -3px;
+    top: 25px;
+    width: 30px;
+    height: 4px;
+    border-color: white;
+    border-width: 1px;
+    background-color: green;
+    z-index: 3;
+}
+
+#hit {
+    color: orangered;
+    position: absolute;
+    font-size: 10px;
+    font-family: monospace;
+    left: -3px;
+    top: 16px;
+    visibility: hidden;
+}
+
+#creepHp {
+    top: 18px;
+    position: relative;
+    visibility: hidden;
+}
+
+#wall {
+    position: absolute;
+    left: 0px;
+    top: 560px;
+}
+
+#base {
+    position: absolute;
+    left: 430px;
+    top: 550px;
+}
+
+#baseStatus {
+    position: absolute;
+    font-family: monospace;
+    left: 8px;
+    top: 18px;
+}
+
+#health {
+    position: absolute;
+    font-family: monospace;
+    left: 100px;
+    top: 18px;
+}</style>
+        <title> Protect The Base</title>
+    </head>
+    <body id="disable_scroll">
+        <canvas id="background" height="570" width="568"></canvas>
+        <h1 id="title">Protect The Base</h1>
+        <p id="baseStatus">Base Health</p>
+        <p id="health">10</p>
+        <div id="gold">
+            <canvas id="drawGold" width="25" height="25"></canvas>
+            <p id="goldAmount">0</p>
+        </div>
+        <p id="backtrack">0</p>
+        <div id="creepBox">
+            <div>
+                <p id="creepHpBar"></p>
+                <p id="hit"></p>
+            </div>
+            <p id="creepHp">13</p>
+            <canvas id="drawCreep" width="24" height="36"></canvas>
+        </div>
+        <canvas id="drawHero" width="25"  height="25"></canvas>
+        <div>
+            <canvas id="wall" width="560"></canvas>
+            <p id="base"></p>
+        </div>
+    </body>
+    <script>var container = document.getElementById("background");
+var background = container.getContext("2d");
+var gradient = background.createLinearGradient(0, 0, 0, 400);
+
+gradient.addColorStop(0, "#E7401D");
+gradient.addColorStop(1, "#FFFFFF");
+background.fillStyle = gradient;
+background.fillRect(0, 0, 568, 570);
+
+var canvas = document.getElementById('wall');
+var wall = canvas.getContext('2d');
+
+wall.fillStyle = 'rgb(147, 58, 22)';
+
+for (let j = 0; j < 61; j += 10) {
+    for (let i = 0; i < 565; i += 12) {
+        wall.fillRect(i, j, 10, 4);
+        wall.fillRect(i + 2, j + 5, 10, 4);
+    }
+}
+
+var gold = document.getElementById('drawGold');
+var goldBars = gold.getContext('2d');
+
+goldBars.fillStyle = 'rgb(255, 215, 0)';
+goldBars.fillRect(7, 0, 12, 4);
+goldBars.fillRect(0, 5, 12, 4);
+goldBars.fillRect(13, 5, 12, 4)</script>
+    <script>var canvas = document.getElementById('drawHero');
+var heroArt = canvas.getContext('2d');
+
+function drawLineHero (x1, y1, x2, y2) {
+    heroArt.beginPath();
+    heroArt.moveTo(x1, y1);
+    heroArt.lineTo(x2, y2);
+    heroArt.stroke();
+};
+
+// hero head polygon
+heroArt.fillStyle = 'rgb(152, 251, 152)';
+heroArt.beginPath();
+heroArt.moveTo(9, 1);
+heroArt.lineTo(15, 1);
+heroArt.lineTo(15, 1);
+heroArt.lineTo(18, 5);
+heroArt.lineTo(18, 14);
+heroArt.lineTo(17, 14);
+heroArt.lineTo(17, 15);
+heroArt.lineTo(7, 15);
+heroArt.lineTo(7, 14);
+heroArt.lineTo(6, 13);
+heroArt.lineTo(6, 5);
+heroArt.closePath();
+heroArt.fill();
+
+// hero face paint
+heroArt.fillStyle = '#228B22';
+heroArt.beginPath();
+heroArt.moveTo(7, 8);
+heroArt.lineTo(9, 6);
+heroArt.lineTo(10, 6);
+heroArt.lineTo(11, 7);
+heroArt.lineTo(11, 8);
+heroArt.lineTo(12, 9);
+heroArt.lineTo(13, 8);
+heroArt.lineTo(13, 6);
+heroArt.lineTo(15, 6);
+heroArt.lineTo(17, 8);
+heroArt.lineTo(17, 12);
+heroArt.lineTo(15, 14);
+heroArt.lineTo(14, 14);
+heroArt.lineTo(13, 15);
+heroArt.lineTo(11, 15);
+heroArt.lineTo(10, 14);
+heroArt.lineTo(9, 14);
+heroArt.lineTo(7, 12);
+heroArt.closePath();
+heroArt.fill();
+
+// hero eye area
+heroArt.fillStyle = 'black';
+heroArt.beginPath();
+heroArt.moveTo(8, 9);
+heroArt.lineTo(9, 8);
+heroArt.lineTo(10, 8);
+heroArt.lineTo(12, 10);
+heroArt.lineTo(14, 8);
+heroArt.lineTo(15, 11);
+heroArt.lineTo(15, 12);
+heroArt.lineTo(14, 13);
+heroArt.lineTo(10, 13);
+heroArt.lineTo(8, 11);
+heroArt.closePath();
+heroArt.fill();
+
+// hero eyes
+heroArt.strokeStyle = 'white';
+drawLineHero(10, 9, 10, 11);
+drawLineHero(14, 9, 14, 11);
+
+// hero body
+heroArt.fillStyle = 'rgb(152, 251, 152)';
+heroArt.beginPath();
+heroArt.moveTo(6, 14);
+heroArt.lineTo(18, 14);
+heroArt.lineTo(20, 16);
+heroArt.lineTo(20, 25);
+heroArt.lineTo(6, 25);
+heroArt.lineTo(4, 16);
+heroArt.closePath();
+heroArt.fill();
+
+// hero body cross
+heroArt.strokeStyle = "rgb(212, 175, 55)";
+drawLineHero(12, 15, 12, 24);
+drawLineHero(8, 18, 16, 18)
+
+var canvas = document.getElementById('drawCreep');
+var creepArt = canvas.getContext('2d');
+
+function drawLineCreep (x1, y1, x2, y2) {
+    creepArt.beginPath();
+    creepArt.moveTo(x1, y1);
+    creepArt.lineTo(x2, y2);
+    creepArt.stroke();
+};
+
+// creep body polygon
+creepArt.fillStyle = 'rgb(210, 184, 135)';
+creepArt.beginPath();
+creepArt.moveTo(7, 21);
+creepArt.lineTo(17, 21);
+creepArt.lineTo(20, 28);
+creepArt.lineTo(18, 31);
+creepArt.lineTo(5, 31);
+creepArt.lineTo(4, 28);
+creepArt.closePath();
+creepArt.fill();
+
+// creep chicken legs
+creepArt.strokeStyle = 'rgb(210, 184, 135)';
+drawLineCreep(6, 31, 7, 36);
+drawLineCreep(6, 33, 7, 36);
+drawLineCreep(17, 31, 17, 33);
+drawLineCreep(17, 33, 16, 36);
+
+// creep head polygon
+creepArt.fillStyle = 'rgb(191, 0, 0)';
+creepArt.beginPath();
+creepArt.moveTo(9, 8);
+creepArt.lineTo(15, 8);
+creepArt.lineTo(18, 18);
+creepArt.lineTo(15, 28);
+creepArt.lineTo(9, 28);
+creepArt.lineTo(6, 18);
+creepArt.closePath();
+creepArt.fill();
+
+//creep horns
+creepArt.strokeStyle = 'rgb(191, 0, 0)';
+drawLineCreep(8, 14, 8, 3);
+drawLineCreep(8, 3, 10, 1);
+drawLineCreep(16, 14, 16, 3);
+drawLineCreep(16, 3, 14, 1);
+
+// creep face
+creepArt.beginPath();
+creepArt.arc(9, 15, 1.5, 0, 2 * Math.PI, false);
+creepArt.fillStyle = 'rgb(255, 211, 0)';
+creepArt.fill();
+
+creepArt.beginPath();
+creepArt.arc(16, 15, 1.5, 0, 2 * Math.PI, false);
+creepArt.fillStyle = 'rgb(255, 211, 0)';
+creepArt.fill();
+
+creepArt.strokeStyle = 'black';
+drawLineCreep(9, 19, 11, 26);
+drawLineCreep(11, 26, 12, 21);
+drawLineCreep(12, 21, 14, 26);
+drawLineCreep(14, 26, 16, 19);</script>
+    <script>function heroMove(e) {
+    var key = e.keyCode;
+    var heroId = document.getElementById('drawHero');
+    var creepBoxId = document.getElementById('creepBox');
+    var heroY = parseInt(getComputedStyle(heroId).top);
+    var heroX = parseInt(getComputedStyle(heroId).left);
+    var creepY = parseInt(getComputedStyle(creepBoxId).top);
+    var creepX = parseInt(getComputedStyle(creepBoxId).left);
+
+    hero = {
+        vertical: function() {
+            if (key == 38) {
+                if (heroY <= 0) {
+                    return 0
+                }
+                else if ((creepY - heroY <= -80) && (creepY - heroY > -84) && (Math.abs(creepX - heroX) < 11)) {
+                    return heroY
+                }
+                heroY -= 4;
+
+            } else if (key == 40) {
+                if (heroY >= 534) {
+                    return 534
+                }
+                else if ((creepY - heroY >= -34) && (creepY - heroY < -30) && (Math.abs(creepX - heroX) < 12)) {
+                    return heroY
+                }
+                heroY += 4;
+            }
+            return heroY
+        },
+        horizontal: function() {
+            if (key == 37) {
+                if (heroX < 0) {
+                    heroX = 0;
+                }
+                else if ((creepX - heroX > -16) && (creepX - heroX <= -12) && (creepY - heroY < -32) && (creepY - heroY > -77)) {
+                    return heroX
+                } 
+                heroX -= 4;
+            } else if (key == 39) {
+                if (heroX >= 536) {
+                    heroX = 537;
+                }
+                else if ((creepX - heroX >= 12) && (creepX - heroX < 16) && (creepY - heroY < -32) && (creepY - heroY > -77)) {
+                    return heroX
+                }
+                heroX += 4;
+            }
+            return heroX
+        }
+    };
+    heroId.style.top = (hero.vertical()) + "px";
+    heroId.style.left = (hero.horizontal()) + "px";
+}
+
+function heroAttack(e) {
+    var key = e.keyCode;
+    var heroId = document.getElementById('drawHero');
+    var creepId = document.getElementById('drawCreep');
+    var creepBoxId = document.getElementById('creepBox');
+    var creepHpBar = document.getElementById('creepHpBar');
+    var goldAmount = document.getElementById('goldAmount');
+    var hit = document.getElementById('hit');
+
+    if (typeof(creepMaxHp) == 'undefined') {
+        creepMaxHp = getCreepMaxHp();
+    }
+    currentCreepHp = creepHp.innerHTML;
+    creepMaxHp = parseInt(creepMaxHp);
+
+    dx = Math.abs(parseInt(getComputedStyle(creepBoxId).left) - parseInt(getComputedStyle(heroId).left));
+    dy = parseInt(getComputedStyle(creepBoxId).top) - parseInt(getComputedStyle(heroId).top) - 38;
+    hitPhrases = ['SMACK!', 'WHACK!', 'THWACK!', 'BOOP!', 'POW!']
+
+    function randomHitPhrase() {
+        var sound = Math.floor(Math.random() * 5);
+        return sound
+    }
+    
+    if (key == 32) {
+        if ((dx <= 12) && (dy <= -70) && (dy > -122)) {
+            hit.innerHTML = hitPhrases[randomHitPhrase()];
+            hit.style.visibility = 'visible';
+            setTimeout(function() {
+                hit.style.visibility = 'hidden'}, 250
+            );
+            creepHp.innerHTML --;
+            creepHpBar.style.width = currentCreepHp/creepMaxHp * 30 + "px";
+        }
+        if (creepHp.innerHTML == 1) {
+            creepHp.innerHTML --;
+            if (parseInt(creepBoxId.style.top) < 476) {
+                clearInterval(creepAdvancing);
+                creepId.style.visibility = "hidden";
+                goldAmount.innerHTML = parseInt(goldAmount.innerHTML) + 1;
+                return
+            }
+            clearInterval(creepSiege);
+            clearInterval(baseRetaliate);
+        }
+    }
+}
+
+function creepMove() {
+    var creepBoxId = document.getElementById('creepBox');
+    var baseId = document.getElementById('base');
+    var baseY = parseInt(getComputedStyle(baseId).top);
+    var creep = {
+        vertical: function() {
+            var y = parseInt(getComputedStyle(creepBoxId).top);
+            if (y < baseY - 76) {
+                y += 4;
+            } else {
+                clearInterval(creepAdvancing);
+                clearInterval(collide);
+                creepSiege = setInterval(creepAttack, 1000);
+                baseRetaliate = setInterval(baseAttack, 1000);
+            }
+            return y
+        }
+
+    };
+    creepBoxId.style.top = (creep.vertical()) + "px";
+}
+
+function creepAttack() {
+    var baseStatus = document.getElementById('baseStatus');
+    var baseHealth = document.getElementById('health');
+    var creepY = parseInt(getComputedStyle(creepBoxId).top);
+    var creep = {
+        attackBase: function() {
+            if (creepY == 476) {
+                baseHealth.innerHTML --;
+            }
+            return baseHealth.innerHTML
+        }
+    }
+    baseHealth.innerHTML = creep.attackBase()
+    if (baseHealth.innerHTML < 1) {
+        baseStatus.innerHTML = "Game Over";
+        baseHealth.innerHTML = "";
+        document.removeEventListener('keyup', heroAttack);
+        document.removeEventListener('keydown', heroMove);
+        document.removeEventListener('keydown', backTrack);
+        clearInterval(creepSiege);
+        clearInterval(baseRetaliate);
+    }
+}
+
+function baseAttack() {
+    var creepId = document.getElementById('drawCreep');
+    var creepHp = document.getElementById('creepHp');
+    var creepHpBar = document.getElementById('creepHpBar');
+    var base = {
+        attackCreep: function() {
+            currentCreepHp = creepHp.innerHTML;
+            creepMaxHp = parseInt(creepMaxHp);
+            if (parseInt(getComputedStyle(creepBoxId).top) == 476) {
+                creepHp.innerHTML --;
+            }
+            creepHpBar.style.width = currentCreepHp/creepMaxHp * 30 + "px";
+
+            if (creepHp.innerHTML < 1) {
+                clearInterval(creepSiege);
+                clearInterval(baseRetaliate);
+                
+                creepId.style.visibility = "hidden";
+            }
+
+            return creepHp.innerHTML
+        }
+    }
+    creepHp.innerHTML = base.attackCreep()
+}
+
+function getCreepMaxHp() {
+    var creepMaxHp = document.getElementById('creepHp').innerHTML
+    return creepMaxHp
+}
+
+function avoidCollision() {
+    var heroId = document.getElementById('drawHero');
+    var heroX = parseInt(getComputedStyle(heroId).left);
+    var heroY = parseInt(getComputedStyle(heroId).top);
+    var creepX = parseInt(getComputedStyle(creepBoxId).left);
+    var creepY = parseInt(getComputedStyle(creepBoxId).top);
+    var dx = creepX - heroX
+
+    if ((creepY - heroY <= -80) && (creepY - heroY >= -84)) {
+        if (dx == 0) {
+            creepX += 16
+        } else if ((dx > 0) && (dx <= 12)) {
+            creepX += 8
+        } else if ((dx < 0) && (dx >= -12)) {
+            creepX -= 8
+        }
+    } 
+
+    creepBoxId.style.left = creepX + "px"
+}
+
+function spawnCreep() {
+    var baseHealth = document.getElementById('health');
+    var creepId = document.getElementById('drawCreep');
+    var creepHp = document.getElementById('creepHp');
+    var creepHpBar = document.getElementById('creepHpBar');
+    var creepBoxId = document.getElementById('creepBox');
+    
+    if ((baseHealth.innerHTML > 0)  && (creepHp.innerHTML < 1)) {
+        if (parseInt(creepBoxId.style.top) < 476) { 
+            creepBoxId.style.left = "300px"
+            creepBoxId.style.top = "0px"
+            creepHp.innerHTML = 13
+            creepHpBar.style.width = "30px"
+            creepId.style.visibility = "visible"
+            creepAdvancing = setInterval(creepMove, 100);
+            collide = setInterval(avoidCollision, 100);
+        } else { 
+        clearInterval(baseRetaliate);
+        creepBoxId.style.left = "300px"
+        creepBoxId.style.top = "0px"
+        creepHp.innerHTML = 13
+        creepHpBar.style.width = "30px"
+        creepId.style.visibility = "visible"
+        creepAdvancing = setInterval(creepMove, 100);
+        collide = setInterval(avoidCollision, 100);
+        }
+    }
+}
+
+function cooldown() {
+    var backtrack = document.getElementById('backtrack');
+    if (backtrack.innerHTML < 10) {
+        backtrack.innerHTML++;
+    }
+
+    if (backtrack.innerHTML == 10) {
+        backtrack.innerHTML = 'backtrack ready';
+        backtrack.style.visibility = 'visible';
+    }
+}
+
+function backTrack(e) {
+    var key = e.keyCode;
+    var creepY = parseInt(getComputedStyle(creepBoxId).top);
+    var backtrack = document.getElementById('backtrack');
+
+    if ((key == 8) && (creepY > 39) && (backtrack.innerHTML == 'backtrack ready')) {
+        if (creepY == 476) {
+            clearInterval(baseRetaliate);
+            clearInterval(creepSiege);
+            clearInterval(creepAdvancing);
+            creepAdvancing = setInterval(creepMove, 100);
+        }
+        creepBoxId.style.top = creepY - 40 + "px";
+        backtrack.style.visibility = 'hidden'
+        backtrack.innerHTML = 0
+    }
+}
+
+var creepBoxId = document.getElementById('creepBox');
+
+document.addEventListener('keyup', heroAttack);
+document.addEventListener('keydown', heroMove);
+document.addEventListener('keydown', backTrack);
+creepAdvancing = setInterval(creepMove, 100);
+collide = setInterval(avoidCollision, 100);
+setInterval(spawnCreep, 1000);
+setInterval(cooldown, 1000);</script>
+</html>

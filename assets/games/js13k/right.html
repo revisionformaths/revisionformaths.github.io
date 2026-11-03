@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>/*
+ * Kontra.js v4.0.1 (Custom Build on 2018-08-20) | MIT
+ * Build: https://straker.github.io/kontra/download?files=gameLoop+keyboard+sprite
+ */
+kontra={init(t){var n=this.canvas=document.getElementById(t)||t||document.querySelector("canvas");this.context=n.getContext("2d")},_noop:new Function,_tick:new Function};
+kontra.gameLoop=function(e){let t,n,a,r,o=(e=e||{}).fps||60,i=0,p=1e3/o,c=1/o,s=!1===e.clearCanvas?kontra._noop:function(){kontra.context.clearRect(0,0,kontra.canvas.width,kontra.canvas.height)};function d(){if(n=requestAnimationFrame(d),a=performance.now(),r=a-t,t=a,!(r>1e3)){for(kontra._tick(),i+=r;i>=p;)m.update(c),i-=p;s(),m.render()}}let m={update:e.update,render:e.render,isStopped:!0,start(){t=performance.now(),this.isStopped=!1,requestAnimationFrame(d)},stop(){this.isStopped=!0,cancelAnimationFrame(n)}};return m};
+!function(){let n={},t={},e={13:"enter",27:"esc",32:"space",37:"left",38:"up",39:"right",40:"down"};for(let n=0;n<26;n++)e[65+n]=(10+n).toString(36);for(i=0;i<10;i++)e[48+i]=""+i;addEventListener("keydown",function(i){let c=e[i.which];t[c]=!0,n[c]&&n[c](i)}),addEventListener("keyup",function(n){t[e[n.which]]=!1}),addEventListener("blur",function(n){t={}}),kontra.keys={bind(t,e){[].concat(t).map(function(t){n[t]=e})},unbind(t,e){[].concat(t).map(function(t){n[t]=e})},pressed:n=>!!t[n]}}();
+!function(){class t{constructor(t,i){this._x=t||0,this._y=i||0}add(t,i){this.x+=(t.x||0)*(i||1),this.y+=(t.y||0)*(i||1)}clamp(t,i,h,s){this._c=!0,this._a=t,this._b=i,this._d=h,this._e=s}get x(){return this._x}get y(){return this._y}set x(t){this._x=this._c?Math.min(Math.max(this._a,t),this._d):t}set y(t){this._y=this._c?Math.min(Math.max(this._b,t),this._e):t}}kontra.vector=((i,h)=>new t(i,h)),kontra.vector.prototype=t.prototype;class i{init(t,i,h,s){for(i in t=t||{},this.position=kontra.vector(t.x,t.y),this.velocity=kontra.vector(t.dx,t.dy),this.acceleration=kontra.vector(t.ddx,t.ddy),this.width=this.height=0,this.context=kontra.context,t)this[i]=t[i];if(h=t.image)this.image=h,this.width=h.width,this.height=h.height;else if(h=t.animations){for(i in h)this.animations[i]=h[i].clone(),s=s||h[i];this._ca=s,this.width=s.width,this.height=s.height}return this}get x(){return this.position.x}get y(){return this.position.y}get dx(){return this.velocity.x}get dy(){return this.velocity.y}get ddx(){return this.acceleration.x}get ddy(){return this.acceleration.y}set x(t){this.position.x=t}set y(t){this.position.y=t}set dx(t){this.velocity.x=t}set dy(t){this.velocity.y=t}set ddx(t){this.acceleration.x=t}set ddy(t){this.acceleration.y=t}isAlive(){return this.ttl>0}collidesWith(t){return this.x<t.x+t.width&&this.x+this.width>t.x&&this.y<t.y+t.height&&this.y+this.height>t.y}update(t){this.advance(t)}render(){this.draw()}playAnimation(t){this._ca=this.animations[t],this._ca.loop||this._ca.reset()}advance(t){this.velocity.add(this.acceleration,t),this.position.add(this.velocity,t),this.ttl--,this._ca&&this._ca.update(t)}draw(){this.image?this.context.drawImage(this.image,this.x,this.y):this._ca?this._ca.render(this):(this.context.fillStyle=this.color,this.context.fillRect(this.x,this.y,this.width,this.height))}}kontra.sprite=(t=>(new i).init(t)),kontra.sprite.prototype=i.prototype}();</script>
+    <script>(function(root, factory) {
+    if (typeof define === 'function' && define.amd) {
+        define(['exports'], factory);
+    } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
+        factory(exports);
+    } else {
+        factory(root.TinyMusic = {});
+    }
+}(this, function(exports) {
+
+    /*
+     * Private stuffz
+     */
+
+    var enharmonics = 'B#-C|C#-Db|D|D#-Eb|E-Fb|E#-F|F#-Gb|G|G#-Ab|A|A#-Bb|B-Cb',
+        middleC = 440 * Math.pow(Math.pow(2, 1 / 12), -9),
+        numeric = /^[0-9.]+$/,
+        octaveOffset = 4,
+        space = /\s+/,
+        num = /(\d+)/,
+        offsets = {};
+
+    // populate the offset lookup (note distance from C, in semitones)
+    enharmonics.split('|').forEach(function(val, i) {
+        val.split('-').forEach(function(note) {
+            offsets[note] = i;
+        });
+    });
+
+    /*
+     * Note class
+     *
+     * new Note ('A4 q') === 440Hz, quarter note
+     * new Note ('- e') === 0Hz (basically a rest), eigth note
+     * new Note ('A4 es') === 440Hz, dotted eighth note (eighth + sixteenth)
+     * new Note ('A4 0.0125') === 440Hz, 32nd note (or any arbitrary
+     * divisor/multiple of 1 beat)
+     *
+     */
+
+    // create a new Note instance from a string
+    function Note(str) {
+        var couple = str.split(space);
+        // frequency, in Hz
+        this.frequency = Note.getFrequency(couple[0]) || 0;
+        // duration, as a ratio of 1 beat (quarter note = 1, half note = 0.5, etc.)
+        this.duration = Note.getDuration(couple[1]) || 0;
+    }
+
+    // convert a note name (e.g. 'A4') to a frequency (e.g. 440.00)
+    Note.getFrequency = function(name) {
+        var couple = name.split(num),
+            distance = offsets[couple[0]],
+            octaveDiff = (couple[1] || octaveOffset) - octaveOffset,
+            freq = middleC * Math.pow(Math.pow(2, 1 / 12), distance);
+        return freq * Math.pow(2, octaveDiff);
+    };
+
+    // convert a duration string (e.g. 'q') to a number (e.g. 1)
+    // also accepts numeric strings (e.g '0.125')
+    // and compund durations (e.g. 'es' for dotted-eight or eighth plus sixteenth)
+    Note.getDuration = function(symbol) {
+        return numeric.test(symbol) ? parseFloat(symbol) :
+            symbol.toLowerCase().split('').reduce(function(prev, curr) {
+                return prev + (curr === 'w' ? 4 : curr === 'h' ? 2 :
+                    curr === 'q' ? 1 : curr === 'e' ? 0.5 :
+                    curr === 's' ? 0.25 : 0);
+            }, 0);
+    };
+
+    /*
+     * Sequence class
+     */
+
+    // create a new Sequence
+    function Sequence(ac, tempo, arr) {
+        this.ac = ac || new AudioContext();
+        this.createFxNodes();
+        this.tempo = tempo || 120;
+        this.loop = true;
+        this.smoothing = 0;
+        this.staccato = 0;
+        this.notes = [];
+        this.push.apply(this, arr || []);
+    }
+
+    // create gain and EQ nodes, then connect 'em
+    Sequence.prototype.createFxNodes = function() {
+        var eq = [
+                ['bass', 100],
+                ['mid', 1000],
+                ['treble', 2500]
+            ],
+            prev = this.gain = this.ac.createGain();
+        eq.forEach(function(config, filter) {
+            filter = this[config[0]] = this.ac.createBiquadFilter();
+            filter.type = 'peaking';
+            filter.frequency.value = config[1];
+            prev.connect(prev = filter);
+        }.bind(this));
+        prev.connect(this.ac.destination);
+        return this;
+    };
+
+    // accepts Note instances or strings (e.g. 'A4 e')
+    Sequence.prototype.push = function() {
+        Array.prototype.forEach.call(arguments, function(note) {
+            this.notes.push(note instanceof Note ? note : new Note(note));
+        }.bind(this));
+        return this;
+    };
+
+    // create a custom waveform as opposed to "sawtooth", "triangle", etc
+    Sequence.prototype.createCustomWave = function(real, imag) {
+        // Allow user to specify only one array and dupe it for imag.
+        if (!imag) {
+            imag = real;
+        }
+
+        // Wave type must be custom to apply period wave.
+        this.waveType = 'custom';
+
+        // Reset customWave
+        this.customWave = [new Float32Array(real), new Float32Array(imag)];
+    };
+
+    // recreate the oscillator node (happens on every play)
+    Sequence.prototype.createOscillator = function() {
+        this.stop();
+        this.osc = this.ac.createOscillator();
+
+        // customWave should be an array of Float32Arrays. The more elements in
+        // each Float32Array, the dirtier (saw-like) the wave is
+        if (this.customWave) {
+            this.osc.setPeriodicWave(
+                this.ac.createPeriodicWave.apply(this.ac, this.customWave)
+            );
+        } else {
+            this.osc.type = this.waveType || 'square';
+        }
+
+        this.osc.connect(this.gain);
+        return this;
+    };
+
+    // schedules this.notes[ index ] to play at the given time
+    // returns an AudioContext timestamp of when the note will *end*
+    Sequence.prototype.scheduleNote = function(index, when) {
+        var duration = 60 / this.tempo * this.notes[index].duration,
+            cutoff = duration * (1 - (this.staccato || 0));
+
+        this.setFrequency(this.notes[index].frequency, when);
+
+        if (this.smoothing && this.notes[index].frequency) {
+            this.slide(index, when, cutoff);
+        }
+
+        this.setFrequency(0, when + cutoff);
+        return when + duration;
+    };
+
+    // get the next note
+    Sequence.prototype.getNextNote = function(index) {
+        return this.notes[index < this.notes.length - 1 ? index + 1 : 0];
+    };
+
+    // how long do we wait before beginning the slide? (in seconds)
+    Sequence.prototype.getSlideStartDelay = function(duration) {
+        return duration - Math.min(duration, 60 / this.tempo * this.smoothing);
+    };
+
+    // slide the note at <index> into the next note at the given time,
+    // and apply staccato effect if needed
+    Sequence.prototype.slide = function(index, when, cutoff) {
+        var next = this.getNextNote(index),
+            start = this.getSlideStartDelay(cutoff);
+        this.setFrequency(this.notes[index].frequency, when + start);
+        this.rampFrequency(next.frequency, when + cutoff);
+        return this;
+    };
+
+    // set frequency at time
+    Sequence.prototype.setFrequency = function(freq, when) {
+        this.osc.frequency.setValueAtTime(freq, when);
+        return this;
+    };
+
+    // ramp to frequency at time
+    Sequence.prototype.rampFrequency = function(freq, when) {
+        this.osc.frequency.linearRampToValueAtTime(freq, when);
+        return this;
+    };
+
+    // run through all notes in the sequence and schedule them
+    Sequence.prototype.play = function(when) {
+        when = typeof when === 'number' ? when : this.ac.currentTime;
+
+        this.createOscillator();
+        this.osc.start(when);
+
+        this.notes.forEach(function(note, i) {
+            when = this.scheduleNote(i, when);
+        }.bind(this));
+
+        this.osc.stop(when);
+        this.osc.onended = this.loop ? this.play.bind(this, when) : null;
+
+        return this;
+    };
+
+    // stop playback, null out the oscillator, cancel parameter automation
+    Sequence.prototype.stop = function() {
+        if (this.osc) {
+            this.osc.onended = null;
+            this.osc.disconnect();
+            this.osc = null;
+        }
+        return this;
+    };
+
+    exports.Note = Note;
+    exports.Sequence = Sequence;
+}));
+</script>
+    <script>/*
+AUDIO HANDLING
+This part is partially copied from the TinyMusic example.
+*/
+
+// create the audio context
+var ac = new AudioContext(),
+    // initialize some vars
+    sequence1,//start
+    sequence2,//bg
+    wrong,
+    right,
+    // create an array of "note strings" that can be passed to a sequence
+
+    wr = [
+        "E4 e",
+        "E3 q"
+    ],
+    rt = [
+        "B3 e",
+        "D4b e"
+    ],
+    bg = [
+      'E0 e',
+      'A1b e',
+      'B0 e',
+      'E1 e',
+      'E0 e',
+      'A1b e',
+      'B0 e',
+      'E1 e',
+      'E0 e',
+      'A1b e',
+      'B0 e',
+      'E1 e',
+      'D2 e',
+      'D3 e',
+      'A1 e',
+      'D3 e',
+      'D2 e',
+      'D3 e',
+      'A1 e',
+      'D3 e',
+        "D4 e",
+        "A4 e",
+        "D4 e",
+        "D4 e",
+        "E4 e",
+        "D4 e",
+        "E4 e",
+        "D4 e",
+        "F4 e",
+        "E4 e",
+        "G4 e",
+        "F4 e",
+        "G4 e",
+        "F4 e"
+        ],
+    start = [
+      'D3  q',
+      '-   h',
+      'D3  q',
+
+      'A2  q',
+      '-   h',
+      'A2  q',
+
+      'Bb2 q',
+      '-   h',
+      'Bb2 q',
+
+      'F2  h',
+      'A2  h'
+],
+
+sequence1 = new TinyMusic.Sequence(ac, 100, start);
+sequence2 = new TinyMusic.Sequence(ac, 100, bg);
+
+wrong = new TinyMusic.Sequence(ac, 100, wr);
+wrong.loop = false;
+wrong.tempo = 300;
+wrong.staccato = 0.55;
+
+right = new TinyMusic.Sequence(ac, 100, rt);
+right.loop = false;
+right.tempo = 300;
+right.staccato = 0.55;
+
+
+// set staccato values for maximum coolness
+sequence1.staccato = 0.55;
+sequence2.staccato = 0.55;
+// adjust the levels
+sequence1.gain.gain.value = 0.05;
+sequence2.gain.gain.value = 0.03;
+wrong.gain.gain.value = 0.1;
+right.gain.gain.value = 0.1;
+
+/*
+  Audio utilities
+*/
+//sequence1.play(ac.currentTime);
+function wrongSound() {
+    wrong.play(ac.currentTime);
+}
+function rightSound() {
+    right.play(ac.currentTime);
+}
+function startSound(){
+    sequence1.play(ac.currentTime);
+}
+function bgSound() {
+    sequence2.play(ac.currentTime);
+}
+</script>
+    <script>window.blur();
+var start = false;//press r to start
+var issame = false;//signal the color of the word and background
+var luckcynumber1 = 0;//random number for color
+var luckcynumber2 = 0;//random number for words
+var luckcynumber3 = 0;//random number for background
+// =============================================
+//  if score>150 then  level up
+// =============================================
+var level = 1;
+// =============================================
+//  colors and words //you can also update them
+// =============================================
+var colors = new Array();
+colors[0] = 'red';
+colors[1] = '#FFCC00';
+colors[2] = '#F7F709';
+colors[3] = '#2B2BD5';
+colors[4] = '#9955AA';
+colors[5] = '#ff99ff';
+colors[6] = '#808080';
+var words = new Array();
+words[0] = 'red';
+words[1] = 'orange';
+words[2] = 'yellow';
+words[3] = 'blue';
+words[4] = 'purple';
+words[5] = 'pink';
+words[6] = 'grey';
+
+
+changecolor();//init random color;
+
+// =============================================
+// start function
+// =============================================
+function a(){
+kontra.init();
+// =============================================
+//  background object
+// =============================================
+  var background = kontra.sprite({
+    x: 0,
+    y: 0,
+    color: 'black',
+    width: kontra.canvas.width,
+    height: kontra.canvas.height,
+  });
+  var max = 0;//highscore
+  var time = 2;//rest time to play
+  var score = 0;
+
+  document.onkeyup = function(e){
+    if(start){
+      kontra.keys.unbind(['R','r']);
+      if(kontra.keys.pressed('left') && !issame){//judge the color
+        rightSound();
+        changecolor();
+        score +=10;
+        time = 2;
+      }else if (kontra.keys.pressed('right') && issame) {//judge the color
+        rightSound();
+        changecolor();
+        score +=10;
+        time = 2;
+      }else{
+        wrongSound();
+        score = 0;
+      }
+    }
+  }
+
+  kontra.keys.bind(['R','r'],function(){
+    start = true;
+    sequence1.stop();
+    bgSound();
+  });
+
+// =============================================
+//  gameLoop
+// =============================================
+  var loop = kontra.gameLoop({
+    update:function(){
+      if(score > max){
+        max = score;
+      }
+      if(time>0){
+        time -=0.01;
+      }else{
+        time = 2;
+        score = 0;
+        level = 1;
+        changecolor();
+      }
+
+      if(score > 150){
+        level = 2;
+        background.color = colors[luckcynumber3];
+      }else if(score <= 150 && score >=0){
+        level = 1;
+        background.color = 'black';
+      }
+    },
+    render:function(){
+      background.render();
+      if(start){
+        drawText(words[luckcynumber2],15,colors[luckcynumber1]);
+        drawscore("score:"+score+"  max:"+max+"  level:"+level,5,5,5);
+        drawscore("time:"+time,5,5,kontra.canvas.height-30);
+      }else{
+        drawscore("Judge the consistency of  ",5,20,50);
+        drawscore("word and its colors.right ",5,20,100);
+        drawscore("press right otherwies left.",5,20,150);
+        drawscore("if wrong or time up",5,20,200);
+        drawscore("then score = 0",5,20,250);
+        drawscore("be careful and go bravely!",5,20,300);
+        drawscore("Press R to start!!!",7,20,500);
+      }
+
+    }
+  });
+  loop.start(); //start
+}
+
+if(start == false){
+  startSound();
+}
+
+// =============================================
+//  changecolor based on level
+// =============================================
+function changecolor(){
+  if(level == 1){
+    luckcynumber1 = Math.floor(Math.random()*colors.length);
+    luckcynumber2 = Math.floor(Math.random()*words.length);
+    if (luckcynumber1 == luckcynumber2){ // judge the color of the word and the background
+      issame = true;
+    }else{
+      issame = false;
+    }
+  }else if(level == 2){
+     luckcynumber1 = Math.floor(Math.random()*colors.length);
+     luckcynumber2 = Math.floor(Math.random()*words.length);
+     luckcynumber3 = Math.floor(Math.random()*colors.length);
+      if(luckcynumber3 == luckcynumber1){
+        luckcynumber3 = (luckcynumber3+1) % colors.length;
+      }
+      if (luckcynumber1 == luckcynumber2){ // judge the color of the word and the background
+        issame = true;
+      }else{
+        issame = false;
+      }
+  }
+}
+
+
+// =============================================
+// function to draw words
+// =============================================
+function drawText(string,size,color) {
+    var needed = [];
+    if (string) {
+        string = string.toUpperCase();
+        for (var i = 0; i < string.length; i++) {
+            var letter = letters[string.charAt(i)];
+            if (letter) {
+                needed.push(letter);
+            }
+          }
+        var currX =kontra.canvas.width/2-(string.length*2)*size;
+        kontra.context.fillStyle = color;
+        for (i = 0; i < needed.length; i++) {
+            letter = needed[i];
+            var currY = kontra.canvas.height/2 -3*size;
+            var addX = 0;
+            for (var y = 0; y < letter.length; y++) {
+                var row = letter[y];
+                for (var x = 0; x < row.length; x++) {
+                    if (row[x]) {
+                        kontra.context.fillRect(currX + x * size , currY , size, size);
+                    }
+                }
+                addX = Math.max(addX, row.length * size);
+                currY += size;
+            }
+            currX += size + addX;
+          }
+    }
+}
+function drawscore(string,size,a,b){
+  //var size = size;
+  var needed = [];
+  if (string) {
+      string = string.toUpperCase();
+      for (var i = 0; i < string.length; i++) {
+          var letter = letters[string.charAt(i)];
+          if (letter) {
+              needed.push(letter);
+          }
+        }
+      var currX = a;
+      kontra.context.fillStyle = 'white';
+      for (i = 0; i < needed.length; i++) {
+          letter = needed[i];
+          var currY = b;
+          var addX = 0;
+          for (var y = 0; y < letter.length; y++) {
+              var row = letter[y];
+              for (var x = 0; x < row.length; x++) {
+                  if (row[x]) {
+                      kontra.context.fillRect(currX + x * size , currY , size, size);
+                  }
+              }
+              addX = Math.max(addX, row.length * size);
+              currY += size;
+          }
+          currX += size + addX;
+        }
+  }
+}
+
+// =============================================
+// Pixel Font
+// =============================================
+var letters = {
+    'A': [
+        [, 1],
+        [1, , 1],
+        [1, , 1],
+        [1, 1, 1],
+        [1, , 1]
+    ],
+    'B': [
+        [1, 1],
+        [1, , 1],
+        [1, 1, 1],
+        [1, , 1],
+        [1, 1]
+    ],
+    'C': [
+        [1, 1, 1],
+        [1],
+        [1],
+        [1],
+        [1, 1, 1]
+    ],
+    'D': [
+        [1, 1],
+        [1, , 1],
+        [1, , 1],
+        [1, , 1],
+        [1, 1]
+    ],
+    'E': [
+        [1, 1, 1],
+        [1],
+        [1, 1, 1],
+        [1],
+        [1, 1, 1]
+    ],
+    'F': [
+        [1, 1, 1],
+        [1],
+        [1, 1],
+        [1],
+        [1]
+    ],
+    'G': [
+        [, 1, 1],
+        [1],
+        [1, , 1, 1],
+        [1, , , 1],
+        [, 1, 1]
+    ],
+    'H': [
+        [1, , 1],
+        [1, , 1],
+        [1, 1, 1],
+        [1, , 1],
+        [1, , 1]
+    ],
+    'I': [
+        [1, 1, 1],
+        [, 1],
+        [, 1],
+        [, 1],
+        [1, 1, 1]
+    ],
+    'J': [
+        [1, 1, 1],
+        [, , 1],
+        [, , 1],
+        [1, , 1],
+        [1, 1, 1]
+    ],
+    'K': [
+        [1, , , 1],
+        [1, , 1],
+        [1, 1],
+        [1, , 1],
+        [1, , , 1]
+    ],
+    'L': [
+        [1],
+        [1],
+        [1],
+        [1],
+        [1, 1, 1]
+    ],
+    'M': [
+        [1, 1, 1, 1, 1],
+        [1, , 1, , 1],
+        [1, , 1, , 1],
+        [1, , , , 1],
+        [1, , , , 1]
+    ],
+    'N': [
+        [1, , , 1],
+        [1, 1, , 1],
+        [1, , 1, 1],
+        [1, , , 1],
+        [1, , , 1]
+    ],
+    'O': [
+        [1, 1, 1],
+        [1, , 1],
+        [1, , 1],
+        [1, , 1],
+        [1, 1, 1]
+    ],
+    'P': [
+        [1, 1, 1],
+        [1, , 1],
+        [1, 1, 1],
+        [1],
+        [1]
+    ],
+    'Q': [
+        [, 1, 1],
+        [1, , , 1],
+        [1, , , 1],
+        [1, , 1, 1],
+        [1, 1, 1, 1]
+    ],
+    'R': [
+        [1, 1],
+        [1, , 1],
+        [1, , 1],
+        [1, 1],
+        [1, , 1]
+    ],
+    'S': [
+        [1, 1, 1],
+        [1],
+        [1, 1, 1],
+        [, , 1],
+        [1, 1, 1]
+    ],
+    'T': [
+        [1, 1, 1],
+        [, 1],
+        [, 1],
+        [, 1],
+        [, 1]
+    ],
+    'U': [
+        [1, , 1],
+        [1, , 1],
+        [1, , 1],
+        [1, , 1],
+        [1, 1, 1]
+    ],
+    'V': [
+        [1, , , , 1],
+        [1, , , , 1],
+        [, 1, , 1],
+        [, 1, , 1],
+        [, , 1]
+    ],
+    'W': [
+        [1, , , , 1],
+        [1, , , , 1],
+        [1, , , , 1],
+        [1, , 1, , 1],
+        [1, 1, 1, 1, 1]
+    ],
+    'X': [
+        [1, , , , 1],
+        [, 1, , 1],
+        [, , 1],
+        [, 1, , 1],
+        [1, , , , 1]
+    ],
+    'Y': [
+        [1, , 1],
+        [1, , 1],
+        [, 1],
+        [, 1],
+        [, 1]
+    ],
+    'Z': [
+        [1, 1, 1, 1, 1],
+        [, , , 1],
+        [, , 1],
+        [, 1],
+        [1, 1, 1, 1, 1]
+    ],
+    ':': [
+        [, , ],
+        [1, , ],
+        [, , , ],
+        [1, , ],
+        [, , ]
+    ],
+    '0': [
+        [1, 1, 1],
+        [1, , 1],
+        [1, , 1],
+        [1, , 1],
+        [1, 1, 1]
+    ],
+    '1': [
+        [, 1],
+        [, 1],
+        [, 1],
+        [, 1],
+        [, 1]
+    ],
+    '2': [
+        [1, 1, 1],
+        [, , 1],
+        [1, 1, 1],
+        [1, , ],
+        [1, 1, 1]
+    ],
+    '3': [
+        [1, 1, 1],
+        [, , 1],
+        [1, 1, 1],
+        [, , 1],
+        [1, 1, 1]
+    ],
+    '4': [
+        [1, , 1],
+        [1, , 1],
+        [1, 1, 1],
+        [, , 1],
+        [, , 1]
+    ],
+    '5': [
+        [1, 1, 1],
+        [1, , ],
+        [1, 1, 1],
+        [, , 1],
+        [1, 1, 1]
+    ],
+    '6': [
+        [1, 1, 1],
+        [1, , ],
+        [1, 1, 1],
+        [1, , 1],
+        [1, 1, 1]
+    ],
+    '7': [
+        [1, 1, 1],
+        [, , 1],
+        [, , 1],
+        [, , 1],
+        [, , 1]
+    ],
+    '8': [
+        [1, 1, 1],
+        [1, , 1],
+        [1, 1, 1],
+        [1, , 1],
+        [1, 1, 1]
+    ],
+    '9': [
+        [1, 1, 1],
+        [1, , 1],
+        [1, 1, 1],
+        [, , 1],
+        [1, 1, 1]
+    ],
+    ' ': [
+        [, , ],
+        [, , ],
+        [, , ],
+        [, , ],
+        [, , ]
+    ],
+    '.': [
+        [, , ],
+        [, , ],
+        [, , ],
+        [, , ],
+        [,1, ]
+    ],
+    '!': [
+        [, 1, ],
+        [, 1, ],
+        [, 1, ],
+        [, , ],
+        [,1, ]
+    ],
+    '=': [
+        [, , ],
+        [1, 1, 1],
+        [, , ],
+        [1,1 ,1 ],
+        [,, ]
+    ],
+};
+</script>
+    <style>
+    #panel{
+      margin: 0 auto;
+      margin-top: 30px;
+      width: 600px;
+    }
+    </style>
+  </head>
+  <body>
+    <div id="panel">
+      <canvas id='canvas' width="600px" height="600px"></canvas>
+    </div>
+  </body>
+  <script>
+  a();
+  </script>
+</html>

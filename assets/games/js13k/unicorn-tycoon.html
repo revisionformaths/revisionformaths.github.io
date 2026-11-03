@@ -1,0 +1,1661 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Unicorn Tycoon</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;position:fixed;inset:0;overflow:hidden;
+ touch-action:none;overscroll-behavior:none;background:#cfe8ff;
+ -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+ font-family:system-ui,sans-serif;color:#4a2a6e}
+#c{display:block;width:100%;height:100%;position:absolute;inset:0;
+ touch-action:none;overscroll-behavior:none}
+button{appearance:none;cursor:pointer;-webkit-tap-highlight-color:transparent;
+ border:3px solid #fff;border-radius:999px;font-weight:800;font-family:inherit}
+.A{background:#fff;border-radius:999px}
+#t{position:absolute;top:calc(9px + env(safe-area-inset-top));left:9px;z-index:5;
+ display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:calc(100% - 160px)}
+#t>div{padding:7px 13px;font-size:13px;font-weight:700;line-height:1}
+#r{color:#e8930c}
+#k{display:none}
+#t #n{gap:5px;align-items:center;padding:8px 12px}
+#n span{width:11px;height:11px;border-radius:999px;display:inline-block}
+#a{background:#ff5d5d;color:#fff}
+#h{position:absolute;left:50%;transform:translateX(-50%);
+ bottom:calc(96px + env(safe-area-inset-bottom));z-index:4;
+ padding:9px 18px;font-size:12.5px;font-weight:700;white-space:nowrap;
+ pointer-events:none;display:none}
+#h.M{display:block}
+#ac{position:absolute;top:calc(62px + env(safe-area-inset-top));right:9px;z-index:10;
+ max-width:210px;padding:10px 16px;font-size:12px;font-weight:800;pointer-events:none}
+#ac:empty{display:none}
+.B{position:absolute;left:50%;transform:translateX(-50%);
+ bottom:calc(22px + env(safe-area-inset-bottom));z-index:6;
+ background:#ff5d8f;color:#fff;padding:13px 26px;font-size:16px}
+#m{position:absolute;left:0;right:0;bottom:0;z-index:8;display:none;background:#fff;
+ border-radius:22px 22px 0 0;padding:10px 0 calc(10px + env(safe-area-inset-bottom))}
+#m.M{display:block}
+#b{display:flex;gap:5px;padding:0 10px 8px;overflow-x:auto;scrollbar-width:none}
+#b button{border:0;background:#efe7fa;color:#6b4a94;font-size:12px;padding:7px 13px;
+ white-space:nowrap}
+#b button.G{background:#8455cf;color:#fff}
+#i{display:flex;gap:8px;padding:2px 10px 4px;overflow-x:auto;scrollbar-width:none}
+.C{flex:0 0 auto;width:104px;border:3px solid #efe7fa;border-radius:16px;padding:8px;
+ text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.C.D{opacity:.42}
+.C canvas{width:88px;height:62px;display:block;margin:0 auto}
+.C .E{font-size:11px;font-weight:700;line-height:1.15}
+.C .F{font-size:12px;font-weight:800;color:#e8930c}
+#e{display:flex;justify-content:space-between;align-items:center;padding:0 14px 6px}
+#e b{font-size:14px}
+#f{border:0;background:#efe7fa;color:#6b4a94;width:30px;height:30px;font-size:15px}
+#p{position:absolute;left:50%;transform:translateX(-50%);
+ bottom:calc(20px + env(safe-area-inset-bottom));z-index:7;display:none;
+ align-items:center;gap:10px;padding:8px 10px 8px 18px}
+#p.M{display:flex}
+#q{font-size:13px;font-weight:700;white-space:nowrap}
+#p button{width:44px;height:44px;font-size:19px;color:#fff}
+#v{background:#3fbf6f}
+#v:disabled{background:#c3bccd}
+#u{background:#ef767a}
+#l{position:absolute;inset:0;z-index:9;display:none;place-items:center;
+ background:rgba(50,24,80,.3);padding:16px}
+#l.M{display:grid}
+#z{background:#fff;border-radius:22px;padding:20px 18px;width:100%;max-width:360px;
+ max-height:88%;overflow:auto}
+#z h2{margin:2px 0 6px;font-size:31px;text-align:center}
+.L,.K,#s{font-size:11.5px;color:#8d7aa8}
+.H{display:flex;align-items:center;gap:8px;margin:7px 0}
+.H .I{font-size:11.5px;font-weight:700;width:74px;flex:0 0 auto}
+.H .J{flex:1;height:11px;background:#efe7fa;border-radius:999px;overflow:hidden}
+.H .J i{display:block;height:100%}
+.H .K{width:32px;text-align:right;flex:0 0 auto;font-weight:700}
+#g{margin:13px 0 0;padding:11px 13px;background:#f7f3fd;border-radius:14px;
+ font-size:12.5px;line-height:1.55}
+#j{margin-top:13px;font-size:22px;font-weight:800;color:#e8930c}
+#j,#s,.L{text-align:center}
+#z button{background:#8455cf;color:#fff;width:100%;margin-top:15px;padding:13px;
+ font-size:15px}
+</style></head><body>
+<canvas id=c></canvas>
+
+<div id=t>
+  <div class=A><span id=r></span> <span style="color:#e8930c">&#9679;</span></div>
+  <div class=A id=d></div>
+  <div class=A id=k></div>
+  <div class=A id=n></div>
+  <div class=A id=a></div>
+</div>
+<div id=h class=A></div>
+<div id=ac class=A role=status></div>
+<button id=o class=B>Open the park &#9654;</button>
+
+<div id=p class=A><span id=q></span><button id=u>&#10005;</button><button id=v>&#10003;</button></div>
+
+<div id=m>
+  <div id=e><b>What shall we build?</b><button id=f>&#10005;</button></div>
+  <div id=b></div>
+  <div id=i></div>
+</div>
+
+<div id=l><div id=z></div></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   UNICORN TYCOON - complete gameplay prototype.
+
+   You are the unicorn. Build in the morning, maintain the park in the afternoon.
+   Each visitor has five needs; the better you meet them, the more they pay.
+   Everything wears out; a fully worn building goes out of service.
+   ===================================================================== */
+
+var C = document.getElementById('c'), X = C.getContext('2d'), W, H, DPR;
+function resize(){
+  DPR = Math.min(2, devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  C.width = W*DPR; C.height = H*DPR;
+  X.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+var _s = 20260826;
+function sr(){ _s = (_s*1103515245 + 12345) & 0x7fffffff; return _s/0x7fffffff; }
+
+var RAINBOW = ['#ff5d5d','#ff9f43','#ffe66d','#7bed9f','#54a0ff','#5f27cd','#c56cf0'];
+var SHIRTS=['#5aa9e6','#f6c453','#ef767a','#9d7bea','#5fd6c0','#ff9bc9','#ffab6b'];
+var HAIRS=['#5b3a29','#2f2f38','#c8622a','#f0d264','#8e5fc9','#e8746f'];
+var SKIN=['#ffd9b3','#f2c193','#d59a6a','#a9714a','#ffe3c9'];
+
+/* ---------------- Camera ---------------- */
+var GRID = 20, K = 1, HW, HH, BASE = 1, FINE = 1;
+var cam = { x:0, y:-30, z:1.25, vx:0, vy:0 };
+/* fit() MUST run before step(), which bounds the camera using HW/HH. */
+function fit(){
+  BASE = Math.min(W, H) / 620;
+  BASE = Math.max(.55, Math.min(1.5, BASE));
+  K = BASE*cam.z; HW = 32*K; HH = 16*K;
+  FINE = K > .46 ? 1 : 0;
+}
+function onScreen(p, rad, top){
+  return p[0] > -rad && p[0] < W + rad && p[1] > -(top || rad) && p[1] < H + rad;
+}
+var G = X;
+/* Screen -> grid. The exact inverse of P(), used for every tap. */
+function unP(sx, sy){
+  var u = (sx - W/2 - cam.x)/HW, v = (sy - H/2 - cam.y)/HH;
+  return [(u+v)/2 + GRID/2, (v-u)/2 + GRID/2];
+}
+/* Reputation bar: the number of lit bands on the entrance arch. */
+var REPB = 1;
+/* ---------------- Primitives (shared with the world) ---------------- */
+/* BX/BY = current building position. Drawing functions imported from
+   the library use local coordinates (0,0)-(w,d); this offset places them
+   in the world without changing their drawing code. */
+var BX = 0, BY = 0;
+function P(gx, gy, gz){
+  var cx = gx + BX - GRID/2, cy = gy + BY - GRID/2;
+  return [(cx-cy)*HW + W/2 + cam.x, (cx+cy)*HH + H/2 + cam.y - gz*K];
+}
+function path(pts){
+  G.beginPath(); G.moveTo(pts[0][0], pts[0][1]);
+  for (var i = 1; i < pts.length; i++) G.lineTo(pts[i][0], pts[i][1]);
+  G.closePath();
+}
+function ring(cx, cy, rx, ry){
+  var pts = [];
+  for (var i = 0; i < 16; i++){ var a = i/16*6.283; pts.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]); }
+  return pts;
+}
+function sticker(pts, lw, ns){
+  /* Each drop shadow adds another filled silhouette per shape. When zoomed
+     out, it is less than two pixels wide: skipping it saves more drawing
+     calls than any other change that preserves the style. */
+  if (!ns && FINE){
+    G.save(); G.globalAlpha = .17; G.fillStyle = '#4a2a6e';
+    G.translate(0, lw*.8); path(pts); G.fill(); G.restore();
+  }
+  G.strokeStyle = '#fff'; G.lineWidth = lw; G.lineJoin = 'round'; G.lineCap = 'round';
+  path(pts); G.stroke();
+}
+function c255(v){ return v<0?0:v>255?255:v|0; }
+function tone(hex, f){
+  return 'rgb(' + c255(parseInt(hex.slice(1,3),16)*f) + ',' +
+                  c255(parseInt(hex.slice(3,5),16)*f) + ',' +
+                  c255(parseInt(hex.slice(5,7),16)*f) + ')';
+}
+function fill(pts, col){ path(pts); G.fillStyle = col; G.fill(); }
+/* FINE: detail level. Below this threshold, seams and highlights are less
+   than one screen pixel wide: drawing them costs time for no visible benefit. */
+function seam(pts){
+  if (!FINE) return;
+  G.strokeStyle = 'rgba(255,255,255,.9)'; G.lineWidth = 1.4*K;
+  G.lineJoin = 'round'; path(pts); G.stroke();
+}
+function gloss(pts, a){
+  if (!FINE) return;
+  var cx = 0, cy = 0, i;
+  for (i = 0; i < pts.length; i++){ cx += pts[i][0]; cy += pts[i][1]; }
+  cx /= pts.length; cy /= pts.length;
+  var sp = [];
+  for (i = 0; i < pts.length; i++)
+    sp.push([cx + (pts[i][0]-cx)*.46 - 1.4*K, cy + (pts[i][1]-cy)*.46 - 2*K]);
+  G.save(); G.globalAlpha = a; G.fillStyle = '#fff'; path(sp); G.fill(); G.restore();
+}
+function box(x, y, w, d, z, h, col, lw){
+  var Nt=P(x,y,z+h), Et=P(x+w,y,z+h), St=P(x+w,y+d,z+h), Wt=P(x,y+d,z+h),
+      Eg=P(x+w,y,z), Sg=P(x+w,y+d,z), Wg=P(x,y+d,z);
+  sticker([Nt,Et,Eg,Sg,Wg,Wt], lw || 5.5*K);
+  var L=[Wt,St,Sg,Wg], R=[St,Et,Eg,Sg], T=[Nt,Et,St,Wt];
+  fill(L, tone(col,.72)); fill(R, tone(col,.52)); fill(T, tone(col,1));
+  seam(L); seam(R); seam(T); gloss(T, .26);
+}
+function disc(cx, cy, rx, ry, col, lw, ns){
+  var p = ring(cx, cy, rx, ry);
+  sticker(p, lw, ns);
+  fill(p, col); gloss(p, .32);
+}
+function tri(pts, col, lw){ sticker(pts, lw); fill(pts, col); gloss(pts, .3); }
+/* Striped conical roof: a simple way to suggest a fairground. */
+function tent(x, y, w, d, z, h, up, cA, cB){
+  var ap = P(x+w/2, y+d/2, z+h+up);
+  var Nt=P(x,y,z+h), Et=P(x+w,y,z+h), St=P(x+w,y+d,z+h), Wt=P(x,y+d,z+h);
+  sticker([Nt,Et,ap,Wt], 5.5*K);
+  var n = 4, i, a0, a1, pA, pB;
+  for (i = 0; i < n; i++){
+    a0 = i/n, a1 = (i+1)/n;
+    pA = [Wt[0]+(St[0]-Wt[0])*a0, Wt[1]+(St[1]-Wt[1])*a0];
+    pB = [Wt[0]+(St[0]-Wt[0])*a1, Wt[1]+(St[1]-Wt[1])*a1];
+    fill([pA,pB,ap], tone(i%2 ? cA : cB, .96));
+  }
+  for (i = 0; i < n; i++){
+    a0 = i/n, a1 = (i+1)/n;
+    pA = [St[0]+(Et[0]-St[0])*a0, St[1]+(Et[1]-St[1])*a0];
+    pB = [St[0]+(Et[0]-St[0])*a1, St[1]+(Et[1]-St[1])*a1];
+    fill([pA,pB,ap], tone(i%2 ? cB : cA, .76));
+  }
+}
+function pole(x, y, z, h, col){ box(x-.035, y-.035, .07, .07, z, h, col, 3*K); }
+/* Flat board facing the camera, used for every sign. */
+function board(cx, cy, w, h, col, lw){
+  var p = [[cx-w/2,cy-h/2],[cx+w/2,cy-h/2],[cx+w/2,cy+h/2],[cx-w/2,cy+h/2]];
+  sticker(p, lw); fill(p, col); gloss(p, .3);
+}
+/* lit = number of illuminated bands. Draw all bands when omitted.
+   The entrance arch passes its reputation here, avoiding a separate
+   function that differed only in this condition. */
+function arcs(cx, cy, r0, dr, n, lw, half, lit){
+  var m = lit === undefined ? n : Math.min(n, lit);
+  G.save(); G.lineCap = 'round';
+  for (var i = 0; i < m; i++){
+    var r = r0 + i*dr;
+    G.strokeStyle = '#fff'; G.lineWidth = lw + 2.6*K;
+    G.beginPath(); G.arc(cx, cy, r, Math.PI*(half?1:1.05), Math.PI*(half?2:1.95)); G.stroke();
+    G.strokeStyle = RAINBOW[i % 7]; G.lineWidth = lw;
+    G.beginPath(); G.arc(cx, cy, r, Math.PI*(half?1:1.05), Math.PI*(half?2:1.95)); G.stroke();
+  }
+  G.restore();
+}
+function uni(cx, cy, s, t){
+  var U = K*s, Y = cy + Math.sin(t*3)*1.2*U, i, q;
+  disc(cx, Y, 9*U, 7.5*U, '#fff', 4.2*K);
+  /* The head used to sit 7.8 units from a body with radius 8, making the
+     silhouette look like a potato. It now clearly extends beyond the body. */
+  disc(cx + 8.5*U, Y - 9*U, 5.6*U, 5*U, '#fff', 4*K);
+  tri([[cx+6.4*U, Y-12.6*U], [cx+10.6*U, Y-12.6*U], [cx+8.6*U, Y-20*U]], '#ffd166', 3.4*K);
+  /* Mane: draw all white outlines first, then all colors. In a single pass,
+     each lock erased the previous one, leaving only a blue bar. The locks
+     fall along the neck instead of lining up end to end. */
+  G.save(); G.lineCap = 'round';
+  for (q = 0; q < 2; q++) for (i = 0; i < 5; i++){
+    G.strokeStyle = q ? RAINBOW[i] : '#fff'; G.lineWidth = (q ? 2.6 : 4.6)*U;
+    G.beginPath();
+    G.moveTo(cx + (5.2-i*1.35)*U, Y + (-12.2+i*1.45)*U);
+    G.lineTo(cx + (3.1-i*1.55)*U, Y + (-6.6+i*1.75)*U);
+    G.stroke();
+  }
+  G.restore();
+  G.fillStyle = '#4a3040';
+  G.beginPath(); G.arc(cx+10.4*U, Y-9.6*U, 1.25*U, 0, 6.283); G.fill();
+}
+function ani(cx, cy, s, t){
+  var U = K*s, Y = cy + Math.sin(t*2.2)*1.1*U;
+  disc(cx, Y, 9*U, 7.2*U, '#fff', 4.2*K);
+  disc(cx-5*U, Y-4.4*U, 5.2*U, 4.6*U, '#fff', 3.2*K, 1);
+  disc(cx+1.4*U, Y-6*U, 5*U, 4.4*U, '#fff', 3.2*K, 1);
+  var hx = cx+7.4*U, hy = Y-4.6*U;
+  disc(hx, hy, 5.2*U, 4.8*U, '#4a3a48', 3.6*K);
+  G.save(); G.strokeStyle = '#4a3a48'; G.lineWidth = 2.6*U; G.lineCap = 'round';
+  G.beginPath(); G.moveTo(hx-1*U, hy-4*U); G.lineTo(hx-3*U, hy-7.5*U);
+  G.moveTo(hx+2.6*U, hy-3.6*U); G.lineTo(hx+3.6*U, hy-7.5*U); G.stroke();
+  G.restore();
+  G.fillStyle = '#4a3040';
+  G.beginPath(); G.arc(hx+1.6*U, hy-.4*U, 1.2*U, 0, 6.283); G.fill();
+}
+function icon(cx, cy, r, col, kind){
+  G.save(); G.fillStyle = col; G.strokeStyle = col;
+  G.lineWidth = r*.32; G.lineCap = 'round'; G.lineJoin = 'round';
+  switch(kind){
+  case 'cup':
+    G.beginPath(); G.moveTo(cx-r*.6, cy-r*.75); G.lineTo(cx+r*.6, cy-r*.75);
+    G.lineTo(cx+r*.36, cy+r*.85); G.lineTo(cx-r*.36, cy+r*.85); G.closePath(); G.fill();
+    break;
+  case 'zzz':
+    for (var zi = 0; zi < 2; zi++){
+      var zs = r*(zi ? .5 : .85), zx = cx + (zi ? r*.5 : -r*.35), zy = cy + (zi ? r*.45 : -r*.25);
+      G.beginPath(); G.moveTo(zx-zs*.6, zy-zs*.6); G.lineTo(zx+zs*.6, zy-zs*.6);
+      G.lineTo(zx-zs*.6, zy+zs*.6); G.lineTo(zx+zs*.6, zy+zs*.6); G.stroke();
+    }
+    break;
+  case 'drop':
+    G.beginPath(); G.arc(cx, cy+r*.2, r*.52, 0, 6.283); G.fill();
+    G.beginPath(); G.moveTo(cx, cy-r*.85); G.lineTo(cx+r*.5, cy+r*.25);
+    G.lineTo(cx-r*.5, cy+r*.25); G.closePath(); G.fill();
+    break;
+  case 'star':
+    G.beginPath();
+    for (var i = 0; i < 10; i++){
+      var a = i*Math.PI/5 - 1.57, rr = i%2 ? r*.42 : r;
+      i ? G.lineTo(cx+Math.cos(a)*rr, cy+Math.sin(a)*rr)
+        : G.moveTo(cx+Math.cos(a)*rr, cy+Math.sin(a)*rr);
+    }
+    G.closePath(); G.fill();
+    break;
+  case 'heart':
+    G.beginPath();
+    G.arc(cx-r*.42, cy-r*.2, r*.46, 0, 6.283); G.arc(cx+r*.42, cy-r*.2, r*.46, 0, 6.283);
+    G.moveTo(cx-r*.86, cy); G.lineTo(cx, cy+r*.9); G.lineTo(cx+r*.86, cy);
+    G.closePath(); G.fill();
+    break;
+  case 'wrench':
+    G.beginPath(); G.moveTo(cx-r*.7, cy+r*.7); G.lineTo(cx+r*.5, cy-r*.5); G.stroke();
+    G.beginPath(); G.arc(cx+r*.62, cy-r*.62, r*.42, .6, 5.2); G.stroke();
+    break;
+  case 'broom':
+    G.beginPath(); G.moveTo(cx+r*.55, cy-r*.85); G.lineTo(cx-r*.2, cy+r*.25); G.stroke();
+    G.beginPath(); G.moveTo(cx-r*.62, cy+r*.85); G.lineTo(cx+r*.18, cy+r*.05);
+    G.lineTo(cx+r*.5, cy+r*.45); G.lineTo(cx-r*.25, cy+r*1.05); G.closePath(); G.fill();
+    break;
+  case 'bag':
+    G.fillRect(cx-r*.68, cy-r*.35, r*1.36, r*1.15);
+    G.beginPath(); G.arc(cx, cy-r*.35, r*.42, Math.PI, 0); G.stroke();
+    break;
+  case 'ticket':
+    G.fillRect(cx-r*.85, cy-r*.5, r*1.7, r);
+    G.save(); G.globalCompositeOperation = 'destination-out';
+    G.beginPath(); G.arc(cx-r*.85, cy, r*.24, 0, 6.283); G.arc(cx+r*.85, cy, r*.24, 0, 6.283);
+    G.fill(); G.restore();
+    break;
+  }
+  G.restore();
+}
+function draw(id, t){
+  var i, p, t0, t1, a, f0, f1, wc, R, rot;
+  switch(id){
+
+  case 'carousel':
+    box(0, 0, 2, 2, 0, 8, '#ffd9ec');
+    for (i = 0; i < 4; i++) pole(.35 + (i%2)*1.3, .35 + ((i/2)|0)*1.3, 8, 24, '#ffe66d');
+    tent(0, 0, 2, 2, 32, 0, 22, '#ff5d8f', '#fff');
+    p = P(1, 1, 34); uni(p[0], p[1] + Math.sin(t*2)*2*K, .8, t);
+    p = P(1, 1, 60); disc(p[0], p[1], 5*K, 5*K, '#ffe66d', 3.6*K);
+    break;
+
+  case 'merryGoRound':
+    box(0, 0, 2, 2, 0, 12, '#ff7bc8');
+    for (i = 0; i < 4; i++) pole(.3 + (i%2)*1.4, .3 + ((i/2)|0)*1.4, 12, 26, '#fff');
+    tent(0, 0, 2, 2, 38, 0, 26, '#c56cf0', '#ffd166');
+    p = P(.55, 1.45, 16); uni(p[0], p[1] + Math.sin(t*2.4)*2.4*K, .95, t);
+    p = P(1.5, .6, 14); uni(p[0], p[1] + Math.sin(t*2.4+2)*2.4*K, .7, t+1);
+    p = P(1, 1, 70); arcs(p[0], p[1], 15*K, 4.2*K, 7, 3.4*K);
+    break;
+
+  case 'wheel':
+    box(.3, .3, 1.4, 1.4, 0, 7, '#b8d8f5');
+    p = P(1, 1, 8);
+    tri([[p[0]-14*K, p[1]], [p[0]+14*K, p[1]], [p[0], p[1]-26*K]], '#8ab8e0', 4.2*K);
+    wc = [p[0], p[1] - 46*K], R = 30*K, rot = t*.5;
+    G.save(); G.lineCap = 'round';
+    G.strokeStyle = '#fff'; G.lineWidth = 8.5*K;
+    G.beginPath(); G.arc(wc[0], wc[1], R, 0, 6.283); G.stroke();
+    G.strokeStyle = '#ffd166'; G.lineWidth = 5*K;
+    G.beginPath(); G.arc(wc[0], wc[1], R, 0, 6.283); G.stroke();
+    for (i = 0; i < 8; i++){
+      a = rot + i/8*6.283;
+      G.strokeStyle = '#fff'; G.lineWidth = 4.6*K;
+      G.beginPath(); G.moveTo(wc[0], wc[1]);
+      G.lineTo(wc[0]+Math.cos(a)*R, wc[1]+Math.sin(a)*R); G.stroke();
+      G.strokeStyle = 'rgba(255,209,102,.9)'; G.lineWidth = 2.2*K;
+      G.beginPath(); G.moveTo(wc[0], wc[1]);
+      G.lineTo(wc[0]+Math.cos(a)*R, wc[1]+Math.sin(a)*R); G.stroke();
+    }
+    G.restore();
+    for (i = 0; i < 8; i++){
+      a = rot + i/8*6.283;
+      disc(wc[0]+Math.cos(a)*R, wc[1]+Math.sin(a)*R, 6.4*K, 6.4*K, RAINBOW[i%7], 3.8*K);
+    }
+    break;
+
+
+
+  case 'meadow':
+    box(0, 0, 3, 2, 0, 5, '#8ee06a');
+    for (i = 0; i <= 3; i += 3) for (var j = 0; j <= 2; j += 2)
+      box(i-.07, j-.07, .14, .14, 5, 16, '#e8c98a', 3.2*K);
+    G.save(); G.lineCap = 'round'; G.strokeStyle = '#fff'; G.lineWidth = 4.4*K;
+    f0 = P(0, 2, 16), f1 = P(3, 2, 16);
+    G.beginPath(); G.moveTo(f0[0], f0[1]); G.lineTo(f1[0], f1[1]); G.stroke();
+    G.strokeStyle = '#e8c98a'; G.lineWidth = 2.4*K;
+    G.beginPath(); G.moveTo(f0[0], f0[1]); G.lineTo(f1[0], f1[1]); G.stroke();
+    G.restore();
+    p = P(1, .8, 6); ani(p[0], p[1] + Math.sin(t*1.6)*1.6*K, 1, t);
+    p = P(2.2, 1.5, 6); ani(p[0], p[1] + Math.sin(t*1.6+2)*1.6*K, .75, t+1.4);
+    break;
+
+
+
+
+  case 'sign':
+    box(.42, .42, .16, .16, 0, 13, '#c98f5a', 3.2*K);
+    p = P(.5, .5, 14);
+    board(p[0], p[1] - 12*K, 34*K, 24*K, '#7bd88f', 5*K);
+    G.save(); G.strokeStyle = 'rgba(255,255,255,.9)'; G.lineWidth = 2.8*K; G.lineCap = 'round';
+    for (i = 0; i < 3; i++){
+      G.beginPath(); G.moveTo(p[0]-11*K, p[1]-18*K+i*6*K);
+      G.lineTo(p[0]+(i===2?2:11)*K, p[1]-18*K+i*6*K); G.stroke();
+    }
+    G.restore();
+    icon(p[0], p[1] - 4*K, 4.4*K, '#fff', 'star');
+    break;
+
+  case 'sandwich':
+    box(0, 0, 1, 1, 0, 18, '#ff9b54');
+    sticker([P(0,1,18), P(1,1,18), P(1,1.42,13), P(0,1.42,13)], 4.6*K);
+    for (i = 0; i < 4; i++){
+      t0 = i*.25, t1 = (i+1)*.25;
+      fill([P(t0,1,18), P(t1,1,18), P(t1,1.42,13), P(t0,1.42,13)], i%2 ? '#fff' : '#ff6b8a');
+    }
+    p = P(.5, .5, 20);
+    board(p[0], p[1] - 12*K, 26*K, 18*K, '#fff', 4.4*K);
+    tri([[p[0]-9*K, p[1]-9*K], [p[0]+9*K, p[1]-9*K], [p[0], p[1]-20*K]], '#ffd166', 3*K);
+    G.fillStyle = '#7bd88f'; G.fillRect(p[0]-9*K, p[1]-9*K, 18*K, 2.6*K);
+    G.fillStyle = '#ff6b8a'; G.fillRect(p[0]-9*K, p[1]-6*K, 18*K, 3.2*K);
+    break;
+
+
+  case 'shop':
+    box(0, 0, 1, 1, 0, 18, '#ffd166');
+    sticker([P(0,1,18), P(1,1,18), P(1,1.42,13), P(0,1.42,13)], 4.6*K);
+    for (i = 0; i < 4; i++){
+      t0 = i*.25, t1 = (i+1)*.25;
+      fill([P(t0,1,18), P(t1,1,18), P(t1,1.42,13), P(t0,1.42,13)], i%2 ? '#fff' : '#54a0ff');
+    }
+    p = P(.5, .5, 22);
+    G.strokeStyle = 'rgba(255,255,255,.9)'; G.lineWidth = 2*K;
+    G.beginPath(); G.moveTo(p[0], p[1]-8*K); G.lineTo(p[0], p[1]-20*K); G.stroke();
+    disc(p[0], p[1] - 27*K + Math.sin(t*1.4)*2*K, 8.4*K, 9.6*K, '#ff6b8a', 4.2*K);
+    break;
+  case 'lemonade':
+    box(.1, .1, .8, .8, 0, 16, '#ffe66d');
+    p = P(.5, .5, 17);
+    disc(p[0], p[1] - 15*K, 13*K, 13*K, '#fff59b', 5*K);
+    G.save(); G.strokeStyle = 'rgba(255,255,255,.9)'; G.lineWidth = 2.4*K;
+    for (i = 0; i < 4; i++){
+      a = i/4*3.14 + .4;
+      G.beginPath(); G.moveTo(p[0], p[1]-15*K);
+      G.lineTo(p[0]+Math.cos(a)*12*K, p[1]-15*K+Math.sin(a)*12*K); G.stroke();
+    }
+    G.restore();
+    G.save(); G.lineCap = 'round'; G.strokeStyle = '#fff'; G.lineWidth = 6*K;
+    G.beginPath(); G.moveTo(p[0]+5*K, p[1]-22*K); G.lineTo(p[0]+12*K, p[1]-36*K); G.stroke();
+    G.strokeStyle = '#ff6b8a'; G.lineWidth = 3.4*K;
+    G.beginPath(); G.moveTo(p[0]+5*K, p[1]-22*K); G.lineTo(p[0]+12*K, p[1]-36*K); G.stroke();
+    G.restore();
+    break;
+
+  case 'icecream':
+    box(.1, .1, .8, .8, 0, 16, '#a8e6f0');
+    p = P(.5, .5, 17);
+    tri([[p[0]-9*K, p[1]-13*K], [p[0]+9*K, p[1]-13*K], [p[0], p[1]+4*K]], '#e8b36a', 4.6*K);
+    disc(p[0]-4.5*K, p[1]-18*K, 8*K, 7.4*K, '#ff9bc9', 4.2*K);
+    disc(p[0]+5*K, p[1]-19*K, 7.4*K, 7*K, '#fff59b', 4.2*K);
+    disc(p[0], p[1]-27*K, 7.8*K, 7.2*K, '#a8e6b4', 4.2*K);
+    disc(p[0]+1*K, p[1]-35*K, 3.4*K, 3.4*K, '#ff5d5d', 2.6*K, 1);
+    break;
+
+  case 'toilets':
+    box(.05, .05, .9, .9, 0, 22, '#5ad2e8');
+    box(.05, .05, .9, .9, 22, 4, '#fff');
+    fill([P(.24,.95,17), P(.76,.95,17), P(.76,.95,2), P(.24,.95,2)], '#2f6f80');
+    seam([P(.24,.95,17), P(.76,.95,17), P(.76,.95,2), P(.24,.95,2)]);
+    p = P(.5, .95, 20);
+    disc(p[0], p[1] - 3*K, 8.4*K, 8.4*K, '#fff', 4*K);
+    icon(p[0], p[1] - 3*K, 5*K, '#2b7fd4', 'drop');
+    break;
+
+  case 'bin':
+    box(.3, .3, .4, .4, 0, 14, '#7fc9a8');
+    p = P(.5, .5, 15);
+    disc(p[0], p[1] - 2*K, 14*K, 7*K, '#5fb98f', 4.4*K);
+    disc(p[0], p[1] - 7*K, 5*K, 3.4*K, '#fff', 3*K, 1);
+    G.save(); G.strokeStyle = 'rgba(255,255,255,.9)'; G.lineWidth = 2.4*K; G.lineCap = 'round';
+    for (i = 0; i < 3; i++){
+      a = p[0] - 7*K + i*7*K;
+      G.beginPath(); G.moveTo(a, p[1]+3*K); G.lineTo(a, p[1]+11*K); G.stroke();
+    }
+    G.restore();
+    break;
+
+  case 'bench':
+    box(.08, .28, .84, .3, 0, 6, '#e8b982');
+    box(.08, .52, .84, .09, 6, 13, '#e8b982', 3.6*K);
+    box(.1, .3, .08, .08, 0, 6, '#c98f5a', 2.6*K);
+    box(.82, .3, .08, .08, 0, 6, '#c98f5a', 2.6*K);
+    break;
+
+  case 'fountain':
+    box(.2, .2, 1.6, 1.6, 0, 8, '#bfe0ff');
+    p = P(1, 1, 9);
+    disc(p[0], p[1], 30*K, 15*K, '#7fc9ff', 5*K);
+    pole(1, 1, 9, 12, '#fff');
+    arcs(p[0], p[1] - 12*K, 8*K, 3.4*K, 7, 3*K, 1);
+    break;
+
+
+
+
+
+  case 'pond':
+    box(0, 0, 3, 2, 0, 6, '#bfe0ff');
+    p = P(1.5, 1, 7);
+    disc(p[0], p[1], 42*K, 21*K, '#5fc4f0', 5*K);
+    G.save(); G.globalAlpha = .5; G.strokeStyle = '#fff'; G.lineWidth = 2.6*K;
+    for (i = 0; i < 3; i++){
+      G.beginPath();
+      G.ellipse(p[0], p[1]+2*K, (12+i*11)*K, (6+i*5.5)*K, 0, 0, 6.283); G.stroke();
+    }
+    G.restore();
+    a = p[1] - 8*K + Math.sin(t*1.8)*3*K;
+    tri([[p[0]-14*K, a+6*K], [p[0]-2*K, a+8*K], [p[0]-9*K, a-14*K]], '#c56cf0', 4*K);
+    disc(p[0]+12*K, a - 2*K, 9*K, 7.4*K, '#fff', 4.2*K);
+    tri([[p[0]+9*K, a-8*K], [p[0]+13*K, a-8*K], [p[0]+11*K, a-19*K]], '#ffd166', 3.2*K);
+    break;
+  case 'gate':
+    box(.02, .32, .28, .36, 0, 13, '#ffd166');
+    box(1.70, .32, .28, .36, 0, 13, '#ffd166');
+    p = P(1, .5, 13);
+    arcs(p[0], p[1], 18*K, 2.8*K, 7, 3.6*K, 1, REPB);
+    f0 = P(.34, .8, 11), f1 = P(.34, .8, 2);
+    board((f0[0]+f1[0])/2, (f0[1]+f1[1])/2, 14*K, 11*K, '#fff', 4*K);
+    icon((f0[0]+f1[0])/2, (f0[1]+f1[1])/2, 4.4*K, '#b98708', 'ticket');
+    break;
+
+  }
+}
+
+
+/* =====================================================================
+   1. BUILDINGS
+   nd = need served (-1 = none), cap = simultaneous visitors,
+   g = gauge refill, u = wear per use,
+   m = maintenance action, dr = use duration, hz = drawing height.
+   ===================================================================== */
+var NEEDN = ['Have fun', 'Eat', 'Drink', 'Toilets', 'Rest'];
+var NEEDI = ['star', 'bag', 'cup', 'drop', 'zzz'];
+var NEEDC = ['#ffe66d', '#ff9b54', '#5fd6c0', '#7fc9ff', '#c9a6ff'];
+var LOWTXT = ['bored', 'hungry', 'thirsty', 'bursting', 'worn out'];
+var CATN = ['Rides', 'Zoo', 'Food', 'Comfort'];
+
+var TY = {
+ carousel :{n:'Carousel',      p:60, k:0, nd:0, w:2,d:2, cap:3, g:.55, u:.07, m:'wrench', dr:4,  hz:66},
+ merryGoRound    :{n:'Merry-go-round',p:120,k:0, nd:0, w:2,d:2, cap:4, g:.85, u:.07, m:'wrench', dr:5,  hz:88},
+ wheel      :{n:'Ferris wheel',  p:170,k:0, nd:0, w:2,d:2, cap:6, g:1,   u:.055,m:'wrench', dr:6,  hz:86},
+ meadow   :{n:'Meadow',        p:95, k:1, nd:0, w:3,d:2, cap:4, g:.60, u:.10, m:'heart',  dr:5,  hz:32},
+ pond    :{n:'Pond',       p:140,k:1, nd:0, w:3,d:2, cap:5, g:.85, u:.09, m:'heart',  dr:5,  hz:32},
+ sign   :{n:'Sign',          p:25, k:1, w:1,d:1, hz:40},
+ sandwich  :{n:'Sandwiches',    p:35, k:2, nd:1, w:1,d:1, cap:2, g:.90, u:.12, m:'bag',    dr:3,  hz:44},
+ icecream   :{n:'Ice cream',     p:45, k:2, nd:1, w:1,d:1, cap:2, g:1,   u:.11, m:'bag',    dr:3,  hz:56},
+ lemonade  :{n:'Lemonade',      p:30, k:2, nd:2, w:1,d:1, cap:2, g:1,   u:.12, m:'bag',    dr:3,  hz:56},
+ fountain  :{n:'Fountain',      p:55, k:2, nd:2, w:2,d:2, cap:3, g:.70, u:.06, m:'drop',   dr:2,  hz:46},
+ toilets :{n:'Toilets',       p:30, k:3, nd:3, w:1,d:1, cap:2, g:1,   u:.14, m:'broom',  dr:3,  hz:30},
+ bench      :{n:'Bench',         p:12, k:3, nd:4, w:1,d:1, cap:2, g:.80, u:.09, m:'broom',  dr:5,  hz:18},
+ bin  :{n:'Bin',           p:14, k:3, w:1,d:1, m:'bag',    hz:24},
+ shop  :{n:'Shop',     p:45, k:3, w:1,d:1, m:'bag',    hz:50},
+ gate    :{n:'Gate',          w:2,d:1}
+};
+/* Same order as TY, excluding the gate, which cannot be built.
+   Object.keys preserves insertion order, so no duplicate list is needed. */
+var ORDER = Object.keys(TY).filter(function(k){ return TY[k].p; });
+
+/* =====================================================================
+   2. GAME STATE
+   ===================================================================== */
+var EX = 9, EY = 15;                 // gate
+var DAY = 1, MAXDAY = 13, PH = 0;    // 0 morning, 1 open, 2 report
+var CR = 120, REP = 0, CLK, DAYLEN = 85, CLOSING, NB, SPAWNED;
+var BUILD = [], VIS = [], HAS = [0,0,0,0,0];
+var TT = 0, last = 0, UT = 0, TIP = 0, BUSYMSG = 'Busy building.';
+var SPARK = [], BEAM = [], POP = [];
+
+/* Campaign scores count completed days; the opening treasury is not revenue.
+   Wavedash injects its API. No SDK, script or network resource is loaded here. */
+var RUN = [0,0,0], DAYS = 0;
+var BOARDS = 'Happiest Park,Rainbow Tycoon,Crowd Pleaser'.split(',');
+var ACH = 'FIRST_SPARK,SOMETHING_FOR_EVERYONE,ALL_THE_FUN,ANIMAL_MAGIC,RAINBOW_RESCUE,HAPPY_CROWD,FULL_HOUSE,SMOOTH_OPERATOR,RAINBOW_MASTER,THE_GRAND_PARADE'.split(',');
+var AK = 'unicorn-tycoon.achievements.v1', AM = 0, AS = 0, AQ = [], AT = 0;
+var WD = window.Wavedash, WR = 0;
+try { AM = localStorage.getItem(AK) & 1023; } catch(e){}
+function saveAwards(){ try { localStorage.setItem(AK, AM); } catch(e){} }
+/* Each call has its own guard: an unavailable platform never stops play. */
+async function wd(method, ...args){
+  try { if (WD) return await WD[method](...args); } catch(e){}
+}
+async function syncAward(i){
+  var bit = 1 << i;
+  if (!WR || (AS & bit)) return;
+  AS |= bit;
+  if (await wd('getAchievement', ACH[i])){ AM |= bit; saveAwards(); }
+  else if (!(AM & bit) || !await wd('setAchievement', ACH[i], true)) AS &= ~bit;
+}
+function award(i){
+  var bit = 1 << i;
+  if (!(AM & bit)){ AM |= bit; saveAwards(); AQ.push(i); }
+  syncAward(i);
+}
+async function submitBoard(i, score){
+  var r = await wd('getOrCreateLeaderboard', BOARDS[i].toLowerCase().replace(/ /g, '-')+'-v1', 1, 0);
+  if (score !== undefined && r && r.success && r.data && r.data.id)
+    await wd('uploadLeaderboardScore', r.data.id, score, true);
+}
+
+function mk(id, x, y){
+  var q = TY[id];
+  var b = { t:id, x:x, y:y, cx:x + q.w/2, cy:y + q.d/2,
+            wear:0, n:0, bonus:1, ph:sr()*6.3 };
+  BUILD.push(b);
+  for (var i = DECOR ? DECOR.length-1 : -1; i >= 0; i--)   // clear the ground
+    if (DECOR[i].x > x-.6 && DECOR[i].x < x+q.w+.6 &&
+        DECOR[i].y > y-.6 && DECOR[i].y < y+q.d+.6) DECOR.splice(i, 1);
+  relink();
+}
+/* Recalculate synergies after each placement: infrequent and inexpensive. */
+function relink(){
+  var i, j, b, o;
+  for (i = 0; i < 5; i++) HAS[i] = 0;
+  for (i = 0; i < BUILD.length; i++){
+    b = BUILD[i]; var q = TY[b.t];
+    if (q.nd >= 0) HAS[q.nd] = 1;
+    b.bonus = 1;
+    if (q.k === 1 && q.nd === 0){
+      for (j = 0; j < BUILD.length; j++){
+        o = BUILD[j];
+        if (o.t === 'sign' && Math.hypot(o.cx-b.cx, o.cy-b.cy) < 5){ b.bonus = 1.5; break; }
+      }
+    }
+  }
+}
+function near(b, id, rad){
+  for (var i = 0; i < BUILD.length; i++){
+    var o = BUILD[i];
+    if (o.t === id && o.wear < 1 && Math.hypot(o.cx-b.cx, o.cy-b.cy) < rad) return o;
+  }
+  return null;
+}
+/* Each copy of a building costs more. Otherwise, the winning strategy
+   would be to fill the grid with 12-credit benches. Meeting a missing need
+   should be more rewarding than duplicating an existing building. */
+function price(id){
+  var n = 0;
+  for (var i = 0; i < BUILD.length; i++) if (BUILD[i].t === id) n++;
+  return Math.round(TY[id].p * (1 + n*.38));
+}
+function canPlace(id, x, y){
+  var s = TY[id], i, b, q;
+  if (x < .5 || y < .5 || x+s.w > GRID-.5 || y+s.d > GRID-.5) return 0;
+  for (i = 0; i < BUILD.length; i++){
+    b = BUILD[i]; q = TY[b.t];
+    if (x < b.x+q.w && x+s.w > b.x && y < b.y+q.d && y+s.d > b.y) return 0;
+  }
+  return 1;
+}
+mk('gate', EX, EY);
+mk('carousel', 9, 10);
+
+/* Daily statistics, reset every morning. */
+var DS;
+function resetDay(){
+  DS = { vis:0, n:0, sat:[0,0,0,0,0], low:[0,0,0,0,0], miss:[0,0,0,0,0],
+         uses:{}, broke:{}, brokeN:0, angry:0, happy:0, mood:0, income:0 };
+}
+resetDay();
+
+/* =====================================================================
+   3. THE UNICORN: you.
+   ===================================================================== */
+var PL = { x:EX+3.6, y:EY-2.4, tx:EX+3.6, ty:EY-2.4, sp:3.0, ph:0, task:null, build:0, idle:2, f:1 };
+
+/* =====================================================================
+   4. SCENERY
+   ===================================================================== */
+var DECOR = [];
+function onBuild(x, y, m){
+  for (var i = 0; i < BUILD.length; i++){
+    var b = BUILD[i], q = TY[b.t];
+    if (x > b.x-m && x < b.x+q.w+m && y > b.y-m && y < b.y+q.d+m) return 1;
+  }
+  return 0;
+}
+(function(){
+  var i, tx, ty;
+  for (i = 0; i < 26; i++){
+    tx = i%2 ? sr()*GRID : (sr()<.5 ? sr()*1.5 : GRID-sr()*1.5);
+    ty = i%2 ? (sr()<.5 ? sr()*1.5 : GRID-sr()*1.5) : sr()*GRID;
+    var far = !onBuild(tx, ty, .9);
+    for (var j = 0; j < DECOR.length && far; j++)
+      if (Math.hypot(DECOR[j].x-tx, DECOR[j].y-ty) < 1.5){ far = 0; break; }
+    if (far) DECOR.push({x:tx, y:ty, s:.8+sr()*.45, ph:sr()*6.3});
+  }
+})();
+
+/* =====================================================================
+   5. VISITORS: five needs, a mood and a wallet.
+   ===================================================================== */
+var DEC  = [.030, .026, .032, .016, .014];   // rate at which each need returns
+var PRIO = [-.18, 0, -.02, .04, .10];        // bias: visitors come primarily to have fun
+
+function spawn(){
+  var v = { x:EX+.5+sr(), y:EY+2.4, st:0, tgt:null, wait:.4+sr()*.7,
+            sat:[.05+sr()*.12, .52+sr()*.24, .46+sr()*.24, .72+sr()*.18, .8+sr()*.15],
+            acc:[0,0,0,0,0], time:.001, mood:.85, need:0, shop:0,
+            sp:1.75+sr()*.55, ph:sr()*6.3, calm:0,
+            sh:SHIRTS[sr()*SHIRTS.length|0], hr:HAIRS[sr()*HAIRS.length|0],
+            sk:SKIN[sr()*SKIN.length|0], hat:sr()<.3 };
+  VIS.push(v); DS.vis++; CR += 3; DS.income += 3;
+  pop(v.x, v.y, '+3', '#ffd166');
+}
+function release(v){
+  if (v.tgt){ v.tgt.n--; v.tgt = null; }
+}
+function pickNeed(v){
+  var k, s, best = -1, bv = 9, raw = -1, rv = 9;
+  for (k = 0; k < 5; k++){
+    s = v.sat[k] + PRIO[k];
+    if (s < rv){ rv = s; raw = k; }
+    if (HAS[k] && s < bv){ bv = s; best = k; }
+  }
+  if (!HAS[raw] && v.sat[raw] < .5){ v.mood -= .035; DS.miss[raw]++; }
+  return best;
+}
+function seek(v){
+  release(v);
+  var need = pickNeed(v);
+  if (need < 0){ v.st = 3; v.wait = 2.2; return; }
+  v.need = need;
+  var i, b, q, d, best = null, bd = 1e9, broken = 0, bkd = 1e9, bkt = 0;
+  for (i = 0; i < BUILD.length; i++){
+    b = BUILD[i]; q = TY[b.t];
+    if (q.nd !== need) continue;
+    d = Math.hypot(b.cx-v.x, b.cy-v.y);
+    if (b.wear >= 1){ broken = 1; if (d < bkd){ bkd = d; bkt = b.t; } continue; }
+    if (b.n >= q.cap) continue;
+    if (d < bd){ bd = d; best = b; }
+  }
+  if (!best){
+    v.st = 3; v.wait = 1.8 + sr();
+    v.mood -= broken ? .13 : .07;
+    if (broken){ DS.brokeN++; DS.broke[bkt] = (DS.broke[bkt]||0) + 1; }
+    return;
+  }
+  /* The nearest building was out of service: walking farther has a cost.
+     Without this penalty, a large enough park would make maintenance pointless. */
+  if (broken && bkd < bd - .6){
+    v.mood -= .09; DS.brokeN++; DS.broke[bkt] = (DS.broke[bkt]||0) + 1;
+  }
+  best.n++; v.tgt = best;
+  var qq = TY[best.t];
+  v.tx = best.cx + (sr()-.5)*(qq.w*.7);
+  v.ty = best.cy + qq.d/2 + .55;
+  v.st = 1;
+}
+function leaveNow(v){ release(v); v.st = 4; v.tx = EX+1; v.ty = EY+2.8; }
+/* A perfectly maintained gauge oscillates between 1 and .3, averaging
+   about .62. Without normalization, a flawless park would display 55%,
+   suggesting failure. .62 represents an achievable 100% score. */
+function grade(a){ return Math.min(1, a/.62); }
+function payAndGo(v, i){
+  var k, s = 0;
+  for (k = 0; k < 5; k++){
+    var a = grade(v.acc[k]/v.time);
+    s += a; DS.sat[k] += a; if (a < .5) DS.low[k]++;
+  }
+  s /= 5; DS.n++; DS.mood += v.mood;
+  if (v.mood < .35) DS.angry++; else if (v.mood > .78 && s > .7) DS.happy++;
+  var pay = Math.round(30*s*(.35 + .65*v.mood));
+  CR += pay; DS.income += pay;
+  if (pay > 0) pop(v.x, v.y, '+'+pay, s > .66 ? '#3fbf6f' : '#ffd166');
+  sfx(s > .66 ? 1 : 0);
+  VIS.splice(i, 1);
+}
+function stepVisitors(dt){
+  var i, v, q, dx, dy, d, k;
+  for (i = VIS.length-1; i >= 0; i--){
+    v = VIS[i];
+    v.time += dt;
+    for (k = 0; k < 5; k++){
+      v.sat[k] -= DEC[k]*dt; if (v.sat[k] < 0) v.sat[k] = 0;
+      v.acc[k] += v.sat[k]*dt;
+    }
+    /* Nearby fountains slow mood decay in addition to serving drinks. */
+    if ((i + (TT*4|0)) % 5 === 0){
+      v.calm = 0;
+      for (k = 0; k < BUILD.length; k++){
+        var o = BUILD[k];
+        if (o.t === 'fountain' &&
+            Math.hypot(o.cx-v.x, o.cy-v.y) < 3.4){ v.calm = 1; break; }
+      }
+    }
+    v.mood -= dt*(v.st === 3 ? .055 : .009)*(v.calm ? .45 : 1);
+    if (v.mood < 0) v.mood = 0;
+    if (v.mood <= .02 && v.st !== 4) leaveNow(v);
+
+
+    /* The shop serves no need: it turns existing happiness into credits.
+       It rewards a successful park rather than being a necessity. */
+    v.shop -= dt;
+    if (v.mood > .7 && v.shop <= 0){
+      for (k = 0; k < BUILD.length; k++){
+        var o = BUILD[k];
+        if (o.t === 'shop' && o.wear < 1 &&
+            Math.hypot(o.cx-v.x, o.cy-v.y) < 1.9){
+          CR += 5; DS.income += 5; o.wear += .09; v.shop = 14;
+          pop(v.x, v.y, '+5', '#54a0ff'); break;
+        }
+      }
+    }
+
+    if (v.st === 2){
+      v.use -= dt;
+      if (v.use <= 0){
+        var b = v.tgt;
+        if (b){
+          q = TY[b.t];
+          v.sat[q.nd] = Math.min(1, v.sat[q.nd] + q.g*b.bonus);
+          v.mood = Math.min(1, v.mood + .07);
+          CR += 1; DS.income += 1;
+          DS.uses[b.t] = (DS.uses[b.t]||0) + 1;
+          var wu = q.u;
+          if (q.k === 2 && q.nd >= 0){
+            var bin = near(b, 'bin', 4.5);
+            if (bin){ wu *= .6; bin.wear = Math.min(1.4, bin.wear + .06); }
+          }
+          b.wear = Math.min(1.4, b.wear + wu);
+          /* Show this hint once per game, when the first yellow bubble appears.
+             After that, the player knows what to do. */
+          if (!TIP && b.wear > .55){ TIP = 1; say('Tap to repair', 3600); }
+          if (SPARK.length < 90){
+            var pb = P(v.x, v.y, 20);
+            for (k = 0; k < 4; k++)
+              SPARK.push({x:pb[0]+(sr()-.5)*14*K, y:pb[1]-sr()*8*K, a:1,
+                          c:'#ff6b8a', r:1.5+sr()});
+          }
+        }
+        release(v); v.st = 0; v.wait = .25 + sr()*.4;
+      }
+      continue;
+    }
+    if (v.st === 3 || v.st === 0){
+      v.wait -= dt;
+      if (v.wait <= 0){ if (CLOSING) leaveNow(v); else seek(v); }
+      else if (v.st === 3){                       // wander around, disappointed
+        v.x += Math.cos(TT*.9 + v.ph)*dt*.35;
+        v.y += Math.sin(TT*.9 + v.ph)*dt*.35;
+      }
+      continue;
+    }
+    dx = v.tx-v.x; dy = v.ty-v.y; d = Math.hypot(dx, dy);
+    if (d < .38){
+      if (v.st === 4){ payAndGo(v, i); continue; }
+      var b = v.tgt;
+      if (!b){ v.st = 0; v.wait = .2; continue; }
+      q = TY[b.t];
+      if (b.wear >= 1){                          // breaks down while the visitor is walking there
+        DS.brokeN++; DS.broke[b.t] = (DS.broke[b.t]||0) + 1;
+        release(v); v.mood -= .09; v.st = 3; v.wait = 1.4; continue;
+      }
+      v.st = 2; v.use = q.dr;
+    } else {
+      v.x += dx/d*v.sp*dt; v.y += dy/d*v.sp*dt;
+    }
+  }
+}
+
+/* =====================================================================
+   6. THE UNICORN WALKS TO BUILD
+   ===================================================================== */
+function stepPlayer(dt){
+  var dx = PL.tx-PL.x, dy = PL.ty-PL.y, d = Math.hypot(dx, dy);
+  if (d > .2){ PL.x += dx/d*PL.sp*dt; PL.y += dy/d*PL.sp*dt; return; }
+  if (!PL.task){
+    /* She wanders while the park is open: a stationary unicorn does not feel
+       like an avatar. Tapping the ground takes control again. */
+    if (PH === 1 && (PL.idle -= dt) < 0){
+      PL.idle = 3 + sr()*4;
+      var b = BUILD[(sr()*BUILD.length)|0];
+      PL.tx = Math.max(.8, Math.min(GRID-.8, b.cx + (sr()-.5)*4));
+      PL.ty = Math.max(.8, Math.min(GRID-.8, b.cy + 1.2 + (sr()-.5)*3));
+    }
+    return;
+  }
+  PL.build += dt;
+  var p = P(PL.task.x + TY[PL.task.t].w/2, PL.task.y + TY[PL.task.t].d/2, 6);
+  if (sr() < .7)
+    SPARK.push({x:p[0]+(sr()-.5)*40*K, y:p[1]-sr()*30*K, a:1, c:RAINBOW[sr()*7|0], r:2+sr()*2.4});
+  if (PL.build > 1.1){
+    mk(PL.task.t, PL.task.x, PL.task.y);
+    award(0);
+    if (HAS.every(function(n){ return n; })) award(1);
+    if (['carousel','merryGoRound','wheel'].every(function(t){
+      return BUILD.some(function(b){ return b.t === t; }); })) award(2);
+    if (BUILD.some(function(b){ return b.bonus > 1; })) award(3);
+    say(TY[PL.task.t].n + ' built!', 1600);
+    sfx(2);
+    PL.task = null; PL.build = 0;
+    refreshMenu(); upd();
+  }
+}
+function order(id, x, y){
+  var q = TY[id];
+  if (PL.task) return 0;                 // only one construction at a time
+  CR -= price(id); PL.task = {t:id, x:x, y:y}; PL.build = 0;
+  PL.tx = Math.max(.6, Math.min(GRID-.6, x + q.w/2 - 1.4));
+  PL.ty = Math.max(.6, Math.min(GRID-.6, y + q.d + .9));
+  upd(); return 1;
+}
+
+/* =====================================================================
+   7. MAINTENANCE: one tap, and the unicorn repairs from a distance.
+   ===================================================================== */
+function repair(b){
+  var q = TY[b.t];
+  if (!q.m || b.wear < .25) return 0;
+  var was = b.wear;
+  b.wear = 0;
+  var a = P(PL.x, PL.y, 26), c2 = P(b.cx, b.cy, q.hz*.45);
+  BEAM.push({x0:a[0], y0:a[1], x1:c2[0], y1:c2[1], a:1});
+  for (var i = 0; i < 9; i++)
+    SPARK.push({x:c2[0]+(sr()-.5)*34*K, y:c2[1]+(sr()-.5)*26*K, a:1,
+                c:RAINBOW[sr()*7|0], r:2+sr()*2.2});
+  sfx(3);
+  if (was >= 1){ award(4); say('Back in service!', 1400); }
+  return 1;
+}
+
+/* =====================================================================
+   8. DRAWING
+   ===================================================================== */
+/* Zoo animals use the same visual structure as the unicorn: a body,
+   a head and a distinctive feature. 0 = sheep, 1 = rabbit, 2 = chick. */
+/* Meadow sheep: body, fleece, head and horns. Sheep are the only zoo
+   animals left since the aviary and nursery were removed. */
+/* Like arcs(), but only the first n bands are lit:
+   the entrance arch is the park's reputation gauge. */
+/* Also used for the halo: the golden circle beneath the unicorn used
+   to duplicate the same ground ellipse with a different color. */
+function shadow(x, y, r, c, a){
+  var p = P(x, y, 0);
+  G.save(); G.globalAlpha = a || .16; G.fillStyle = c || '#000';
+  G.beginPath(); G.ellipse(p[0], p[1], r*HW, r*HH, 0, 0, 6.283); G.fill(); G.restore();
+}
+function pop(x, y, txt, col){
+  if (POP.length > 40) POP.shift();
+  POP.push({x:x, y:y, t:txt, c:col, a:1, o:0});
+}
+function paintBuilding(b, t){
+  BX = b.x; BY = b.y;
+  draw(b.t, t);
+  BX = 0; BY = 0;
+  if (b.wear >= 1){                         // out of service: a gray overlay makes it immediately visible
+    var q = TY[b.t];
+    var pts = [P(b.x,b.y,0), P(b.x+q.w,b.y,0), P(b.x+q.w,b.y+q.d,0), P(b.x,b.y+q.d,0)];
+    G.save(); G.globalAlpha = .34; fill(pts, '#5c4a70'); G.restore();
+  }
+}
+function paintGhost(g, t){
+  var q = TY[g.t];
+  var pts = [P(g.x,g.y,0), P(g.x+q.w,g.y,0), P(g.x+q.w,g.y+q.d,0), P(g.x,g.y+q.d,0)];
+  G.save(); G.globalAlpha = .5; fill(pts, g.ok ? '#7bed9f' : '#ff5d5d');
+  G.strokeStyle = '#fff'; G.lineWidth = 3.5*K; path(pts); G.stroke();
+  G.globalAlpha = g.ok ? .55 : .25;
+  BX = g.x; BY = g.y; draw(g.t, t); BX = 0; BY = 0;
+  G.restore();
+}
+function drawTree(o, t){
+  var s = o.s, sway = Math.sin(t*.9 + o.ph)*2.2*K;
+  box(o.x-.09*s, o.y-.09*s, .18*s, .18*s, 0, 17*s, '#c98f5a', 4*K);
+  var c1 = P(o.x, o.y, 17*s);
+  disc(c1[0]+sway, c1[1]-9*K*s, 19*K*s, 15*K*s, '#6fcf7a', 5.6*K);
+  disc(c1[0]+sway-7*K*s, c1[1]-17*K*s, 12*K*s, 10*K*s, '#8ce08f', 5*K);
+  disc(c1[0]+sway+8*K*s, c1[1]-14*K*s, 10*K*s, 8.5*K*s, '#8ce08f', 5*K);
+}
+function drawVisitor(v, t){
+  var hop = v.st === 2 || v.st === 3 ? Math.abs(Math.sin(t*3 + v.ph))*.4 : Math.abs(Math.sin(t*6.4 + v.ph));
+  var lift = hop*3.6*K, sq = 1 + hop*.10;
+  shadow(v.x, v.y, .19);
+  box(v.x-.10, v.y-.10, .20, .20, hop*2.25, 11*sq, v.sh, 4.4*K);
+  var hp = P(v.x, v.y, 12*sq); hp[1] -= lift;
+  var hr = 8.2*K;
+  disc(hp[0], hp[1], hr, hr, v.sk, 4.4*K);
+  G.save();
+  G.strokeStyle = v.hr; G.lineWidth = 4.6*K; G.lineCap = 'round';
+  G.beginPath(); G.arc(hp[0], hp[1]-.6*K, hr*.82, Math.PI*1.08, Math.PI*1.92); G.stroke();
+  if (v.hat){
+    G.strokeStyle = '#fff'; G.lineWidth = 5.6*K;
+    G.beginPath(); G.moveTo(hp[0]-hr*.95, hp[1]-hr*.42); G.lineTo(hp[0]+hr*.95, hp[1]-hr*.42); G.stroke();
+    G.strokeStyle = '#ff6b8a'; G.lineWidth = 3.4*K;
+    G.beginPath(); G.moveTo(hp[0]-hr*.95, hp[1]-hr*.42); G.lineTo(hp[0]+hr*.95, hp[1]-hr*.42); G.stroke();
+  }
+  if (FINE){
+    G.globalAlpha = .55; G.fillStyle = '#ff9bb5';
+    G.beginPath(); G.arc(hp[0]-3.6*K, hp[1]+2.2*K, 1.9*K, 0, 6.283);
+    G.arc(hp[0]+3.6*K, hp[1]+2.2*K, 1.9*K, 0, 6.283); G.fill();
+    G.globalAlpha = 1; G.fillStyle = '#4a3040';
+    G.beginPath(); G.arc(hp[0]-2.7*K, hp[1]-.4*K, 1.25*K, 0, 6.283);
+    G.arc(hp[0]+2.7*K, hp[1]-.4*K, 1.25*K, 0, 6.283); G.fill();
+    /* The mouth is the mood gauge: smile, straight line or frown. */
+    G.strokeStyle = '#4a3040'; G.lineWidth = 1.3*K; G.lineCap = 'round';
+    G.beginPath();
+    if (v.mood > .55)      G.arc(hp[0], hp[1]+1.4*K, 2.4*K, .25, Math.PI-.25);
+    else if (v.mood > .3){ G.moveTo(hp[0]-2.2*K, hp[1]+3*K); G.lineTo(hp[0]+2.2*K, hp[1]+3*K); }
+    else                   G.arc(hp[0], hp[1]+5.2*K, 2.4*K, Math.PI+.25, -.25);
+    G.stroke();
+  }
+  G.restore();
+  if (v.st === 1 || v.st === 3){
+    var col = v.st === 3 ? '#ff5d5d' : NEEDC[v.need];
+    disc(hp[0], hp[1]-19*K, 7.4*K, 7.4*K, col, 3.4*K);
+    if (FINE) icon(hp[0], hp[1]-19*K, 5*K, tone(col, .34), NEEDI[v.need]);
+  }
+}
+function drawPlayer(u, t){
+  var mv = Math.hypot(u.tx-u.x, u.ty-u.y) > .2;
+  /* In isometric projection, moving left on screen means (dx-dy) < 0:
+     equal movement along x and y has no horizontal effect. Keep the last
+     direction when stopped so the unicorn does not turn in place. */
+  if (mv) u.f = u.tx-u.x < u.ty-u.y ? -1 : 1;
+  var hop = Math.abs(Math.sin(t*6 + u.ph)), lift = hop*4*K;
+  /* She used to be smaller than a tree and hard to find. A golden ground
+     halo and doubled size make her immediately recognizable. */
+  shadow(u.x, u.y, .94, '#ffe66d', .36);
+  shadow(u.x, u.y, .42);
+  var p = P(u.x, u.y, 4); p[1] -= lift;
+  /* Mirror around her own axis: f=1 preserves the drawing; f=-1 maps
+     x to 2*p[0]-x. One drawing works in both directions. */
+  G.save(); G.translate(p[0], 0); G.scale(u.f, 1);
+  uni(0, p[1], 2, t);
+  G.restore();
+}
+/* Draw bubbles AFTER depth sorting: an alert hidden behind the Ferris
+   wheel would be useless. */
+function bubbles(t){
+  var i, b, q, p, r, pulse, col, kind;
+  for (i = 0; i < BUILD.length; i++){
+    b = BUILD[i]; q = TY[b.t];
+    if (!q.m || b.wear < .55) continue;
+    p = P(b.cx, b.cy, q.hz + 16);
+    if (!onScreen(p, 40*K)) continue;
+    var dead = b.wear >= 1;
+    pulse = dead ? Math.abs(Math.sin(t*4.5)) : Math.abs(Math.sin(t*2 + b.ph))*.5;
+    r = (dead ? 14 : 11.5)*K*(1 + pulse*.14);
+    col = dead ? '#ff5d5d' : '#ffc23d';
+    disc(p[0], p[1] - pulse*3*K, r, r, col, 3.8*K);
+    icon(p[0], p[1] - pulse*3*K, r*.6, '#fff', q.m);
+  }
+  if (PH === 0 && !PL.task){                    // "tap me" above the unicorn
+    p = P(PL.x, PL.y, 52);
+    var bb = Math.abs(Math.sin(t*2.6))*3*K;
+    disc(p[0], p[1]-bb, 13*K, 13*K, '#8455cf', 4*K);
+    G.strokeStyle = '#fff'; G.lineWidth = 3.6*K; G.lineCap = 'round';
+    G.beginPath();
+    G.moveTo(p[0]-5.4*K, p[1]-bb); G.lineTo(p[0]+5.4*K, p[1]-bb);
+    G.moveTo(p[0], p[1]-bb-5.4*K); G.lineTo(p[0], p[1]-bb+5.4*K); G.stroke();
+  }
+}
+function tilePath(gx, gy){
+  var a = P(gx,gy,0), b = P(gx+1,gy,0), c = P(gx+1,gy+1,0), e = P(gx,gy+1,0);
+  G.moveTo(a[0],a[1]); G.lineTo(b[0],b[1]); G.lineTo(c[0],c[1]); G.lineTo(e[0],e[1]);
+  G.closePath();
+}
+function ground(){
+  var A = P(0,0,0), B = P(GRID,0,0), Cc = P(GRID,GRID,0), D = P(0,GRID,0);
+  G.save(); G.globalAlpha = .17; G.fillStyle = '#4a2a6e';
+  G.translate(0, 8*K); path([A,B,Cc,D]); G.fill(); G.restore();
+  G.strokeStyle = '#fff'; G.lineWidth = 10*K; G.lineJoin = 'round';
+  path([A,B,Cc,D]); G.stroke();
+  fill([A,B,Cc,D], '#8ee06a');
+  var gx, gy, m = 70*K;
+  G.beginPath();
+  for (gy = 0; gy < GRID; gy++) for (gx = 0; gx < GRID; gx++){
+    if (((gx+gy) & 1) === 0) continue;
+    if (!onScreen(P(gx,gy,0), m, m)) continue;
+    tilePath(gx, gy);
+  }
+  G.fillStyle = '#7fd75d'; G.fill();
+}
+function drawFX(dt){
+  var i, p;
+  for (i = BEAM.length-1; i >= 0; i--){
+    p = BEAM[i]; p.a -= dt*2.2;
+    if (p.a <= 0){ BEAM.splice(i,1); continue; }
+    G.save(); G.globalAlpha = p.a; G.lineCap = 'round';
+    G.strokeStyle = '#fff'; G.lineWidth = 9*K;
+    G.beginPath(); G.moveTo(p.x0,p.y0); G.lineTo(p.x1,p.y1); G.stroke();
+    for (var j = 0; j < 3; j++){
+      G.strokeStyle = RAINBOW[(j*2 + (TT*10|0)) % 7]; G.lineWidth = (5-j*1.4)*K;
+      G.beginPath();
+      G.moveTo(p.x0, p.y0 + (j-1)*3*K); G.lineTo(p.x1, p.y1 + (j-1)*3*K); G.stroke();
+    }
+    G.restore();
+  }
+  for (i = SPARK.length-1; i >= 0; i--){
+    p = SPARK[i]; p.y -= .5*K; p.a -= dt*1.5;
+    if (p.a <= 0){ SPARK.splice(i,1); continue; }
+    G.save(); G.globalAlpha = p.a; G.fillStyle = p.c;
+    var r = p.r*K;
+    G.beginPath();
+    G.moveTo(p.x, p.y-r*2); G.lineTo(p.x+r*.55, p.y-r*.55); G.lineTo(p.x+r*2, p.y);
+    G.lineTo(p.x+r*.55, p.y+r*.55); G.lineTo(p.x, p.y+r*2); G.lineTo(p.x-r*.55, p.y+r*.55);
+    G.lineTo(p.x-r*2, p.y); G.lineTo(p.x-r*.55, p.y-r*.55);
+    G.closePath(); G.fill(); G.restore();
+  }
+  for (i = POP.length-1; i >= 0; i--){
+    p = POP[i]; p.o += dt*26; p.a -= dt*.85;
+    if (p.a <= 0){ POP.splice(i,1); continue; }
+    var q = P(p.x, p.y, 26);
+    G.save(); G.globalAlpha = p.a;
+    G.font = 'bold ' + (15*K|0) + 'px system-ui,sans-serif';
+    G.textAlign = 'center'; G.lineJoin = 'round';
+    G.strokeStyle = '#fff'; G.lineWidth = 4.5*K;
+    G.strokeText(p.t, q[0], q[1]-p.o*K);
+    G.fillStyle = p.c; G.fillText(p.t, q[0], q[1]-p.o*K);
+    G.restore();
+  }
+}
+function mix(a, b, f){
+  return 'rgb(' + [0,1,2].map(function(i){
+    var u = parseInt(a.substr(1+i*2,2),16), v = parseInt(b.substr(1+i*2,2),16);
+    return (u + (v-u)*f)|0;
+  }).join(',') + ')';
+}
+function render(dt){
+  var prog = PH === 1 ? CLK/DAYLEN : 0;
+  var sun = PH === 0 ? 0 : Math.max(0, prog-.45)/.55;
+  var gr = X.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, mix('#bfe6ff', '#ffb27a', sun));
+  gr.addColorStop(1, mix(PH === 0 ? '#ffe9c9' : '#ffe3f4', '#ff8fae', sun));
+  X.fillStyle = gr; X.fillRect(0, 0, W, H);
+  ground();
+  var list = [], i;
+  for (i = 0; i < BUILD.length; i++){
+    var b = BUILD[i], q = TY[b.t];
+    if (!onScreen(P(b.cx, b.cy, 0), 130*K, 260*K)) continue;
+    list.push({z:b.cx+b.cy, f:paintBuilding, a:b});
+  }
+  for (i = 0; i < DECOR.length; i++){
+    var o = DECOR[i];
+    if (!onScreen(P(o.x, o.y, 0), 60*K, 110*K)) continue;
+    list.push({z:o.x+o.y, f:drawTree, a:o});
+  }
+  for (i = 0; i < VIS.length; i++){
+    var v = VIS[i];
+    if (!onScreen(P(v.x, v.y, 0), 40*K, 70*K)) continue;
+    list.push({z:v.x+v.y, f:drawVisitor, a:v});
+  }
+  list.push({z:PL.x+PL.y, f:drawPlayer, a:PL});
+  if (GH) list.push({z:GH.x+TY[GH.t].w/2 + GH.y+TY[GH.t].d/2 - .01, f:paintGhost, a:GH});
+  if (PL.task) list.push({z:PL.task.x+.5 + PL.task.y+.5 - .01, f:paintGhost,
+                          a:{t:PL.task.t, x:PL.task.x, y:PL.task.y, ok:1}});
+  list.sort(function(p, q2){ return p.z - q2.z; });
+  for (i = 0; i < list.length; i++) list[i].f(list[i].a, TT);
+  bubbles(TT);
+  drawFX(dt);
+}
+
+/* =====================================================================
+   9. LOOP AND PHASES
+   ===================================================================== */
+function step(dt){
+  TT += dt;
+  if ((AT -= dt) <= 0){
+    el('ac').textContent = AQ.length ? '\u2605 ' + ACH[AQ.shift()].replace(/_/g, ' ') : '';
+    AT = 4;
+  }
+  /* Play each day 1.3x faster. Speed up the simulation AFTER advancing TT
+     so animations stay calm. Since walking, needs, waiting and wear all
+     speed up together, the day produces the same result, only sooner. */
+  dt *= 1.3;
+  if (PH === 1){
+    CLK += dt;
+    var prog = CLK/DAYLEN;
+    while (SPAWNED < NB && prog > (SPAWNED+.35)/NB*.6){ spawn(); SPAWNED++; }
+    if (prog >= 1 && !CLOSING){
+      CLOSING = 1; say('The park is closing.', 2200);
+      for (var i = 0; i < VIS.length; i++) if (VIS[i].st !== 2) leaveNow(VIS[i]);
+    }
+    if (CLOSING && !VIS.length) endDay();
+    if ((UT -= dt) < 0){ UT = .25; upd(); }
+  }
+  stepPlayer(dt);
+  if (PH === 1) stepVisitors(dt);
+  if (!drag){
+    cam.x += cam.vx; cam.y += cam.vy;
+    cam.vx *= .93; cam.vy *= .93;
+    if (Math.abs(cam.vx) < .02) cam.vx = 0;
+    if (Math.abs(cam.vy) < .02) cam.vy = 0;
+  }
+  var lim = GRID*HW*.72 + W*.10, limy = GRID*HH*.72 + H*.16;
+  cam.x = Math.max(-lim, Math.min(lim, cam.x));
+  cam.y = Math.max(-limy, Math.min(limy, cam.y));
+}
+function loop(t){
+  var dt = Math.min(.05, (t-last)/1000); last = t;
+  fit(); step(dt); render(dt);
+  requestAnimationFrame(loop);
+}
+function openPark(){
+  if (PH !== 0) return;
+  if (PL.task){ say(BUSYMSG, 1600); return; }
+  PH = 1; CLK = 0; CLOSING = 0; SPAWNED = 0;
+  NB = 4 + DAY + Math.round(REP*9);
+  closeMenu(); GH = null; el('p').className = 'A';
+  el('k').style.display = 'block';
+  say(NB + ' visitors on their way!', 2600);
+  BUSY = 1; sfx(2); upd();
+}
+function endDay(){
+  if (PH !== 1) return;
+  PH = 2;
+  var i, k, s = 0;
+  for (k = 0; k < 5; k++) DS.sat[k] = DS.n ? DS.sat[k]/DS.n : 0;
+  for (k = 0; k < 5; k++) s += DS.sat[k];
+  DS.mood = DS.n ? DS.mood/DS.n : 0;
+  /* The rating combines need gauges AND mood: mood absorbs the cost
+     of detours around buildings that are out of service. */
+  s = s/5 * (.45 + .55*DS.mood);
+  REP = REP*.55 + s*.45;
+  REPB = 1 + Math.round(REP*6);
+  RUN[0] += s; RUN[1] += DS.income; RUN[2] += DS.happy;
+  if (DS.happy >= 10) award(5);
+  if (DS.vis >= 20) award(6);
+  if (DS.vis >= 15 && !DS.angry && !DS.brokeN) award(7);
+  if (REPB >= 6) award(8);
+  if (++DAYS === MAXDAY){
+    RUN[0] = Math.round(RUN[0]/MAXDAY*10000);
+    award(9);
+    RUN.forEach(function(score, i){ submitBoard(i, score); });
+  }
+  ACH.forEach(function(id, i){ syncAward(i); });
+  BUSY = 0;
+  el('k').style.display = 'none';
+  showReport(s);
+}
+function nextDay(){
+  if (PH !== 2) return;
+  el('l').className = '';
+  if (DAY >= MAXDAY){ showEnd(); return; }
+  DAY++;
+  for (var i = 0; i < BUILD.length; i++){ BUILD[i].wear = 0; BUILD[i].n = 0; }
+  resetDay(); PH = 0;
+  upd();
+  var m = missing();
+  say(m.length ? 'Day ' + DAY + '. Nobody can: ' + m.join(', ') + '.'
+               : 'Day ' + DAY + '. All five needs are covered.', 3400);
+}
+
+/* =====================================================================
+   10. INTERFACE
+   ===================================================================== */
+function el(i){ return document.getElementById(i); }
+var GH = null, TAB = 0, BUSY = 0;
+function upd(){
+  el('r').textContent = CR;
+  el('d').textContent = 'Day ' + DAY + '/' + MAXDAY;
+  var i;
+  if (PH === 1){
+    var h = 12 + 7*Math.min(1, CLK/DAYLEN);
+    el('k').innerHTML = '<b>' + (h|0) + ':' + ('0'+((h%1*60)|0)).slice(-2) + '</b>';
+    var hs = 0;
+    for (i = 0; i < BUILD.length; i++) if (BUILD[i].wear >= 1) hs++;
+    el('a').style.display = hs ? 'flex' : 'none';
+    el('a').textContent = '\u26A0 ' + hs;
+  } else el('a').style.display = 'none';
+  /* BUILD already contains the gate and carousel at startup. Show the
+     button at three buildings, after the player's first construction. */
+  var m0 = PH === 0;
+  el('o').style.display = m0 && BUILD.length > 2 ? 'block' : 'none';
+  el('n').style.display = m0 ? 'flex' : 'none';
+  if (m0){
+    var d = '';
+    for (i = 0; i < 5; i++)
+      d += '<span style="background:' + (HAS[i] ? NEEDC[i] : '#ddd6e6') + '"></span>';
+    el('n').innerHTML = d;
+  }
+}
+/* Name the missing need instead of asking the player to decode a gray dot. */
+function missing(){
+  var m = [], i;
+  for (i = 0; i < 5; i++) if (!HAS[i]) m.push(NEEDN[i].toLowerCase());
+  return m;
+}
+var hintT = 0;
+function say(m, ms){
+  var e = el('h'); e.textContent = m; e.className = 'A M';
+  clearTimeout(hintT); hintT = setTimeout(function(){ e.className = 'A'; }, ms);
+}
+/* Menu thumbnails reuse draw() in a small canvas with a different
+   projection. All drawings share the same code. */
+var THUMB = {};
+function thumb(id){
+  if (THUMB[id]) return THUMB[id];
+  var q = TY[id], cv = document.createElement('canvas');
+  cv.width = 176; cv.height = 124;
+  var g = cv.getContext('2d'); g.setTransform(2,0,0,2,0,0);
+  var oG=G, oW=W, oH=H, oK=K, oHW=HW, oHH=HH, oF=FINE, ox=cam.x, oy=cam.y, oB=BX, oC=BY;
+  G = g; W = 88; H = 62;
+  K = Math.min(74/((q.w+q.d)*32), 40/q.hz); HW = 32*K; HH = 16*K; FINE = 1;
+  BX = GRID/2 - q.w/2; BY = GRID/2 - q.d/2;
+  cam.x = 0; cam.y = (q.hz*K - (q.w+q.d)/2*HH)/2 - 2;
+  try { draw(id, 1.1); } catch(e){}
+  G=oG; W=oW; H=oH; K=oK; HW=oHW; HH=oHH; FINE=oF; cam.x=ox; cam.y=oy; BX=oB; BY=oC;
+  THUMB[id] = cv; return cv;
+}
+function openMenu(){
+  if (PH !== 0){ say('Build again tomorrow morning.', 2400); return; }
+  if (PL.task){ say(BUSYMSG, 1800); return; }
+  el('m').className = 'M';
+  var tb = el('b'); tb.innerHTML = '';
+  CATN.forEach(function(nm, i){
+    var b = document.createElement('button');
+    b.textContent = nm; b.className = i === TAB ? 'G' : '';
+    b.onclick = function(){ TAB = i; openMenu(); };
+    tb.appendChild(b);
+  });
+  refreshMenu();
+}
+function refreshMenu(){
+  if (el('m').className !== 'M') return;
+  var box2 = el('i'); box2.innerHTML = '';
+  ORDER.forEach(function(id){
+    var q = TY[id];
+    if (q.k !== TAB) return;
+    var d = document.createElement('div');
+    var pz = price(id);
+    d.className = 'C' + (CR < pz ? ' D' : '');
+    d.appendChild(thumb(id));
+    var n = document.createElement('div'); n.className = 'E'; n.textContent = q.n; d.appendChild(n);
+    var p = document.createElement('div'); p.className = 'F'; p.textContent = pz + ' \u25CF'; d.appendChild(p);
+    d.onclick = function(){
+      if (CR < price(id)){ say('Not enough credits.', 1600); return; }
+      closeMenu(); startPlace(id);
+    };
+    box2.appendChild(d);
+  });
+}
+function closeMenu(){ el('m').className = ''; }
+function startPlace(id){
+  var q = TY[id];
+  var x = Math.round(PL.x - q.w/2), y = Math.round(PL.y + 1);
+  if (!canPlace(id, x, y)){
+    var found = 0;
+    for (var r = 1; r < 9 && !found; r++)
+      for (var a = 0; a < 8 && !found; a++){
+        var nx = x + Math.round(Math.cos(a/8*6.283)*r), ny = y + Math.round(Math.sin(a/8*6.283)*r);
+        if (canPlace(id, nx, ny)){ x = nx; y = ny; found = 1; }
+      }
+  }
+  GH = {t:id, x:x, y:y, ok:canPlace(id, x, y) && CR >= q.p};
+  if (!canPlace(id, x, y)) say('No room here.', 2000);
+  el('q').textContent = q.n + ' \u2013 ' + price(id) + ' \u25CF';
+  el('p').className = 'A M';
+  el('v').disabled = !GH.ok;
+  say('Tap the ground to place it.', 2400);
+}
+function stopPlace(){ GH = null; el('p').className = 'A'; }
+el('u').onclick = function(){ stopPlace(); openMenu(); };
+el('v').onclick = function(){
+  if (!GH || !GH.ok) return;
+  order(GH.t, GH.x, GH.y); stopPlace();
+};
+el('f').onclick = closeMenu;
+el('o').onclick = openPark;
+
+function bar(lb, v, col){
+  return '<div class=H><div class=I>' + lb + '</div><div class=J><i style="width:' +
+    Math.round(v*100) + '%;background:' + col + '"></i></div><div class=K>' +
+    Math.round(v*100) + '%</div></div>';
+}
+function showReport(s){
+  var i, f = [], q;
+  f.push('<div>\uD83C\uDFAB ' + DS.vis + ' visitor' + (DS.vis>1?'s':'') + ' came in.</div>');
+  var worst = -1, wv = 0;
+  for (i = 0; i < 5; i++) if (DS.low[i] > wv){ wv = DS.low[i]; worst = i; }
+  if (worst >= 0)
+    f.push('<div>\uD83D\uDE15 ' + wv + ' left ' + LOWTXT[worst] + '.</div>');
+  var top = null, tv = 0;
+  for (i in DS.uses) if (DS.uses[i] > tv){ tv = DS.uses[i]; top = i; }
+  if (top) f.push('<div>\u2B50 ' + TY[top].n + ': ' + tv + ' visits.</div>');
+  var bad = null, bv = 0;
+  for (i in DS.broke) if (DS.broke[i] > bv){ bv = DS.broke[i]; bad = i; }
+  if (DS.brokeN)
+    f.push('<div>\uD83D\uDD27 ' + DS.brokeN + ' times found a building out of service' +
+           (bad ? ' (mostly ' + TY[bad].n + ')' : '') + '.</div>');
+  for (i = 0; i < 5; i++) if (DS.miss[i] > 2){
+    f.push('<div>\u2757 Nobody could ' + NEEDN[i].toLowerCase() + ': nothing built.</div>'); break;
+  }
+  var hs = 0;
+  for (i = 0; i < BUILD.length; i++) if (BUILD[i].wear >= 1) hs++;
+  if (hs) f.push('<div>\uD83D\uDEA7 ' + hs + ' building' + (hs>1?'s':'') +
+                 ' ended the day out of service.</div>');
+  if (DS.happy) f.push('<div>\uD83D\uDC96 ' + DS.happy + ' left delighted.</div>');
+  if (DS.angry) f.push('<div>\uD83D\uDCA2 ' + DS.angry + ' left angry.</div>');
+  var g = '';
+  for (i = 0; i < 5; i++) g += bar(NEEDN[i], DS.sat[i], NEEDC[i]);
+  g += '<div style="height:7px"></div>' + bar('Mood', DS.mood, '#ff6b8a');
+  el('z').innerHTML =
+    '<h2>Evening of day ' + DAY + '</h2><div class=L>How your visitors felt</div>' +
+    g + '<div id=g>' + f.join('') + '</div>' +
+    '<div id=j>+' + DS.income + ' \u25CF</div>' +
+    '<div id=s>average satisfaction ' + Math.round(s*100) + '% \u00B7 reputation ' +
+    REPB + '/7 rainbows</div>' +
+    '<button id=w>' + (DAY >= MAXDAY ? 'See how it went \u25B6' : 'Good night \u25B6') + '</button>';
+  el('w').onclick = nextDay;
+  el('l').className = 'M';
+  upd();
+}
+function showEnd(){
+  var t = REPB >= 7 ? 'The happiest park in the world.' :
+          REPB >= 5 ? 'A park the whole town talks about.' :
+          REPB >= 3 ? 'A small park with real charm.' :
+                      'A start. The sheep like you, at least.';
+  el('z').innerHTML =
+    '<h2>The Grand Parade</h2><div class=L>Thirteen days later</div>' +
+    '<div style="font-size:34px;text-align:center;letter-spacing:2px;margin:6px 0 10px">' +
+    RAINBOW.slice(0, REPB).map(function(c){
+      return '<span style="color:' + c + '">\u25CF</span>'; }).join('') + '</div>' +
+    '<div id=g><div>' + t + '</div><div>Final treasure: ' + CR + ' credits.</div>' +
+    '<div>' + BUILD.length + ' buildings raised.</div>' +
+    BOARDS.map(function(n, i){ return '<div>' + n + ': ' + RUN[i] + '</div>'; }).join('') + '</div>' +
+    '<button id=w>Play again</button>';
+  el('w').onclick = function(){ location.reload(); };
+  el('l').className = 'M';
+}
+
+/* =====================================================================
+   11. INPUT: drag to move the camera, tap to act.
+   ===================================================================== */
+['touchstart','touchmove','touchend','touchcancel'].forEach(function(ev){
+  document.addEventListener(ev, function(e){
+    var t = e.target;
+    if (t && t.closest && t.closest('#m,#p,#l,#o,#t')){ e.stopPropagation(); return; }
+    e.stopPropagation();
+    if (ev === 'touchmove' && e.cancelable) e.preventDefault();
+  }, { passive:false, capture:true });
+});
+['gesturestart','gesturechange','gestureend','dragstart','selectstart','contextmenu']
+  .forEach(function(ev){ document.addEventListener(ev, function(e){
+    if (e.cancelable) e.preventDefault(); e.stopPropagation();
+  }, { passive:false, capture:true }); });
+
+var drag = false, lx = 0, ly = 0, pts = {}, pinch0 = 0, z0 = 1, dx0 = 0, dy0 = 0, t0 = 0;
+function pc(){ return Object.keys(pts).length; }
+C.addEventListener('pointerdown', function(e){
+  e.stopPropagation(); C.setPointerCapture(e.pointerId);
+  pts[e.pointerId] = {x:e.clientX, y:e.clientY};
+  startAudio();
+  if (pc() === 1){
+    drag = true; lx = e.clientX; ly = e.clientY;
+    dx0 = e.clientX; dy0 = e.clientY; t0 = performance.now();
+    cam.vx = cam.vy = 0;
+  } else if (pc() === 2){
+    var k = Object.keys(pts);
+    pinch0 = Math.hypot(pts[k[0]].x-pts[k[1]].x, pts[k[0]].y-pts[k[1]].y);
+    z0 = cam.z; drag = false; t0 = 0;
+  }
+});
+C.addEventListener('pointermove', function(e){
+  e.stopPropagation();
+  if (!pts[e.pointerId]) return;
+  pts[e.pointerId] = {x:e.clientX, y:e.clientY};
+  if (pc() === 2){
+    var k = Object.keys(pts);
+    var d = Math.hypot(pts[k[0]].x-pts[k[1]].x, pts[k[0]].y-pts[k[1]].y);
+    if (pinch0 > 0) cam.z = Math.max(.62, Math.min(2.2, z0*d/pinch0));
+  } else if (drag){
+    var ddx = e.clientX-lx, ddy = e.clientY-ly;
+    cam.x += ddx; cam.y += ddy; cam.vx = ddx; cam.vy = ddy;
+    lx = e.clientX; ly = e.clientY;
+  }
+});
+function up(e){
+  e.stopPropagation();
+  var was = pts[e.pointerId];
+  delete pts[e.pointerId];
+  if (pc() < 2) pinch0 = 0;
+  if (!pc()) drag = false;
+  if (was && t0 && Math.hypot(was.x-dx0, was.y-dy0) < 11 && performance.now()-t0 < 480)
+    tap(was.x, was.y);
+  t0 = 0;
+}
+C.addEventListener('pointerup', up);
+C.addEventListener('pointercancel', up);
+C.addEventListener('wheel', function(e){
+  e.preventDefault(); e.stopPropagation();
+  cam.z = Math.max(.62, Math.min(2.2, cam.z*(e.deltaY > 0 ? .92 : 1.08)));
+}, {passive:false});
+
+function tap(sx, sy){
+  var g = unP(sx, sy), i, b, q, p, d;
+  /* 1. In placement mode, every tap moves the preview. */
+  if (GH){
+    var q2 = TY[GH.t];
+    GH.x = Math.max(0, Math.min(GRID-q2.w, Math.round(g[0]-q2.w/2)));
+    GH.y = Math.max(0, Math.min(GRID-q2.d, Math.round(g[1]-q2.d/2)));
+    GH.ok = canPlace(GH.t, GH.x, GH.y) && CR >= price(GH.t);
+    el('v').disabled = !GH.ok;
+    return;
+  }
+  /* 2. The unicorn gets a generous hit area: she is the main button. */
+  p = P(PL.x, PL.y, 22);
+  if (Math.hypot(sx-p[0], sy-p[1]) < 42*K + 16){ openMenu(); return; }
+  /* 3. Check alert bubbles first: they are the intended targets. */
+  var best = null, bd = 1e9;
+  for (i = 0; i < BUILD.length; i++){
+    b = BUILD[i]; q = TY[b.t];
+    if (!q.m || b.wear < .25) continue;
+    p = P(b.cx, b.cy, q.hz + 16);
+    d = Math.hypot(sx-p[0], sy-p[1]);
+    if (d < 34*K + 14 && d < bd){ bd = d; best = b; }
+  }
+  if (best){ repair(best); return; }
+  /* 4. Otherwise, check the building footprint. */
+  for (i = 0; i < BUILD.length; i++){
+    b = BUILD[i]; q = TY[b.t];
+    if (g[0] > b.x-.3 && g[0] < b.x+q.w+.3 && g[1] > b.y-.3 && g[1] < b.y+q.d+.3){
+      if (repair(b)) return;
+      say(q.n + (q.nd >= 0 ? ' \u00B7 ' + NEEDN[q.nd] + ' \u00B7 wear ' +
+          Math.round(Math.min(1,b.wear)*100) + '%' : ''), 2200);
+      return;
+    }
+  }
+  /* 5. Empty ground: the unicorn walks there. She is your avatar. */
+  if (!PL.task && g[0] > 0 && g[1] > 0 && g[0] < GRID && g[1] < GRID){
+    PL.tx = g[0]; PL.ty = g[1]; PL.idle = 5;
+  }
+}
+
+/* =====================================================================
+   12. AUDIO: cozy lo-fi. Drums join only while the park is open.
+   ===================================================================== */
+var AC = null, mst, dry, verb, nextT = 0, sI = 0, NOISE;
+var SEV = [[60,64,67,71],[57,60,64,67],[62,65,69,72],[55,59,62,65]];
+var BASSJ = [36,33,38,31], PENTA = [72,74,76,79,81,84];
+function hz(m){ return 440*Math.pow(2,(m-69)/12); }
+function conn(g, s){
+  g.connect(dry);
+  if (s){ var n = AC.createGain(); n.gain.value = s; g.connect(n); n.connect(verb); }
+}
+function vox(t, f, dur, type, vol, atk, send, dt){
+  var o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f; o.detune.value = dt || 0;
+  g.gain.setValueAtTime(.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + (atk || .008));
+  g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); conn(g, send); o.start(t); o.stop(t + dur + .05);
+}
+function bell(t, m, dur, vol, send){
+  var f = hz(m);
+  vox(t, f, dur, 'sine', vol, .002, send);
+  vox(t, f*2, dur*.55, 'sine', vol*.34, .002, send);
+  vox(t, f*3.02, dur*.28, 'sine', vol*.15, .002, send);
+}
+function noise(t, dur, vol, cut, type, send){
+  var s = AC.createBufferSource(); s.buffer = NOISE; s.loop = true;
+  var f = AC.createBiquadFilter(); f.type = type; f.frequency.value = cut;
+  var g = AC.createGain();
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  s.connect(f); f.connect(g); conn(g, send); s.start(t); s.stop(t + dur + .02);
+}
+function kick(t, vol){
+  var o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(148, t); o.frequency.exponentialRampToValueAtTime(42, t + .1);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + .3);
+  o.connect(g); conn(g, 0); o.start(t); o.stop(t + .34);
+}
+function bar16(s, t, dur){
+  var bar = (s/16|0) % 4, b = s % 16, ch = SEV[bar], sw = (b%2) ? dur*.22 : 0, i;
+  if (b === 0) vox(t, hz(BASSJ[bar]), dur*7, 'triangle', .24, .02, 0);
+  if (b === 10) vox(t, hz(BASSJ[bar]+7), dur*4, 'triangle', .16, .02, 0);
+  if (b === 0 || b === 10){
+    for (i = 0; i < ch.length; i++) vox(t, hz(ch[i]), dur*7, 'triangle', .048, .09, .26, i*3);
+    if (BUSY) kick(t, .55);
+  }
+  if (BUSY && (b === 4 || b === 12)) noise(t, .13, .16, 1700, 'bandpass', .16);
+  if (BUSY && b % 2 === 0) noise(t + sw, .035, .045, 8200, 'highpass', .07);
+  if (b % 2 === 1 && Math.random() < (BUSY ? .22 : .34))
+    bell(t + sw, PENTA[Math.random()*6|0], dur*5, .07, .40);
+  noise(t, dur, .008, 3000, 'highpass', 0);
+}
+function tick(){
+  if (!AC) return;
+  var ahead = AC.currentTime + .22, dur = 60/74/4;
+  while (nextT < ahead){ try { bar16(sI, nextT, dur); } catch(e){} nextT += dur; sI++; }
+}
+/* 0 = sad coin, 1 = happy coin, 2 = construction, 3 = maintenance. */
+function sfx(k){
+  if (!AC) return;
+  var t = AC.currentTime + .01;
+  try {
+    if (k === 0){ bell(t, 67, .5, .10, .3); bell(t+.1, 63, .6, .09, .3); }
+    else if (k === 1){ bell(t, 76, .5, .11, .35); bell(t+.09, 83, .7, .10, .35); }
+    else if (k === 2){ bell(t, 72, .4, .10, .3); bell(t+.08, 79, .4, .10, .3); bell(t+.16, 84, .8, .11, .4); }
+    else { noise(t, .18, .10, 4200, 'highpass', .2); bell(t+.03, 88, .45, .08, .4); }
+  } catch(e){}
+}
+function startAudio(){
+  if (AC){ if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    mst = AC.createGain(); mst.gain.value = 0; mst.connect(AC.destination);
+    mst.gain.linearRampToValueAtTime(.6, AC.currentTime + 3.5);
+    var n = AC.sampleRate*2, nb = AC.createBuffer(1, n, AC.sampleRate), nd = nb.getChannelData(0), i;
+    for (i = 0; i < n; i++) nd[i] = Math.random()*2-1;
+    NOISE = nb;
+    var vl = (AC.sampleRate*2.1)|0, vb = AC.createBuffer(2, vl, AC.sampleRate);
+    for (var c = 0; c < 2; c++){
+      var d = vb.getChannelData(c);
+      for (i = 0; i < vl; i++) d[i] = (Math.random()*2-1)*Math.pow(1-i/vl, 2.7);
+    }
+    verb = AC.createConvolver(); verb.buffer = vb;
+    var vg = AC.createGain(); vg.gain.value = .34; verb.connect(vg); vg.connect(mst);
+    dry = AC.createGain(); dry.connect(mst);
+    nextT = AC.currentTime + .1; sI = 0;
+    setInterval(tick, 45);
+  } catch(e){ AC = null; }
+}
+
+/* ---------------- Startup ---------------- */
+upd();
+el('z').innerHTML =
+  '<h2>' + 'Unicorn Tycoon'.replace(/./g, function(c, i){
+    return '<span style=color:' + tone(RAINBOW[i%7], .78) + '>' + c + '</span>'; }) +
+  '</h2><div class=L>You are the unicorn. Tap her to build.' +
+  '</div><button id=w>Tap to start</button>';
+el('w').onclick = function(){ el('l').className = ''; startAudio(); };
+el('l').className = 'M';
+wd('init');
+wd('requestStats').then(function(r){
+  WR = r && r.success && r.data;
+  ACH.forEach(function(id, i){ syncAward(i); });
+});
+BOARDS.forEach(function(n, i){ submitBoard(i); });
+requestAnimationFrame(loop);
+</script></body></html>
