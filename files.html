@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-E5kMajXmbdXPccLIwDoA3Vxt05ndwQTkZDRmvtCwxos='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No referrer to anyone: a publisher this page links to learns nothing about where the click came from. -->
+<meta name="referrer" content="no-referrer">
 <title>Classroom</title>
 <meta name="description" content="One hundred and twenty-nine G@M£$ that open as plain files, with no embed and nothing a filter can block.">
 <meta name="theme-color" content="#ffffff">
@@ -72,7 +75,7 @@
     </p>
     <p class="files-lede files-lede-2">
       One hundred and twenty-nine of them come from
-      <a href="https://github.com/CoolDude2349/Offline-HTML-Games-Pack" target="_blank" rel="noopener">CoolDude2349's Offline HTML Games Pack</a>,
+      <a href="https://github.com/CoolDude2349/Offline-HTML-Games-Pack" target="_blank" rel="noopener noreferrer">CoolDude2349's Offline HTML Games Pack</a>,
       which holds 352 in all: the small classics, the heavy legends (Retro
       Bowl, OvO, Bad Piggies and friends) and the sequels people keep
       asking for — Bloons TD 2 to 4, Fireboy &amp; Watergirl 2 to 4, Among Us,
@@ -83,7 +86,7 @@
       <b>Minecraft</b> is not in this folder any more. It was a 76&nbsp;MB
       single file — more than every other title put together — so it plays
       from a browser build online again, starting with
-      <a href="https://johntherriiiippper.github.io/eaglercraftx.html" target="_blank" rel="noopener">this one</a>,
+      <a href="https://johntherriiiippper.github.io/eaglercraftx.html" target="_blank" rel="noopener noreferrer">this one</a>,
       and it needs the network. Search for it on the main wall instead.
     </p>
     <ul class="files-facts">
@@ -124,14 +127,14 @@
 </main>
 
 <footer class="foot">
-  <p>G@M£$ <span class="sep">/</span> the rest of the wall is streamed from publishers — this page is the exception.</p>
+  <p>G@M£$ <span class="sep">/</span> the rest of the wall opens on the publishers' own sites — this page is the exception.</p>
   <p class="foot-data">
     <span>Teacher walking over? Press <kbd>`</kbd> to exit fast.</span>
     <a class="link" href="https://classroom.google.com/">Quick exit</a>
     <button type="button" class="link" data-blank>Blank tab</button>
     <button type="button" class="link" data-install hidden>Install app</button>
-    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io/issues/new/choose" target="_blank" rel="noopener" data-feedback>Send feedback</a>
-    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io" target="_blank" rel="noopener">Source on GitHub</a>
+    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io/issues/new/choose" target="_blank" rel="noopener noreferrer" data-feedback>Send feedback</a>
+    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
     <button type="button" class="link" data-file-theme>Use dark theme</button>
     <button type="button" class="link" data-file-text>Larger text</button>
     <button type="button" class="link" data-file-contrast>High contrast</button>
@@ -152,7 +155,7 @@
     </div>
     <div class="player-tools">
       <button type="button" class="pbtn pbtn-wide" data-offline-game aria-label="Save this file for offline play">Save offline</button>
-      <a class="pbtn" data-external target="_blank" rel="noopener" aria-label="Open the file on its own">
+      <a class="pbtn" data-external target="_blank" rel="noopener noreferrer" aria-label="Open the file on its own">
         <svg class="ico" aria-hidden="true"><use href="#i-external"/></svg>
       </a>
       <button type="button" class="pbtn" data-fs aria-label="Fullscreen">
@@ -164,13 +167,13 @@
     <div class="player-load" data-loading>
       <span class="spinner" aria-hidden="true"></span>
       <span data-loading-text>Loading</span>
-      <a class="load-link" data-load-link target="_blank" rel="noopener" hidden>Open in a new tab</a>
+      <a class="load-link" data-load-link target="_blank" rel="noopener noreferrer" hidden>Open in a new tab</a>
     </div>
   </div>
 </div>
 
 <script src="assets/js/local-games.js?v=4"></script>
-<script src="assets/js/feedback.js?v=2"></script>
+<script src="assets/js/feedback.js?v=3"></script>
 <script src="assets/js/pwa.js?v=2"></script>
 <script>
 (function () {

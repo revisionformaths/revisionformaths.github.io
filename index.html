@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No referrer to anyone: a publisher this page links to learns nothing about where the click came from. -->
+<meta name="referrer" content="no-referrer">
 <title>Classroom</title>
 <meta name="description" content="129 G@M£$ that open as plain files and keep playing with the network off, plus a wall of streamed publisher titles.">
 <meta name="theme-color" content="#ffffff">
@@ -72,7 +75,7 @@
     — each one is an HTML file served from this page, so there is no embed to
     refuse and nothing for a filter to block.
     <a href="files.html">Open them</a>.
-    The rest of the wall below is streamed from publishers and needs the internet.
+    The rest of the wall below opens on the publisher's own site, in a new tab.
   </p>
 
   <div class="toolbar">
@@ -97,7 +100,7 @@
             <svg class="ico" aria-hidden="true"><use href="#i-play"/></svg>
             <span>Resume</span>
           </button>
-          <a class="btn" data-continue-external target="_blank" rel="noopener">Open in a new tab</a>
+          <a class="btn" data-continue-external target="_blank" rel="noopener noreferrer">Open in a new tab</a>
         </div>
       </div>
     </div>
@@ -142,7 +145,7 @@
   <details class="site-help">
     <summary>How this page works</summary>
     <p>Search titles or descriptions, then filter by G@M£$ type and whether a title plays here or is a local file. Press <kbd>/</kbd> to search and <kbd>Esc</kbd> to close the player. Saved titles and history stay in this browser; use Export/Import to move them between devices.</p>
-    <p>Publisher G@M£$ need an internet connection and their publisher may refuse to load. Local HTML G@M£$ can be saved to this browser for offline play. This site has no account and no server-side storage; saved picks and history stay in this browser. Microsoft Clarity measures page visits and sessions. The catalogue is served as static files from GitHub Pages.</p>
+    <p>Publisher G@M£$ open on the publisher's own site in a new tab — nothing of theirs is loaded in this page. Local HTML G@M£$ can be saved to this browser for offline play. This site has no account and no server-side storage; saved picks and history stay in this browser. Microsoft Clarity measures page visits and sessions. The catalogue is served as static files from GitHub Pages.</p>
   </details>
   <section id="grid" class="grid" aria-label="Titles"></section>
 
@@ -157,7 +160,7 @@
 </main>
 
 <footer class="foot">
-  <p>G@M£$ <span class="sep">/</span> <span data-foot-count>16,000+</span> titles, streamed from the publishers. Nothing is hosted here.</p>
+  <p>G@M£$ <span class="sep">/</span> <span data-foot-count>16,000+</span> titles, each opened on the publisher's own site. Nothing is hosted here.</p>
   <p class="foot-data">
     <span data-storage-note>Picks, history and scroll position are saved in this browser.</span>
     <button type="button" class="link" data-export>Export my data</button>
@@ -173,8 +176,8 @@
     <button type="button" class="link" data-text-toggle aria-pressed="false">Larger text</button>
     <button type="button" class="link" data-contrast-toggle aria-pressed="false">High contrast</button>
     <button type="button" class="link" data-install hidden>Install app</button>
-    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io/issues/new/choose" target="_blank" rel="noopener" data-feedback>Send feedback</a>
-    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io" target="_blank" rel="noopener">Source on GitHub</a>
+    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io/issues/new/choose" target="_blank" rel="noopener noreferrer" data-feedback>Send feedback</a>
+    <a class="link" href="https://github.com/funclassroom/funclassroom.github.io" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
   </p>
   <p class="foot-data foot-stealth">
     <span class="stealth-label">Tab look:</span>
@@ -199,14 +202,14 @@
       <span data-player-sub></span>
       <span class="player-source" data-source></span>
       <span class="player-description" data-player-description></span>
-      <a class="player-report" data-report-game target="_blank" rel="noopener">Report this title on GitHub</a>
+      <a class="player-report" data-report-game target="_blank" rel="noopener noreferrer">Report this title on GitHub</a>
     </div>
     <div class="player-tools">
       <button type="button" class="pbtn pbtn-wide" data-next hidden>Try another source</button>
       <button type="button" class="pbtn" data-player-fav aria-label="Save" aria-pressed="false">
         <svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>
       </button>
-      <a class="pbtn" data-external target="_blank" rel="noopener" aria-label="Open in a new tab">
+      <a class="pbtn" data-external target="_blank" rel="noopener noreferrer" aria-label="Open in a new tab">
         <svg class="ico" aria-hidden="true"><use href="#i-external"/></svg>
       </a>
       <button type="button" class="pbtn" data-fs aria-label="Fullscreen" aria-pressed="false">
@@ -219,7 +222,7 @@
     <div class="player-load" data-loading>
       <span class="spinner" aria-hidden="true"></span>
       <span data-loading-text>Loading</span>
-      <a class="load-link" data-load-link target="_blank" rel="noopener" hidden>Open in a new tab</a>
+      <a class="load-link" data-load-link target="_blank" rel="noopener noreferrer" hidden>Open in a new tab</a>
     </div>
 
     <div class="player-blocked" data-blocked hidden>
@@ -227,7 +230,7 @@
       <p data-blocked-text></p>
       <ul class="blocked-list" data-blocked-list></ul>
       <div class="blocked-actions">
-        <a class="btn btn-accent" data-blocked-open target="_blank" rel="noopener" hidden></a>
+        <a class="btn btn-accent" data-blocked-open target="_blank" rel="noopener noreferrer" hidden></a>
         <button type="button" class="btn btn-dark" data-retry>Try them all again</button>
       </div>
       <p class="blocked-apology">Sorry about that — the publisher(s) are refusing to be framed right now. Nothing on this page is broken except that.</p>
@@ -248,8 +251,8 @@
 
 <script src="assets/js/catalog.js?v=23"></script>
 <script src="assets/js/local-games.js?v=4"></script>
-<script src="assets/js/app.js?v=28"></script>
-<script src="assets/js/feedback.js?v=2"></script>
+<script src="assets/js/app.js?v=29"></script>
+<script src="assets/js/feedback.js?v=3"></script>
 <script src="assets/js/pwa.js?v=2"></script>
 </body>
 </html>

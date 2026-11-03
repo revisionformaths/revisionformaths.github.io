@@ -244,9 +244,9 @@
         var eb = matchScore(b, query);
         if (ea !== eb) return ea - eb;
       }
-      // G@M£$ that can play inside the page always lead; the rest open in a
-      // tab and sit at the end.
-      if (playable(a) !== playable(b)) return playable(a) ? -1 : 1;
+      // Playing in the page is no longer a ranking signal: only the local
+      // files can do that, and letting them lead every sort buried the
+      // publisher titles the wall is for. They rank by the sort on offer.
       if (state.sort === "az") return a.title.localeCompare(b.title);
       if (state.sort === "top") {
         if (b.rating !== a.rating) return b.rating - a.rating;
@@ -601,12 +601,19 @@
     // shows nothing at all. No network, just an iframe of this page.
     var win = window.open("about:blank", "_blank");
     if (!win) return;
-    var url = window.location.href.replace(/</g, "%3C");
-    win.document.write(
-      "<!doctype html><html><head><title>Classroom</title></head>" +
-      "<body style='margin:0'><iframe src='" + url + "' style='border:0;width:100vw;height:100vh' allowfullscreen></iframe></body></html>"
-    );
-    win.document.close();
+    var doc = win.document;
+    doc.title = "Classroom";
+    var body = doc.body || doc.appendChild(doc.createElement("body"));
+    body.style.margin = "0";
+    // The URL goes in as a property, never as markup: nothing in it can
+    // break out of an attribute and become a tag.
+    var frame = doc.createElement("iframe");
+    frame.setAttribute("src", window.location.href);
+    frame.setAttribute("allowfullscreen", "");
+    frame.style.border = "0";
+    frame.style.width = "100vw";
+    frame.style.height = "100vh";
+    body.appendChild(frame);
   }
 
   function applyDisplaySettings() {
@@ -654,9 +661,24 @@
 
   /* ---------- sources ---------- */
 
-  // Keep explicitly non-embeddable routes as new-tab fallbacks.
+  /* Only this site's own files are ever framed. A publisher's page opens in
+     a new tab instead, so no third-party document - and with it no
+     third-party script, ad, tracker or redirect - ever runs inside this page.
+     That is also what lets the security policy name 'self' as the only
+     allowed frame source. */
+  function sameOrigin(url) {
+    try {
+      return new URL(url, window.location.href).origin === window.location.origin;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // Keep explicitly non-embeddable routes out, and anything off-origin.
   function embeddable(item) {
-    return item.sources.filter(function (source) { return source.embed !== false; });
+    return item.sources.filter(function (source) {
+      return source.embed !== false && sameOrigin(source.url);
+    });
   }
 
   function sourcesFor(item) {
@@ -701,6 +723,13 @@
     if (!item || state.active === id) return;
     var opts = options || {};
 
+    // Nothing of a publisher's is loaded here any more: a title without a
+    // local file is handed straight to its own site, in its own tab.
+    if (!playable(item)) {
+      openOnPublisher(item);
+      return;
+    }
+
     if (!state.active) {
       state.lastFocus = document.activeElement;
       state.lastFocusId = state.lastFocus && state.lastFocus.getAttribute
@@ -716,9 +745,9 @@
     dom.playerTitle.textContent = item.title;
     dom.playerSub.textContent = (item.rating > 0 ? item.rating.toFixed(1) + " stars · " : "") +
       (item.plays > 0 ? shortNum(item.plays) + " plays" : "new arrival") +
-      " · " + (item.local ? "local file · works offline" : playable(item) ? "publisher embed" : "opens in a new tab");
+      " · " + (item.local ? "local file · works offline" : "plays here");
     if (dom.playerDescription) dom.playerDescription.textContent = item.description ||
-      "Publisher-hosted title. Controls and content vary; check its own instructions.";
+      "Publisher-hosted title. It opens on the publisher\u2019s own site, where its instructions are.";
     if (dom.reportGame) {
       var reportTitle = encodeURIComponent("Broken or incorrect title: " + item.title);
       var reportBody = encodeURIComponent("Title: " + item.title + "\nID: " + item.id + "\nPage: " + window.location.href + "\n\nWhat happened?\n");
@@ -746,6 +775,26 @@
     if (opts.push !== false) {
       try { window.history.pushState({ p: id }, "", "#p=" + id); } catch (err) { /* file:// */ }
     }
+  }
+
+  /* Hand a title to the publisher, in a tab of its own.
+     One synthetic click on a real anchor: a link click inside a gesture is
+     never popup-blocked, and rel=noopener noreferrer means the publisher
+     gets no handle on this page and no referrer either. window.open is not
+     used here because passing "noopener" to it returns null by design, and
+     a null return would look like a blocked popup and open a second tab. */
+  function openOnPublisher(item) {
+    var source = item.sources && item.sources[0];
+    if (!source) return;
+    rememberPlay(item.id);
+    var link = document.createElement("a");
+    link.href = source.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   function syncPlayerFav(item) {
@@ -885,7 +934,7 @@
       var link = document.createElement("a");
       link.href = source.url;
       link.target = "_blank";
-      link.rel = "noopener";
+      link.rel = "noopener noreferrer";
       link.textContent = source.portal + (source.embed === false
         ? " — opens in a new tab"
         : " — " + source.url.replace(/^https:\/\//, ""));

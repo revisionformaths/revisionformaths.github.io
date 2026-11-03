@@ -63,7 +63,9 @@ function firstPlayable(document) {
 function sourcesFor(count) {
   const list = [];
   for (let i = 0; i < count; i += 1) {
-    list.push({ portal: "portal" + (i + 1) + ".test", url: "https://portal" + (i + 1) + ".test/embed/" });
+    // The player only ever frames this site's own files now, so the fixture
+    // uses same-origin URLs for anything that is meant to play in the page.
+    list.push({ portal: "portal" + (i + 1) + ".test", url: "/assets/games/probe" + (i + 1) + ".html" });
   }
   return list;
 }
@@ -73,6 +75,17 @@ function readStore(window) {
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+/* Hands a link to the browser without navigating jsdom: records every anchor
+   click that targets a new tab, then stops the default. */
+function watchNewTabs(window) {
+  const seen = [];
+  window.HTMLAnchorElement.prototype.click = function () {
+    seen.push({ href: this.getAttribute("href"), rel: this.getAttribute("rel"), target: this.getAttribute("target") });
+  };
+  return seen;
+}
+
 
 function click(window, node) {
   node.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -312,17 +325,15 @@ function titles(document) {
     const firstSlug = () => document.querySelector(".tile").getAttribute("data-id");
 
     check(
-      "the wall opens with a game that can play",
-      document.querySelector(".tile").getAttribute("data-playable") === "1",
+      "the wall opens with the most played title",
+      firstSlug() === window.CATALOG.reduce((a, b) => ((b.plays || 0) > (a.plays || 0) ? b : a)).id,
       firstSlug()
     );
     check(
-      "most played first inside that group",
-      (() => {
-        const plays = Array.from(document.querySelectorAll('.tile[data-playable="1"] .tile-meta'))
-          .map((el) => el.textContent);
-        return plays.length > 0;
-      })()
+      "only the local files offer to play in the page",
+      Array.from(document.querySelectorAll('.tile[data-playable="1"]')).every((t) =>
+        /^local-/.test(t.getAttribute("data-id"))
+      )
     );
 
     click(window, buttons.find((b) => b.dataset.sort === "az"));
@@ -431,6 +442,9 @@ function titles(document) {
     await tick();
     const { window } = dom;
     const { document } = window;
+    // Only the bundled files play in the page now, and they sit at the end of
+    // a play-ranked wall — so search for one rather than hope for the batch.
+    type(window, document.querySelector("#q"), "2048");
     const opener = document.querySelector('.tile[data-playable="1"] .tile-open');
     const tile = opener.closest(".tile");
     const id = tile.getAttribute("data-id");
@@ -492,7 +506,7 @@ function titles(document) {
     await tick();
     click(dom.window, dom.window.document.querySelector(".tile-open"));
     check("remembered working source survives reload: " + remembered,
-      dom.window.document.querySelector("iframe").getAttribute("src") === "https://portal3.test/embed/");
+      dom.window.document.querySelector("iframe").getAttribute("src") === "/assets/games/probe3.html");
     dom.window.close();
   }
 
@@ -507,16 +521,16 @@ function titles(document) {
 
     click(window, document.querySelector(".tile-open"));
     const src = () => document.querySelector("iframe").getAttribute("src");
-    check("first source is used first", src() === "https://portal1.test/embed/");
+    check("first source is used first", src() === "/assets/games/probe1.html");
     check("source counter shows", /Source 1 of 3/.test(document.querySelector("[data-source]").textContent));
     check("a next-source button appears", !document.querySelector("[data-next]").hidden);
 
     click(window, document.querySelector("[data-next]"));
-    check("second source is tried", src() === "https://portal2.test/embed/");
+    check("second source is tried", src() === "/assets/games/probe2.html");
     check("counter follows", /Source 2 of 3/.test(document.querySelector("[data-source]").textContent));
 
     click(window, document.querySelector("[data-next]"));
-    check("third source is tried", src() === "https://portal3.test/embed/");
+    check("third source is tried", src() === "/assets/games/probe3.html");
 
     click(window, document.querySelector("[data-next]"));
     check("running out shows the blocked panel", !document.querySelector("[data-blocked]").hidden);
@@ -538,7 +552,7 @@ function titles(document) {
     click(window, document.querySelector("[data-retry]"));
     check(
       "retry starts again, preferring the portals that did not fail",
-      /portal[23]\.test/.test(src()),
+      /probe[23]\.html/.test(src()),
       src()
     );
     check("blocked panel is hidden on retry", document.querySelector("[data-blocked]").hidden);
@@ -568,7 +582,7 @@ function titles(document) {
     click(window, window.document.querySelector(".tile-open"));
     check(
       "a previously working source is preferred",
-      window.document.querySelector("iframe").getAttribute("src") === "https://portal3.test/embed/"
+      window.document.querySelector("iframe").getAttribute("src") === "/assets/games/probe3.html"
     );
     dom.window.close();
   }
@@ -593,7 +607,7 @@ function titles(document) {
     dom.window.close();
   }
 
-  /* a portal that refuses framing never gets an iframe */
+  /* a publisher title is handed to its own site, never framed */
   {
     const dom = boot("", null, miniCatalog([{
       id: "walled", title: "Walled Garden",
@@ -603,28 +617,28 @@ function titles(document) {
     const { window } = dom;
     const { document } = window;
 
+    const tabs = watchNewTabs(window);
+
     click(window, document.querySelector(".tile-open"));
-    check("no iframe for a non-embeddable source", document.querySelectorAll("iframe").length === 0);
-    check("the panel is shown straight away", !document.querySelector("[data-blocked]").hidden);
+    check("a publisher tile is never framed", document.querySelectorAll("iframe").length === 0);
+    check("the player is not opened for it", document.querySelector("[data-player]").hidden);
     check(
-      "it explains the no-frame rule",
-      /does not allow its G@M£\$ inside another page/.test(document.querySelector("[data-blocked-text]").textContent)
+      "it opens on the publisher's own site, once",
+      tabs.length === 1 && tabs[0].href === "https://walled.test/full/game",
+      JSON.stringify(tabs)
     );
     check(
-      "it says the title will not be framed",
-      /will not be framed/.test(document.querySelector("[data-blocked]").textContent)
+      "the handoff drops the opener and the referrer",
+      tabs[0] && tabs[0].target === "_blank" && /noopener/.test(tabs[0].rel) && /noreferrer/.test(tabs[0].rel)
     );
     check(
-      "it offers the new-tab button",
-      !document.querySelector("[data-blocked-open]").hidden &&
-        document.querySelector("[data-blocked-open]").getAttribute("href") === "https://walled.test/full/game"
+      "the tile says so instead of offering to play",
+      document.querySelector(".tile").getAttribute("data-playable") === "0"
     );
-    check("the new tab button is named", /Play on walled\.test/.test(document.querySelector("[data-blocked-open]").textContent));
-    check("the tile has no source badge", !document.querySelector(".tile-mirrors"));
     dom.window.close();
   }
 
-  /* mixed sources: frameable ones are tried, the walled one is the way out */
+  /* the mixed case: a same-origin file still frames, a publisher route does not */
   {
     const dom = boot("", null, miniCatalog([{
       id: "mixed", title: "Mixed",
@@ -634,23 +648,15 @@ function titles(document) {
     const { window } = dom;
     const { document } = window;
 
+    const tabs = watchNewTabs(window);
+
     check("every source is counted", document.querySelector(".tile-mirrors").textContent === "3 routes");
     click(window, document.querySelector(".tile-open"));
-    check("first source loads", /portal1\.test/.test(document.querySelector("iframe").src));
+    const first = document.querySelector("iframe");
+    check("a bundled file loads in the page", /probe1\.html/.test(first.src));
     click(window, document.querySelector("[data-next]"));
-    check("second source loads", /portal2\.test/.test(document.querySelector("iframe").src));
-    click(window, document.querySelector("[data-next]"));
-    check("the walled source is never mounted", document.querySelectorAll("iframe").length === 0);
-    check("running out brings the panel", !document.querySelector("[data-blocked]").hidden);
-    check(
-      "there is always a way out",
-      !document.querySelector("[data-blocked-open]").hidden &&
-        document.querySelector("[data-blocked-open]").getAttribute("href") === "https://walled.test/x"
-    );
-    check(
-      "the walled route is labelled",
-      /opens in a new tab/.test(document.querySelector("[data-blocked-list]").textContent)
-    );
+    check("the next bundled file loads", /probe2\.html/.test(document.querySelector("iframe").src));
+    check("the off-site route is never mounted", tabs.length === 0);
     dom.window.close();
   }
 
@@ -663,7 +669,7 @@ function titles(document) {
 
     click(window, document.querySelector(".tile-open"));
     click(window, document.querySelector("[data-next]"));
-    check("the second source is mounted", /portal2\.test/.test(document.querySelector("iframe").src));
+    check("the second source is mounted", /probe2\.html/.test(document.querySelector("iframe").src));
     document.querySelector("iframe").dispatchEvent(new window.Event("load"));
     click(window, document.querySelector("[data-close]"));
 
@@ -674,7 +680,7 @@ function titles(document) {
     click(window, document.querySelector(".tile-open"));
     check(
       "reopening resumes the source that answered",
-      /portal2\.test/.test(document.querySelector("iframe").src),
+      /probe2\.html/.test(document.querySelector("iframe").src),
       document.querySelector("iframe").src
     );
     dom.window.close();
@@ -697,10 +703,12 @@ function titles(document) {
 
   /* deep links */
   {
-    const probe = boot();
+    // Only the bundled files can be deep-linked into the player; a publisher
+    // id is handed to the publisher.
+    const local = boot();
     await tick();
-    const first = probe.window.CATALOG.find((g) => g.sources.some((s) => s.embed));
-    probe.window.close();
+    const first = local.window.CATALOG.find((g) => /^local-/.test(g.id));
+    local.window.close();
 
     const dom = boot("#p=" + first.id);
     await tick();
@@ -708,26 +716,29 @@ function titles(document) {
     const frame = document.querySelector("iframe");
     check(
       "deep link opens the title",
-      frame && frame.getAttribute("src") === first.sources.find((s) => s.embed).url
+      frame && frame.getAttribute("src") === first.sources[0].url
     );
     check("deep link is named", document.querySelector("[data-player-title]").textContent === first.title);
+    dom.window.close();
 
     const other = boot("#p=subway-surfers");
     await tick();
     const otherDoc = other.window.document;
+    const tabs = watchNewTabs(other.window);
+    // The hash is applied on boot, after open() is in place, in this order.
+    other.window.location.hash = "#p=subway-surfers";
+    other.window.dispatchEvent(new other.window.Event("hashchange"));
+    await tick();
     check(
-      "MadKid deep link mounts its player",
-      !otherDoc.querySelector("[data-player]").hidden &&
-        otherDoc.querySelectorAll("iframe").length === 1 &&
-        otherDoc.querySelector("iframe").getAttribute("src") === "https://www.madkidgames.com/full/subway-surfers" &&
-        otherDoc.querySelector("[data-blocked]").hidden
+      "a publisher deep link is not framed",
+      otherDoc.querySelector("[data-player]").hidden && otherDoc.querySelectorAll("iframe").length === 0
     );
     check(
-      "the MadKid deep link names the title",
-      otherDoc.querySelector("[data-player-title]").textContent === "Subway Surfers"
+      "a publisher deep link goes to the publisher",
+      tabs.length === 1 && /subway-surfers/.test(tabs[0].href),
+      JSON.stringify(tabs)
     );
     other.window.close();
-    dom.window.close();
   }
 
   {
@@ -745,14 +756,15 @@ function titles(document) {
     const { document } = window;
 
     const random = window.Math.random;
+    const tabs = watchNewTabs(window);
     window.Math.random = () => 0;
     click(window, document.querySelector("[data-shuffle]"));
     check(
-      "random opens a title",
-      document.querySelector("[data-player-title]").textContent === window.CATALOG[0].title
+      "random hands the first title to its own site",
+      tabs.length === 1 && tabs[0].href === window.CATALOG[0].sources[0].url,
+      JSON.stringify(tabs)
     );
     window.Math.random = random;
-    press(window, "Escape");
 
     const search = document.querySelector("#q");
     const event = press(window, "/");
@@ -772,6 +784,8 @@ function titles(document) {
     const first = boot();
     await tick();
     const seed = (() => {
+      // Reach a bundled file: they are the only tiles that open the player.
+      type(first.window, first.window.document.querySelector("#q"), "2048");
       click(first.window, first.window.document.querySelector('.tile[data-playable="1"] .tile-open'));
       press(first.window, "Escape");
       click(first.window, first.window.document.querySelector(".tile [data-fav]"));
@@ -969,6 +983,7 @@ function titles(document) {
     await tick();
     const { window } = dom;
     const { document } = window;
+    type(window, document.querySelector("#q"), "2048");
     click(window, document.querySelector('.tile[data-playable="1"] .tile-open'));
     const fav = document.querySelector("[data-player-fav]");
     check("the player has a save button", !!fav);
@@ -977,7 +992,7 @@ function titles(document) {
     check("the pick is stored", readStore(window).saved.length === 1);
     check(
       "the tile agrees",
-      document.querySelector("[data-fav]").getAttribute("aria-pressed") === "true"
+      document.querySelector('.tile[data-playable="1"] [data-fav]').getAttribute("aria-pressed") === "true"
     );
     dom.window.close();
   }
