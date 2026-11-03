@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Lost Key</title>
+	<style type="text/css">
+	#grids {
+    margin: 0 auto;
+    padding: 5px;
+    background: url(data:image/jpeg;base64,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);
+    min-height: 500px;
+    border: 1px solid #eebb55;
+    border: 1px solid #000000;
+    border-radius: 7px;
+    padding-bottom: 100px;
+    padding-top: 80px;
+
+}
+#display,#moves{
+	font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New;
+}
+.grid {
+    background: url(data:image/png;base64,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);
+     background-size: cover;
+    color: #000000;
+    border: 1px solid #ccccff;
+    border-radius: 5px;
+    flex: 1;
+    width: 80px;
+    height: 120px;
+    text-align: center;
+	font-family: "Times New Roman", Times, serif;
+    vertical-align: middle;
+    font-size: 30px;
+}
+
+.mytable {
+	margin: 0 auto;
+}
+.grid:hover {
+    color: #E68B8B;*/
+    border-color: #C0C0C0;
+    color: #C0C0C0;
+    cursor: pointer;
+}
+
+.row {
+    display: flex;
+    flow-direction: row;
+}
+
+ fieldset {
+  	border-style: solid;
+    border: 20px ;
+    text-align: center;
+    border-radius:8px;
+	box-shadow:0 0 10px #999;
+}
+.myButton {
+	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #000000), color-stop(1, #70736e));
+	background:-moz-linear-gradient(top, #000000 5%, #70736e 100%);
+	background:-webkit-linear-gradient(top, #000000 5%, #70736e 100%);
+	background:-o-linear-gradient(top, #000000 5%, #70736e 100%);
+	background:-ms-linear-gradient(top, #000000 5%, #70736e 100%);
+	background:linear-gradient(to bottom, #000000 5%, #70736e 100%);
+	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#000000', endColorstr='#70736e',GradientType=0);
+	background-color:#000000;
+	-moz-border-radius:28px;
+	-webkit-border-radius:28px;
+	border-radius:28px;
+	border:1px solid #e0e0e0;
+	display:inline-block;
+	cursor:pointer;
+	color:#ffffff;
+	font-family:Arial;
+	font-size:17px;
+	padding:16px 31px;
+	text-decoration:none;
+	text-shadow:0px 1px 0px #2f6627;
+	display: block;
+	margin: 0 auto;
+}
+.myButton:hover {
+	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #70736e), color-stop(1, #000000));
+	background:-moz-linear-gradient(top, #70736e 5%, #000000 100%);
+	background:-webkit-linear-gradient(top, #70736e 5%, #000000 100%);
+	background:-o-linear-gradient(top, #70736e 5%, #000000 100%);
+	background:-ms-linear-gradient(top, #70736e 5%, #000000 100%);
+	background:linear-gradient(to bottom, #70736e 5%, #000000 100%);
+	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#70736e', endColorstr='#000000',GradientType=0);
+	background-color:#70736e;
+}
+.myButton:active {
+	position:relative;
+	top:1px;
+}
+
+li {
+	font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+	color: #8B0000;	
+}
+
+
+</style>
+</head>
+
+
+<body>
+<fieldset>
+<h1 id="display"></h1>
+<h1 id="moves"></h1>
+</fieldset>
+<br>
+<br>
+<h2 style="text-align: center;" id='head'></h2>
+<div id="grids">
+<h2 >Rules:</h2>
+<div style="background-color: #FFFFFF">
+<ul>
+  <li>Your key is <b>LOST</b> and you have to find it.</li>
+  <li>There are 100 lockers out of which 1 locker contains the key</li>
+  <li>Open lockers by clicking on them</li>
+  <li>Each locker contains hint to reach the box.</li>
+  <li>Five lockers contain Bombs and game ends if you open one of it game ends</li> 
+  <li>Clues in some lockers is lost and some contain misguiding clues.</li>
+  <li>Find the key in least number of moves</li>
+  <li><b>ENJOY PLAYING!!</b></li>
+</ul>  
+</div>
+<br>
+<br>
+<br>
+
+<button onclick="Create()" class="myButton">Start Game</button>
+</div>
+<script type="text/javascript">
+
+
+document.getElementById('display').innerHTML = "Key Locked";
+var ans;
+var clicked = [];
+var Bombs = [];
+var Lost = [];
+var moves = 0;
+
+
+var messageClose = [
+	"You are about to find it!",
+	"Damn! You just missed it!",
+	"So Close! So Close",
+	"You almost found that",
+	"Check nearby lockers Buddy!!",
+	"Differnce is not more than 3"
+];
+
+var messageToofarLarge = [
+	"Too far buddy. Too far!!",
+	"Poor Guess, Think Smaller",
+	"You're on Earth. Need to go to Sun,Imagine distance",
+	"Search in locker with much smaller number",
+	"Too large than actual locker",
+	"Go to smaller boxes else you'll get killed",
+	"Smaller numbers are way better",
+	"Way to go. Go for something lot lesser",
+	"Go to locker No. 1 ;) ",
+	"Cheers! Go for value which is not nearby and is much smaller",
+	"Don't Search nearby lockers... Search in lockers with much lesser value",
+	"Having fun? Search in boxes with lesser number to have more of it",
+	"Getting similar message again and again! Search in boxes which are less numbered and you'll find it",
+	"Key is in number like Ant"
+]
+
+var messagefarLarge = [
+	"Neither Too far, Neither Too Close, But smaller than this",
+	"Clues are flowing, So are you, go slow, go wise",
+	"Search in locker with lesser value",
+	"100 lockers, 1 locker with Key, 5 Bombs, Go for lesser valued box",
+	"Dont Search in nearby lockers, go down",
+	"Search is locker with small number",
+	"You are a fine distance away. Keep Going!",
+	"Lesser the value, the better it is!"
+]
+
+var messageToofarSmall = [
+	"Too far buddy. Too far!!",
+	"Poor Guess, Think Large",
+	"You're on Sun. Need to come to Earth, Imagine distance",
+	"Search in locker with much larger number",
+	"Too small than actual locker",
+	"Go to larger boxes else you'll get killed",
+	"I am in love with larger numbers",
+	"Go to 100! I am troller!",
+	"Large is the new small",
+	"Infinitely More?",
+	"Having fun? Search in boxes with larger number to have more of it",
+	"Key is in number like Elephant",
+	"Differnce is more than 20",
+	"Bomb is nearby!! Run away"
+]
+
+var messagefarSmall = [
+	"Neither Too far, Neither Too Close, But larger than this",
+	"Clues are flowing, So are you",
+	"Search in locker with larger value",
+	"100 lockers, 1 locker with Key, 5 Bombs, Go for larger valued box",
+	"Search Down Fast",
+	"Search is locker with large number",
+	"You are a fine distance away. Keep Going!",
+	"Greater the value, the better it is!",
+	"Go Down the locker lane",
+	"Trust me!! Go to 50 B) "
+]
+function Create()
+{
+	document.getElementById('grids').innerHTML = "";
+	document.getElementById('moves').innerHTML = 'Moves: ' + moves;
+	document.getElementById('display').innerHTML = "Game is On!";
+	document.getElementById('head').innerHTML = "Key Locked\n\n";
+	ans = Math.floor(Math.random()*100) + 1;
+	count = 5;
+	while(count > 0)
+	{
+		var p = Math.floor(Math.random()*100) + 1;
+		if(p!=ans)
+			Bombs.push(p);
+		count--;
+	}
+	count = 5;
+	while(count > 0)
+	{
+		var p = Math.floor(Math.random()*100) + 1;
+		if(p!=ans)
+			Lost.push(p);
+		count--;
+	}
+
+	grid = clickableGrid(10,10);
+	console.log(grid);
+	document.getElementById('grids').appendChild(grid);
+}
+function CheckBox(num){
+	var response;
+	if(Bombs.indexOf(num) != -1)
+	{
+		response = 'Boom! You got Killed';
+		alert('Boom! You Got Killed. Click OK to restart');
+		window.location.reload();	
+	}
+	else if(Lost.indexOf(num) == 0)
+		response = 'No Message my boy';
+	else if(Lost.indexOf(num) == 1 || Lost.indexOf(num) == 2 )
+		response = 'Message is Lost';
+	else if(Lost.indexOf(num) == 3)
+		response = 'One Bomb is Present in locker number ' + Bombs[0];	
+	else if(Lost.indexOf(num) == 4)
+		response = 'One Bomb is Present in locker number ' + Bombs[1];
+
+	else if(clicked.indexOf(num) != -1)
+		response = 'You have Already read this message';
+
+	else if(num === ans)
+	{
+		response = 'You win';
+		moves++;
+		alert("You Found the Key!!\nMoves = " + moves + "\nClick OK for restart");
+		window.location.reload();
+	}
+	else if(num > ans)
+	{
+		if(num-ans < 3)
+		{
+			response = messageClose[Math.floor(Math.random()*6)]
+		}
+
+		else if(num-ans < 20)
+			response = messagefarLarge[Math.floor(Math.random()*8)];
+		else
+			response = messageToofarLarge[Math.floor(Math.random()*14)];
+	}
+	else
+	{
+		if(ans-num < 3)
+			response = messageClose[Math.floor(Math.random()*6)]
+		else if(ans-num < 20)
+			response = messagefarSmall[Math.floor(Math.random()*10)];
+		else
+			response = messageToofarSmall[Math.floor(Math.random()*14)];
+
+	}
+	document.getElementById('display').innerHTML = 'Message: '+ response;
+	moves++;
+	document.getElementById('moves').innerHTML = 'Moves: ' + moves;
+	document.body.scrollTop = document.documentElement.scrollTop = 0;
+	// alert(response);
+}
+function clickableGrid( rows, cols)
+{
+  var i=0;
+  var grid = document.createElement('table');
+  grid.className = 'mytable';
+  for (var r=0;r<rows;++r){
+    var tr = grid.appendChild(document.createElement('tr'));
+    tr.className = 'row';
+    for (var c=0;c<cols;++c){
+      var cell = tr.appendChild(document.createElement('td'));
+      cell.innerHTML = ++i;
+      cell.className = 'grid';
+      cell.addEventListener('click',function(){CheckBox(parseInt(this.innerHTML)); clicked.push(parseInt(this.innerHTML));});	
+    }
+  }
+  return grid;
+}
+</script>
+</body>
+</html>

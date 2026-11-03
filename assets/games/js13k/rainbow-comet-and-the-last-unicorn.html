@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Canvas</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+        }
+        body {
+            background: #000;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = AudioContext ? new AudioContext() : null;
+
+        function resumeAudio() {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+
+        function playCoinSound() {
+            if (!audioContext) return;
+            const now = audioContext.currentTime;
+            const baseFreq = 600 + Math.random() * 600;
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(baseFreq, now);
+            osc.frequency.exponentialRampToValueAtTime(baseFreq * 2, now + 0.1);
+            gain.gain.setValueAtTime(0.25, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start(now);
+            osc.stop(now + 0.18);
+        }
+
+        function playJumpSound() {
+            if (!audioContext) return;
+            const now = audioContext.currentTime;
+            const duration = 0.35;
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(650, now + duration * 0.25);
+            osc.frequency.exponentialRampToValueAtTime(200, now + duration);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.25, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        const coinImage = new Image();
+        coinImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAAARAgMAAAB4JsAnAAAADFBMVEUAAAD/1VP/tADciABWLGuAAAAAAXRSTlMAQObYZgAAAJlJREFUeNq90CEOwjAUxvFvS6joEeYxEMJ1SE/AEZA9B+qZNqwstLqq56lCkipel7mFCsRe8jPf3z20TxKbFm9gR8CwgHNVmh08oB7onJuh90WzAF8SzjVe0PkCwTtkfBGb+mgDTjXeIKLVA++Q+Ukyj+uYR8LRuevWkQP9jtESW8e7JfRGaRZgVMK+xg86oyB4b72v/fj/7wsPZJWBkBHFrQAAAABJRU5ErkJggg==';
+        
+        const enemyImage = new Image();
+        enemyImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAgBAMAAAC2tmq2AAAAG1BMVEUAAACbrbfL2/xpamoiIDT////fcSasMjL78jZv2jeuAAAAAXRSTlMAQObYZgAAAgdJREFUSMe1km+OEzEMxUML38fNBWhGHMCxpT1AcoKVKk7AigsAN0AcmxdndjbUqhitFPdP5mf7+cVVQ49TSp/tYRIni3l8SyKWmcSfntevv3LCVnP4dEtPP19+JMtM4PAlpaeX399SixkccK7f/zxbYgafEuJ2SxbLMc7H+2E4Bh3iNR/uf5+BlOP9ttGVLoZ4WP7La1q1XNJ6sB8GOAiZvcFzHFnSWgtdJLu6128GZGFMi+OcSEaWpLUyaR7rj/XBjiHuec3XKEwUNxaVCoNYy139gR4GA0WmfMeSSSpjMG9cSzPQZsCu7vXhH8O8UgbzwMqkVQgn8o0ropvE4upeH/JowEJypSjNfGMtsd02quA+jatF38LVvT7kdm4Ja8C2rUG4sxbBhVnwURkMbAtX9/pwxuw+HCcSZ45a2G4kxq+3rZhhPISrO70ZcGwLME6Oy0eWomgopXMfUOxbjIdwda83A7yiWURezijHQsoinSHU7TeJYryHiqs7fTjh/t0gEmI5S8GSbF3GCmG/Y+scDJBnV3f6EOL2A+GNAKOgUnZWCLf/zMZV94Gu7vXBHtioNwgMq7xxYbI/YukstewDfd3rw4d2xo0XcNMJ73w2AZg31n2gr3s9goZ45TgwA8vAGKg20Ne93hk8YHaGrv5Ij53eeDnKfLjfMlN5XGoSI2azbbXM4b8q3kXr+5+3jwAAAABJRU5ErkJggg==';
+
+        const enemy2Image = new Image();
+        enemy2Image.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAgBAMAAAC2tmq2AAAAD1BMVEUAAACbrbfL2/xpamr///9u5wHpAAAAAXRSTlMAQObYZgAAAYZJREFUSMftkkGOwjAMRZOKA/CbOcDE5ABEOcFEc/8zjVtjUkcQKBqxwrvn/1LZVt3bKuJomOq34USW6ZEfbe4xmy9MiSwDOBq/2vzX+r7zXU1kDKqW2Wd+3Z8oEdeVDyzMG/ZzlXyv3x6sjeN2Q1myXazlj/1DSiZ3P8DSgDI4j0AwF+F87Ifc+3YAVnQAGTAWHTguccsf+qR+O9nSyrAXgP0gl/FL85P4offtRqFoI63cBGCNM4yPohPTwG//REQo5+s/sTAg7L/WPBTmXX5mbhtyXs5tw1CuPF0Oxg8Gfr7l6z8xi38RwAJDViZmze/5YeA7cGVmbcgBSsctx1IjP1nfzxQZgjYmyVfWE5cs3Py88VPnM2zYVbmITKDMuTJWEH7eL+YC2lo5AnnLINIXt30G41frT3VZsLFfXuc+H/gCd3LZUNhJYZYBlBNpvtdXIQOCKliuHcewz/cIWVE2jNjyIQk/7ZNlV2Mp5wGnE/Mev2N3YhxxEH7Z94z/zJ/61Ke6+gPurpLFmc6QvQAAAABJRU5ErkJggg==';
+
+        const enemy3Image = new Image();
+        enemy3Image.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAgBAMAAAC2tmq2AAAAG1BMVEUAAACbrbfL2/z///+sMjJpamrZV2P78jYAAACNHvKTAAAAAXRSTlMAQObYZgAAAd1JREFUSMe1lDFu4zAQRWkt0otJ1CcydAGPjN16PaLSyl7tBeL4BAx8ARc5dob8RKiAEpBCHKjw+59ffwgBVpiirp/wKw/XfjLyDkou/kU15ikPF2AoGVhto/CcgxUYQg4udhOhXJ9VRBH06ixCM47jEYLW63PR/DN8fR9RqMuiObWGvzFR2y37yE/Zso3nVXHic889u1LtDpzICxMmpyz5Sf5/z7fefLG6k/P2he25G7QT7igIb19MsrLl93k/yZv+5UMKDnuweiB+pY+bPTOUB6IDWS+AfYHbqlvwmdpJ/tHQH19AYCk4hAO019WAF+IFkem326pb8oHIPxLxzReAXUHrr8hEw7FxgfYMIbAbXHvBByIvBWzZugKwFOAjuQP7YZRAFMAyBh+um/GTvODVE1gKWsPXUOkDUQB7AVvN+EmeDbuHCKzuqZU+ecKBe4oCWCZsNecn+ZYvFxAKNltic7n4yt1QlcJBiExhqzk/zTOzJ7AraJ1yEG6qwQWCEJmw1d/nGT/NO5QMWArkzvCpGbQuhSFEhsC84Kd5DFipahu4FtazjJ0T/2es9NEru3rUMuuz2lT+v7XxXK7PUlmNMoN2k4FFmEwOVpvIZQaGkpXjpXIwJjPjVmUe/gSFYJzgBE9JQgAAAABJRU5ErkJggg==';
+
+        const playerImage = new Image();
+        playerImage.src = 'data:image/png;base64,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';
+
+        const TRACK_COUNT = 7;
+        const RAINBOW_COLORS = ['#e6262b', '#f28c28', '#f5e33e', '#39b54a', '#00a2e8', '#1d5ba8', '#662d91'];
+        const ISO_ANGLE = Math.PI / 6; // 30 degrees
+        const ISO_EXTENT = 5000;
+        const BG_STAR_SPEED = 1;
+        const FG_STAR_SPEED = 40;
+        const FAST_STAR_SPEED = 60;
+        const STAR_DENSITY = 0.000012;
+        const PLAYER_RADIUS = 36;
+        const PLAYER_BOUNCE_HEIGHT = 80;
+        const GRAVITY = 1.6;
+        const LANE_CHANGE_SPEED = 12;
+        const SWIPE_THRESHOLD = 40;
+        const TAP_TIMEOUT = 200;
+        const HOLE_MIN_LENGTH = 80;
+        const HOLE_MAX_LENGTH = 500;
+        const WORLD_SCROLL_SPEED = -16;
+        const ENEMY_SPAWN_INTERVAL = 60;
+        const GAME_STATE_TITLE = 'title';
+        const GAME_STATE_PLAYING = 'playing';
+        const GAME_STATE_STARTING = 'starting';
+        const GAME_STATE_GAMEOVER = 'gameover';
+        const START_ANIMATION_DURATION = 30;
+        const GAME_OVER_DURATION = 30;
+
+        let TRACK_WIDTH = 100;
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            TRACK_WIDTH = Math.max(60, Math.min(canvas.width, canvas.height) / 12);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        function isoToScreen(ix, iy) {
+            const cos = Math.cos(ISO_ANGLE);
+            const sin = Math.sin(ISO_ANGLE);
+            return {
+                x: (ix + iy) * cos + canvas.width / 2,
+                y: (ix - iy) * sin + canvas.height / 2
+            };
+        }
+
+        function screenToIso(sx, sy) {
+            const cos = Math.cos(ISO_ANGLE);
+            const sin = Math.sin(ISO_ANGLE);
+            const x = (sx - canvas.width / 2) / cos;
+            const y = (sy - canvas.height / 2) / sin;
+            return {
+                x: (x + y) / 2,
+                y: (x - y) / 2
+            };
+        }
+
+        const bgStars = [];
+        const fgStars = [];
+        const fastStars = [];
+
+        function createStars(layer, count, sizeScale = 1) {
+            layer.length = 0;
+            for (let i = 0; i < count; i++) {
+                layer.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: (Math.random() * 2 + 0.5) * sizeScale
+                });
+            }
+        }
+
+        function createAllStars() {
+            const area = canvas.width * canvas.height;
+            const baseCount = Math.floor(area * STAR_DENSITY);
+            createStars(bgStars, baseCount * 10);
+            createStars(fgStars, baseCount * 3);
+            createStars(fastStars, baseCount, 1.5);
+        }
+
+        createAllStars();
+
+        const bgDx = -Math.cos(ISO_ANGLE) * BG_STAR_SPEED;
+        const bgDy = Math.sin(ISO_ANGLE) * BG_STAR_SPEED;
+        const fgDx = -Math.cos(ISO_ANGLE) * FG_STAR_SPEED;
+        const fgDy = Math.sin(ISO_ANGLE) * FG_STAR_SPEED;
+        const fastDx = -Math.cos(ISO_ANGLE) * FAST_STAR_SPEED;
+        const fastDy = Math.sin(ISO_ANGLE) * FAST_STAR_SPEED;
+
+        function wrap(star) {
+            if (star.x < 0) star.x += canvas.width;
+            if (star.x > canvas.width) star.x -= canvas.width;
+            if (star.y < 0) star.y += canvas.height;
+            if (star.y > canvas.height) star.y -= canvas.height;
+        }
+
+        const player = {
+            track: Math.floor(TRACK_COUNT / 2),
+            screenXRatio: 0.22,
+            screenYRatio: 0.78,
+            jumpVelocity: 0,
+            jumpOffset: 0,
+            isJumping: false,
+            onGround: true
+        };
+
+        const laneQueue = [];
+        let laneTransition = {
+            active: false,
+            targetTrack: null,
+            visualOffset: 0,
+            targetOffset: 0
+        };
+
+        const trackHoles = [];
+        let currentScrollSpeed = WORLD_SCROLL_SPEED;
+        let holeSpawnTimer = 0;
+        let holeSpawnInterval = 300;
+        let speedIncreaseTimer = 0;
+        const SPEED_INCREASE_INTERVAL = 30 * 10; // 10 seconds at 30 fps
+        let gameState = GAME_STATE_TITLE;
+        let score = 0;
+        let hiScore = 0;
+        let titleStarAngle = 0;
+        let startAnimationTimer = 0;
+        let gameStartFadeTimer = 0;
+        const GAME_START_FADE_DURATION = 30;
+        let playerAnimationFrame = 0;
+        let coinAnimationFrame = 0;
+        let enemyAnimationFrame = 0;
+        let gameOverTimer = 0;
+        const COIN_SIZE = 48;
+        const COIN_TILE_SIZE = 16;
+        const ENEMY_SIZE = 64;
+        const ENEMY_TILE_SIZE = 32;
+        const PLAYER_SIZE = 128;
+        const PLAYER_TILE_SIZE = 64;
+        const ENEMY_ANIMATION_RATE = 2;
+        const COIN_GROUP_MIN = 5;
+        const COIN_GROUP_MAX = 10;
+        const COIN_SPAWN_INTERVAL = 60;
+        const COIN_DISTANCE = 100;
+
+        const coins = [];
+        let coinSpawnTimer = 0;
+
+        function loadHiScore() {
+            const stored = localStorage.getItem('rainbowHiScore');
+            hiScore = stored ? parseInt(stored, 10) || 0 : 0;
+        }
+
+        function saveHiScore() {
+            localStorage.setItem('rainbowHiScore', String(hiScore));
+        }
+
+        loadHiScore();
+
+        function randomHoleLength() {
+            return HOLE_MIN_LENGTH + Math.random() * (HOLE_MAX_LENGTH - HOLE_MIN_LENGTH);
+        }
+
+        function createHole(trackIndex, startY) {
+            return {
+                track: trackIndex,
+                start: startY,
+                end: startY + randomHoleLength()
+            };
+        }
+
+        function generateInitialHoles() {
+            trackHoles.length = 0;
+            for (let i = 0; i < TRACK_COUNT; i++) {
+                trackHoles.push([]);
+            }
+        }
+
+        generateInitialHoles();
+
+        function spawnHole() {
+            const trackIndex = Math.floor(Math.random() * TRACK_COUNT);
+            const holes = trackHoles[trackIndex];
+            const minStart = ISO_EXTENT + 800;
+            const maxStart = ISO_EXTENT + 2000;
+            const startY = minStart + Math.random() * (maxStart - minStart);
+            holes.push(createHole(trackIndex, startY));
+        }
+
+        function updateHoles() {
+            for (let i = 0; i < TRACK_COUNT; i++) {
+                const holes = trackHoles[i];
+
+                for (const hole of holes) {
+                    hole.start += currentScrollSpeed;
+                    hole.end += currentScrollSpeed;
+
+                    if (hole.end < -ISO_EXTENT) {
+                        const length = randomHoleLength();
+                        const minStart = ISO_EXTENT + 800;
+                        const maxStart = ISO_EXTENT + 2000;
+                        hole.start = minStart + Math.random() * (maxStart - minStart);
+                        hole.end = hole.start + length;
+                    }
+                }
+
+                holes.sort((a, b) => a.start - b.start);
+            }
+        }
+
+        function resetGame() {
+            player.track = Math.floor(TRACK_COUNT / 2);
+            player.jumpVelocity = 0;
+            player.jumpOffset = 0;
+            player.isJumping = false;
+            player.onGround = true;
+
+            laneQueue.length = 0;
+            laneTransition.active = false;
+            laneTransition.targetTrack = null;
+            laneTransition.visualOffset = 0;
+            laneTransition.targetOffset = 0;
+
+            currentScrollSpeed = WORLD_SCROLL_SPEED;
+            holeSpawnTimer = 0;
+            holeSpawnInterval = 300;
+            speedIncreaseTimer = 0;
+            enemySpawnTimer = 0;
+            coinSpawnTimer = 0;
+
+            generateInitialHoles();
+            enemies.length = 0;
+            coins.length = 0;
+
+            heldDirections.left = false;
+            heldDirections.right = false;
+        }
+
+        function startGame() {
+            resumeAudio();
+            resetGame();
+            score = 0;
+            startAnimationTimer = 0;
+            gameState = GAME_STATE_STARTING;
+        }
+
+        function finishStartAnimation() {
+            gameState = GAME_STATE_PLAYING;
+            gameStartFadeTimer = 0;
+        }
+
+        function goToTitle() {
+            resetGame();
+            gameState = GAME_STATE_TITLE;
+        }
+
+        function gameOver() {
+            if (gameState === GAME_STATE_GAMEOVER) return;
+            if (score > hiScore) {
+                hiScore = score;
+                saveHiScore();
+            }
+            gameState = GAME_STATE_GAMEOVER;
+            gameOverTimer = 0;
+        }
+
+        function finishGameOver() {
+            goToTitle();
+        }
+
+        function updateDifficulty() {
+            holeSpawnTimer++;
+            speedIncreaseTimer++;
+
+            if (holeSpawnTimer >= holeSpawnInterval) {
+                holeSpawnTimer = 0;
+                spawnHole();
+                if (holeSpawnInterval > 60) {
+                    holeSpawnInterval -= 2;
+                }
+            }
+
+            if (speedIncreaseTimer >= SPEED_INCREASE_INTERVAL) {
+                speedIncreaseTimer = 0;
+                if (currentScrollSpeed > -90) {
+                    currentScrollSpeed -= 1;
+                }
+            }
+        }
+
+        const enemies = [];
+        let enemySpawnTimer = 0;
+
+        function createCoin(track, isoY) {
+            return {
+                track: track,
+                visualTrack: track,
+                isoY: isoY
+            };
+        }
+
+        function spawnCoinGroup() {
+            const count = COIN_GROUP_MIN + Math.floor(Math.random() * (COIN_GROUP_MAX - COIN_GROUP_MIN + 1));
+            let track = Math.floor(Math.random() * TRACK_COUNT);
+            const startY = ISO_EXTENT + COIN_SIZE;
+
+            for (let i = 0; i < count; i++) {
+                coins.push(createCoin(track, startY - i * COIN_DISTANCE));
+
+                if (Math.random() < 0.3) {
+                    const direction = Math.random() < 0.5 ? -1 : 1;
+                    const newTrack = track + direction;
+                    if (newTrack >= 0 && newTrack < TRACK_COUNT) {
+                        track = newTrack;
+                    }
+                }
+            }
+        }
+
+        function updateCoins() {
+            const playerVisualTrack = getPlayerVisualTrack();
+            const screenX = canvas.width * player.screenXRatio;
+            const screenY = canvas.height * player.screenYRatio;
+            const playerIso = screenToIso(screenX, screenY);
+            const xOffset = getTrackOffset();
+
+            for (let i = coins.length - 1; i >= 0; i--) {
+                const coin = coins[i];
+                coin.isoY += currentScrollSpeed;
+
+                const trackCenterX = (coin.visualTrack + 0.5) * TRACK_WIDTH + xOffset;
+                const coinBasePos = isoToScreen(trackCenterX, coin.isoY);
+                const coinCenterY = coinBasePos.y - COIN_SIZE / 2;
+                const playerBasePos = isoToScreen(playerIso.x, playerIso.y);
+                const playerBallY = playerBasePos.y + player.jumpOffset - PLAYER_RADIUS;
+
+                if (Math.round(coin.visualTrack) === Math.round(playerVisualTrack) &&
+                    Math.abs(playerBasePos.x - coinBasePos.x) < COIN_SIZE / 2 + PLAYER_RADIUS &&
+                    Math.abs(playerBallY - coinCenterY) < COIN_SIZE / 2 + PLAYER_RADIUS) {
+                    score += 1;
+                    playCoinSound();
+                    coins.splice(i, 1);
+                    continue;
+                }
+
+                if (coin.isoY < -ISO_EXTENT - COIN_SIZE) {
+                    coins.splice(i, 1);
+                }
+            }
+        }
+
+        function createEnemy() {
+            const track = Math.floor(Math.random() * TRACK_COUNT);
+            const flying = Math.random() < 0.4;
+            const laneChanger = Math.random() < 0.3;
+            const enemyType = Math.floor(Math.random() * 3);
+            return {
+                track: track,
+                visualTrack: track,
+                targetTrack: null,
+                isoY: ISO_EXTENT + PLAYER_RADIUS,
+                flying: flying,
+                laneChanger: laneChanger,
+                laneChangeTimer: 0,
+                image: enemyType === 0 ? enemyImage : (enemyType === 1 ? enemy2Image : enemy3Image),
+                frameCount: 6
+            };
+        }
+
+        function spawnEnemy() {
+            enemies.push(createEnemy());
+        }
+
+        function updateEnemies() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.isoY += currentScrollSpeed;
+
+                if (enemy.laneChanger) {
+                    enemy.laneChangeTimer++;
+                    if (enemy.laneChangeTimer >= 15) {
+                        enemy.laneChangeTimer = 0;
+                        const direction = Math.random() < 0.5 ? -1 : 1;
+                        const newTrack = enemy.track + direction;
+                        if (newTrack >= 0 && newTrack < TRACK_COUNT && enemy.targetTrack === null) {
+                            enemy.targetTrack = newTrack;
+                        }
+                    }
+                }
+
+                if (enemy.targetTrack !== null) {
+                    const diff = enemy.targetTrack - enemy.visualTrack;
+                    if (Math.abs(diff) <= 0.15) {
+                        enemy.visualTrack = enemy.targetTrack;
+                        enemy.track = enemy.targetTrack;
+                        enemy.targetTrack = null;
+                    } else {
+                        enemy.visualTrack += Math.sign(diff) * 0.15;
+                    }
+                }
+
+                if (enemy.isoY < -ISO_EXTENT - PLAYER_RADIUS) {
+                    enemies.splice(i, 1);
+                }
+            }
+        }
+
+        function checkEnemyCollisions() {
+            const screenX = canvas.width * player.screenXRatio;
+            const screenY = canvas.height * player.screenYRatio;
+            const playerIso = screenToIso(screenX, screenY);
+            const playerBasePos = isoToScreen(playerIso.x, playerIso.y);
+            const playerBallY = playerBasePos.y + player.jumpOffset - PLAYER_RADIUS;
+            const xOffset = getTrackOffset();
+            const playerVisualTrack = getPlayerVisualTrack();
+
+            for (const enemy of enemies) {
+                if (Math.round(enemy.visualTrack) !== Math.round(playerVisualTrack)) {
+                    continue;
+                }
+
+                const trackCenterX = (enemy.visualTrack + 0.5) * TRACK_WIDTH + xOffset;
+                const enemyBasePos = isoToScreen(trackCenterX, enemy.isoY);
+                const enemyCenterY = enemy.flying
+                    ? enemyBasePos.y - PLAYER_BOUNCE_HEIGHT - ENEMY_SIZE / 2
+                    : enemyBasePos.y - ENEMY_SIZE / 2;
+
+                if (enemy.flying && player.jumpOffset > -PLAYER_BOUNCE_HEIGHT * 0.5) {
+                    continue;
+                }
+
+                const dx = playerBasePos.x - enemyBasePos.x;
+                const dy = playerBallY - enemyCenterY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const minDistance = PLAYER_RADIUS + ENEMY_SIZE / 2;
+
+                if (distance < minDistance) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function getTrackOffset() {
+            const screenX = canvas.width * player.screenXRatio;
+            const screenY = canvas.height * player.screenYRatio;
+            const iso = screenToIso(screenX, screenY);
+            const trackCenterX = (player.track + 0.5) * TRACK_WIDTH;
+            return iso.x - trackCenterX + laneTransition.visualOffset;
+        }
+
+        function getPlayerVisualTrack() {
+            return player.track - laneTransition.visualOffset / TRACK_WIDTH;
+        }
+
+        function isPlayerInHole() {
+            const screenX = canvas.width * player.screenXRatio;
+            const screenY = canvas.height * player.screenYRatio;
+            const iso = screenToIso(screenX, screenY);
+
+            const playerVisualTrack = Math.round(getPlayerVisualTrack());
+            const trackIndex = Math.max(0, Math.min(TRACK_COUNT - 1, playerVisualTrack));
+            const holes = trackHoles[trackIndex];
+            for (const hole of holes) {
+                if (iso.y >= hole.start && iso.y <= hole.end) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function jump() {
+            if (player.onGround) {
+                player.jumpVelocity = -28;
+                player.isJumping = true;
+                player.onGround = false;
+                playJumpSound();
+            }
+        }
+
+        function queueLaneChange(direction) {
+            const lastTarget = laneTransition.active
+                ? laneTransition.targetTrack
+                : player.track;
+            const finalTarget = laneQueue.length > 0
+                ? laneQueue[laneQueue.length - 1]
+                : lastTarget;
+            const newTarget = finalTarget + direction;
+
+            if (newTarget >= 0 && newTarget < TRACK_COUNT && newTarget !== finalTarget) {
+                laneQueue.push(newTarget);
+            }
+        }
+
+        const heldDirections = {
+            left: false,
+            right: false
+        };
+
+        function handleKeyDown(event) {
+            if (gameState === GAME_STATE_TITLE || gameState === GAME_STATE_STARTING) {
+                if (event.code === 'Space' || event.code === 'Enter') {
+                    event.preventDefault();
+                    if (gameState === GAME_STATE_TITLE) {
+                        startGame();
+                    }
+                }
+                return;
+            }
+
+            if (event.code === 'Space' || event.code === 'ArrowUp' || event.code === 'KeyW') {
+                if (!event.repeat) {
+                    event.preventDefault();
+                    jump();
+                }
+                return;
+            }
+            if (event.code === 'ArrowLeft' || event.code === 'KeyA') {
+                event.preventDefault();
+                heldDirections.left = true;
+                return;
+            }
+            if (event.code === 'ArrowRight' || event.code === 'KeyD') {
+                event.preventDefault();
+                heldDirections.right = true;
+                return;
+            }
+        }
+
+        function handleKeyUp(event) {
+            if (event.code === 'ArrowLeft' || event.code === 'KeyA') {
+                heldDirections.left = false;
+            }
+            if (event.code === 'ArrowRight' || event.code === 'KeyD') {
+                heldDirections.right = false;
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        const touchState = {
+            startX: 0,
+            startY: 0,
+            startTime: 0,
+            handled: false
+        };
+        let lastTouchEndTime = 0;
+
+        function isClickOnStar(x, y) {
+            const starCenterX = canvas.width / 2;
+            const starCenterY = canvas.height * 0.45;
+            const starSize = 70;
+            const dx = x - starCenterX;
+            const dy = y - starCenterY;
+            return Math.sqrt(dx * dx + dy * dy) < starSize;
+        }
+
+        function handleMouseClick(event) {
+            if (gameState !== GAME_STATE_TITLE) return;
+            if (performance.now() - lastTouchEndTime < 500) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            if (isClickOnStar(x, y)) {
+                startGame();
+            }
+        }
+
+        function handleTouchStartGame(event) {
+            if (event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            touchState.startX = touch.clientX;
+            touchState.startY = touch.clientY;
+            touchState.startTime = performance.now();
+            touchState.handled = false;
+
+            if (gameState !== GAME_STATE_TITLE) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            if (isClickOnStar(x, y)) {
+                startGame();
+                touchState.handled = true;
+                lastTouchEndTime = performance.now();
+            }
+        }
+
+        function handleTouchEnd(event) {
+            if (touchState.handled) return;
+
+            const touch = event.changedTouches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+
+            if (gameState === GAME_STATE_TITLE) {
+                if (isClickOnStar(x, y)) {
+                    startGame();
+                    touchState.handled = true;
+                    lastTouchEndTime = performance.now();
+                    return;
+                }
+            }
+
+            const dx = touch.clientX - touchState.startX;
+            const dy = touch.clientY - touchState.startY;
+            const elapsed = performance.now() - touchState.startTime;
+
+            if (Math.abs(dx) >= SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+                queueLaneChange(dx > 0 ? 1 : -1);
+                touchState.handled = true;
+                lastTouchEndTime = performance.now();
+                return;
+            }
+
+            if (elapsed < TAP_TIMEOUT && Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) {
+                jump();
+                touchState.handled = true;
+            }
+
+            lastTouchEndTime = performance.now();
+        }
+
+        canvas.addEventListener('touchstart', handleTouchStartGame, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        canvas.addEventListener('click', handleMouseClick);
+
+        function startLaneTransition() {
+            if (laneTransition.active || laneQueue.length === 0) return;
+
+            const target = laneQueue.shift();
+            const direction = target - player.track;
+
+            laneTransition.active = true;
+            laneTransition.targetTrack = target;
+            laneTransition.visualOffset = 0;
+            laneTransition.targetOffset = -direction * TRACK_WIDTH;
+        }
+
+        function applyHeldDirection() {
+            if (heldDirections.left) {
+                queueLaneChange(-1);
+            }
+            if (heldDirections.right) {
+                queueLaneChange(1);
+            }
+        }
+
+        function updateLaneTransition() {
+            if (!laneTransition.active) {
+                applyHeldDirection();
+            }
+
+            startLaneTransition();
+
+            if (!laneTransition.active) return;
+
+            const diff = laneTransition.targetOffset - laneTransition.visualOffset;
+
+            if (Math.abs(diff) <= LANE_CHANGE_SPEED) {
+                laneTransition.visualOffset = 0;
+                player.track = laneTransition.targetTrack;
+                laneTransition.active = false;
+                laneTransition.targetTrack = null;
+                laneTransition.targetOffset = 0;
+            } else {
+                laneTransition.visualOffset += Math.sign(diff) * LANE_CHANGE_SPEED;
+            }
+        }
+
+        function updatePlayer() {
+            player.jumpOffset += player.jumpVelocity;
+
+            if (player.isJumping) {
+                player.jumpVelocity += GRAVITY;
+                if (player.jumpOffset >= 0) {
+                    player.jumpOffset = 0;
+                    player.jumpVelocity = 0;
+                    player.isJumping = false;
+                    player.onGround = true;
+                }
+            }
+        }
+
+        function update() {
+            for (const star of bgStars) {
+                star.x += bgDx;
+                star.y += bgDy;
+                wrap(star);
+            }
+            for (const star of fgStars) {
+                star.x += fgDx;
+                star.y += fgDy;
+                wrap(star);
+            }
+            for (const star of fastStars) {
+                star.x += fastDx;
+                star.y += fastDy;
+                wrap(star);
+            }
+
+            playerAnimationFrame++;
+            coinAnimationFrame++;
+            enemyAnimationFrame++;
+
+            if (gameState === GAME_STATE_TITLE) {
+                titleStarAngle += 0.02;
+                return;
+            }
+
+            if (gameState === GAME_STATE_STARTING) {
+                titleStarAngle += 0.05;
+                startAnimationTimer++;
+                if (startAnimationTimer >= START_ANIMATION_DURATION) {
+                    finishStartAnimation();
+                }
+                return;
+            }
+
+            if (gameState === GAME_STATE_GAMEOVER) {
+                gameOverTimer++;
+                if (gameOverTimer >= GAME_OVER_DURATION) {
+                    finishGameOver();
+                }
+                return;
+            }
+
+            if (gameState !== GAME_STATE_PLAYING) {
+                return;
+            }
+
+            if (gameStartFadeTimer < GAME_START_FADE_DURATION) {
+                gameStartFadeTimer++;
+            }
+
+            updatePlayer();
+            updateLaneTransition();
+            updateHoles();
+            updateDifficulty();
+            updateEnemies();
+            updateCoins();
+
+            enemySpawnTimer++;
+            if (enemySpawnTimer >= ENEMY_SPAWN_INTERVAL) {
+                enemySpawnTimer = 0;
+                spawnEnemy();
+            }
+
+            coinSpawnTimer++;
+            if (coinSpawnTimer % COIN_SPAWN_INTERVAL === 0) {
+                spawnCoinGroup();
+            }
+
+            if (isPlayerInHole() && !player.isJumping) {
+                gameOver();
+                return;
+            }
+
+            if (checkEnemyCollisions()) {
+                gameOver();
+                return;
+            }
+        }
+
+        function drawStar(star, opacity = 1) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawTrackSolid(xMin, xMax, startY, endY) {
+            const corners = [
+                isoToScreen(xMin, startY),
+                isoToScreen(xMax, startY),
+                isoToScreen(xMax, endY),
+                isoToScreen(xMin, endY)
+            ];
+
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y);
+            for (let j = 1; j < corners.length; j++) {
+                ctx.lineTo(corners[j].x, corners[j].y);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawTracks() {
+            const xOffset = getTrackOffset();
+            const shadowOffsetX = 20;
+            const shadowOffsetY = -20;
+
+            for (let i = 0; i < TRACK_COUNT; i++) {
+                const xMin = i * TRACK_WIDTH + xOffset;
+                const xMax = xMin + TRACK_WIDTH;
+                const holes = trackHoles[i];
+
+                let drawStart = -ISO_EXTENT;
+
+                for (const hole of holes) {
+                    if (hole.end < -ISO_EXTENT || hole.start > ISO_EXTENT) continue;
+                    const clampedHoleStart = Math.max(hole.start, -ISO_EXTENT);
+                    const clampedHoleEnd = Math.min(hole.end, ISO_EXTENT);
+
+                    if (clampedHoleStart > drawStart) {
+                        ctx.fillStyle = RAINBOW_COLORS[i] + '99';
+                        drawTrackSolid(xMin + shadowOffsetX, xMax + shadowOffsetX, drawStart + shadowOffsetY, clampedHoleStart + shadowOffsetY);
+
+                        ctx.fillStyle = RAINBOW_COLORS[i];
+                        drawTrackSolid(xMin, xMax, drawStart, clampedHoleStart);
+                    }
+
+                    drawStart = clampedHoleEnd;
+                }
+
+                if (drawStart < ISO_EXTENT) {
+                    ctx.fillStyle = RAINBOW_COLORS[i] + '99';
+                    drawTrackSolid(xMin + shadowOffsetX, xMax + shadowOffsetX, drawStart + shadowOffsetY, ISO_EXTENT + shadowOffsetY);
+
+                    ctx.fillStyle = RAINBOW_COLORS[i];
+                    drawTrackSolid(xMin, xMax, drawStart, ISO_EXTENT);
+                }
+            }
+        }
+
+        function drawEntity(entity) {
+            ctx.fillStyle = entity.shadowColor;
+            ctx.beginPath();
+            ctx.ellipse(entity.x, entity.baseY, entity.radius * entity.shadowScale, entity.radius * 0.35 * entity.shadowScale, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (entity.image && entity.image.complete && entity.image.naturalWidth > 0) {
+                const frames = entity.frameCount || Math.floor(entity.image.width / entity.tileSize);
+                const isPlayer = entity.image === playerImage;
+                const frame = isPlayer
+                    ? (player.isJumping ? 0 : playerAnimationFrame % frames)
+                    : Math.floor(enemyAnimationFrame / ENEMY_ANIMATION_RATE) % frames;
+                const spriteX = entity.x - entity.size / 2;
+                const spriteY = entity.bottomY - entity.size;
+
+                ctx.drawImage(
+                    entity.image,
+                    frame * entity.tileSize, 0,
+                    entity.tileSize, entity.tileSize,
+                    spriteX, spriteY,
+                    entity.size, entity.size
+                );
+            } else {
+                ctx.fillStyle = entity.color;
+                ctx.beginPath();
+                ctx.arc(entity.x, entity.spriteY, entity.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function getPlayerRenderEntity() {
+            const screenX = canvas.width * player.screenXRatio;
+            const screenY = canvas.height * player.screenYRatio;
+            const iso = screenToIso(screenX, screenY);
+            const basePos = isoToScreen(iso.x, iso.y);
+            const ballY = basePos.y + player.jumpOffset - PLAYER_RADIUS;
+            const height = Math.max(0, -player.jumpOffset);
+            return {
+                x: basePos.x,
+                baseY: basePos.y,
+                spriteY: ballY,
+                bottomY: basePos.y + player.jumpOffset,
+                radius: PLAYER_RADIUS,
+                color: '#ffffff',
+                shadowColor: `rgba(0, 0, 0, ${Math.max(0.1, 0.35 - height / (PLAYER_BOUNCE_HEIGHT * 6))})`,
+                shadowScale: Math.max(0.5, 1 - height / (PLAYER_BOUNCE_HEIGHT * 6)),
+                image: playerImage,
+                frameCount: 8,
+                tileSize: PLAYER_TILE_SIZE,
+                size: PLAYER_SIZE
+            };
+        }
+
+        function getEnemyRenderEntity(enemy) {
+            const xOffset = getTrackOffset();
+            const trackCenterX = (enemy.visualTrack + 0.5) * TRACK_WIDTH + xOffset;
+            const basePos = isoToScreen(trackCenterX, enemy.isoY);
+            const circleBottomY = enemy.flying
+                ? basePos.y - PLAYER_BOUNCE_HEIGHT
+                : basePos.y;
+            return {
+                x: basePos.x,
+                baseY: basePos.y,
+                spriteY: circleBottomY - ENEMY_SIZE,
+                bottomY: circleBottomY,
+                radius: ENEMY_SIZE / 2,
+                color: '#888888',
+                shadowColor: 'rgba(0, 0, 0, 0.35)',
+                shadowScale: 1,
+                image: enemy.image,
+                frameCount: enemy.frameCount,
+                tileSize: ENEMY_TILE_SIZE,
+                size: ENEMY_SIZE
+            };
+        }
+
+        function drawEntities() {
+            const entities = [];
+            entities.push(getPlayerRenderEntity());
+            for (const enemy of enemies) {
+                entities.push(getEnemyRenderEntity(enemy));
+            }
+
+            entities.sort((a, b) => a.baseY - b.baseY);
+
+            for (const entity of entities) {
+                drawEntity(entity);
+            }
+        }
+
+        function drawStarShape(cx, cy, outerRadius, innerRadius, points, rotation) {
+            ctx.beginPath();
+            for (let i = 0; i < points * 2; i++) {
+                const angle = (i * Math.PI / points) - Math.PI / 2 + rotation;
+                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawTitleScreen(zoomProgress = 0) {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (const star of bgStars) {
+                drawStar(star, 0.6);
+            }
+            for (const star of fgStars) {
+                drawStar(star, 0.9);
+            }
+            for (const star of fastStars) {
+                drawStar(star, 1);
+            }
+
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const titleY = canvas.height * 0.25;
+            const baseStarCenterX = canvas.width / 2;
+            const baseStarCenterY = canvas.height * 0.45;
+            const zoomTargetX = canvas.width / 3 * 2;
+            const zoomTargetY = canvas.height / 3;
+            const starCenterX = baseStarCenterX + (zoomTargetX - baseStarCenterX) * zoomProgress;
+            const starCenterY = baseStarCenterY + (zoomTargetY - baseStarCenterY) * zoomProgress;
+            const starSize = 70 * (1 + zoomProgress * 2);
+            const tailWidth = 10 * (1 + zoomProgress * 4);
+            const tailSpacing = 11 * (1 + zoomProgress);
+            const starIso = screenToIso(starCenterX, starCenterY);
+            const tailLength = (canvas.width + canvas.height) * (1 + zoomProgress * 2);
+
+            for (let i = 0; i < TRACK_COUNT; i++) {
+                const offset = (i - (TRACK_COUNT - 1) / 2) * tailSpacing;
+                const centerIsoX = starIso.x + offset;
+                const xMin = centerIsoX - tailWidth / 2;
+                const xMax = centerIsoX + tailWidth / 2;
+
+                ctx.fillStyle = RAINBOW_COLORS[i];
+                drawTrackSolid(xMin, xMax, starIso.y, starIso.y - tailLength);
+            }
+
+            ctx.fillStyle = '#ffffff';
+            drawStarShape(starCenterX, starCenterY, starSize, starSize * 0.55, 5, titleStarAngle);
+
+            const titleLines = ['RAINBOW', 'c  o  m  e  t      a  n  d      t  h  e      l  a  s  t', 'UNICORN'];
+            const titleLineSizes = [0.1, 0.025, 0.1];
+            const titleLineHeight = Math.max(24, Math.min(canvas.width, canvas.height) * 0.08);
+            const totalHeight = titleLines.length * titleLineHeight;
+            const titleLineOffsets = [0, -titleLineHeight * 0.40, -titleLineHeight * 0.65];
+            titleLines.forEach((line, index) => {
+                const lineSize = Math.min(canvas.width, canvas.height) * titleLineSizes[index];
+                const fontWeight = index === 1 ? 'normal' : 'bold';
+                ctx.font = `${fontWeight} ${lineSize}px sans-serif`;
+                const lineY = titleY - totalHeight / 2 + index * titleLineHeight + titleLineHeight / 2 + titleLineOffsets[index];
+                ctx.fillText(line, canvas.width / 2, lineY);
+            });
+
+            if (zoomProgress === 0) {
+                ctx.fillStyle = '#000000';
+                ctx.font = `bold ${Math.max(12, 70 * 0.22)}px sans-serif`;
+                ctx.fillText('START', starCenterX, starCenterY);
+
+                if (hiScore > 0) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.font = `${Math.max(12, Math.min(canvas.width, canvas.height) * 0.025)}px sans-serif`;
+                    ctx.fillText(`HI-SCORE: ${hiScore}`, canvas.width / 2, canvas.height * 0.92);
+                }
+            }
+        }
+
+        function getCurrentButtons() {
+            const w = Math.min(canvas.width * 0.6, 280);
+            const h = Math.max(44, Math.min(canvas.width, canvas.height) * 0.08);
+            const x = (canvas.width - w) / 2;
+
+            if (gameState === GAME_STATE_TITLE) {
+                return [
+                    { x: x, y: canvas.height * 0.55, w: w, h: h, label: 'START' }
+                ];
+            }
+
+            return [];
+        }
+
+        function drawCoin(coin) {
+            if (!coinImage.complete || coinImage.naturalWidth === 0) return;
+
+            const frames = Math.floor(coinImage.width / COIN_TILE_SIZE);
+            const frame = coinAnimationFrame % frames;
+            const xOffset = getTrackOffset();
+            const trackCenterX = (coin.visualTrack + 0.5) * TRACK_WIDTH + xOffset;
+            const basePos = isoToScreen(trackCenterX, coin.isoY);
+            const x = basePos.x - COIN_SIZE / 2;
+            const y = basePos.y - COIN_SIZE - PLAYER_BOUNCE_HEIGHT / 2;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.beginPath();
+            ctx.ellipse(basePos.x, basePos.y, COIN_SIZE * 0.3, COIN_SIZE * 0.12, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.drawImage(
+                coinImage,
+                frame * COIN_TILE_SIZE, 0,
+                COIN_TILE_SIZE, COIN_TILE_SIZE,
+                x, y,
+                COIN_SIZE, COIN_SIZE
+            );
+        }
+
+        function drawCoins() {
+            if (gameState !== GAME_STATE_PLAYING) return;
+            for (const coin of coins) {
+                drawCoin(coin);
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.font = `bold ${Math.max(14, Math.min(canvas.width, canvas.height) * 0.04)}px sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(String(score), 20, 20);
+        }
+
+        function draw() {
+            if (gameState === GAME_STATE_TITLE) {
+                drawTitleScreen(0);
+                return;
+            }
+
+            if (gameState === GAME_STATE_STARTING) {
+                const progress = startAnimationTimer / START_ANIMATION_DURATION;
+                drawTitleScreen(progress);
+
+                ctx.fillStyle = `rgba(255, 255, 255, ${progress})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (const star of bgStars) {
+                drawStar(star, 0.6);
+            }
+
+            drawTracks();
+            drawCoins();
+            drawEntities();
+
+            for (const star of fgStars) {
+                drawStar(star, 0.9);
+            }
+
+            for (const star of fastStars) {
+                drawStar(star, 1);
+            }
+
+            drawScore();
+
+            if (gameStartFadeTimer < GAME_START_FADE_DURATION) {
+                const fadeProgress = gameStartFadeTimer / GAME_START_FADE_DURATION;
+                ctx.fillStyle = `rgba(255, 255, 255, ${1 - fadeProgress})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            if (gameState === GAME_STATE_GAMEOVER) {
+                const flash = Math.floor(gameOverTimer / 5) % 2 === 0;
+                ctx.fillStyle = flash ? 'rgba(255, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function renderLoop() {
+            draw();
+            requestAnimationFrame(renderLoop);
+        }
+
+        setInterval(update, 1000 / 30);
+        renderLoop();
+    </script>
+</body>
+</html>

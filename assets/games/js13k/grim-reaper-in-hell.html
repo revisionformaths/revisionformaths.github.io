@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<title>Grim Reaper in Hell</title>
+<meta name="viewport" content="width=device-width">
+<style>body{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0px;
+	height: 100vh;
+	background-color: #888888;
+}
+
+canvas{
+	border: 10px dashed #c8c8c8;
+	border-radius: 16px;
+	border-top-right-radius: 50px;
+}</style>
+<body>
+	<canvas id="canvas" width="620" height="200"></canvas>
+	<script>ctx = document.getElementById('canvas').getContext('2d');
+
+firecolor = false; //fire 'blink' animation
+fireposition = [600, 800]; //2 bonfire
+deathposition = 94; //coord of Grim Reaper
+score = 0;
+
+death = new Image();
+death.src="data:image/png;base64,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";
+death.onload = function() {ctx.drawImage(death, 26, 94);}; //load and draw Grim Reaper on canvas
+
+function gameloop() {
+	//sky
+	ctx.fillStyle = '#ffffff';
+	ctx.fillRect(0, 0, 620, 160);
+
+	//ground
+	ctx.fillStyle = '#000000';
+	ctx.fillRect(0, 160, 620, 40);
+
+	//display score on corner
+	ctx.fillText(score, 8, 16);
+
+	//waterMark
+	ctx.fillStyle = '#ffffff';
+	ctx.fillText("js13kGames", 554, 184);
+
+	//character on position
+	ctx.drawImage(death, 26, deathposition);
+
+	collision = false;
+
+	fireposition[0] -= 22; //fire 1 moves fast
+	fireposition[1] -= 14; //fire 2 moves slow
+
+	for(x = 0; x < 2; x++) { //2 bonfire
+
+		if(firecolor == x) { //bonfire[x] frame 1
+
+			ctx.fillStyle = '#bb6644';
+
+			ctx.beginPath();
+			ctx.moveTo(fireposition[x] + 50, 156);
+			ctx.lineTo(fireposition[x] + 30, 156);
+			ctx.lineTo(fireposition[x] + 14, 136);
+			ctx.lineTo(fireposition[x] + 35, 146);
+			ctx.lineTo(fireposition[x] + 40, 126);
+			ctx.lineTo(fireposition[x] + 45, 146);
+			ctx.lineTo(fireposition[x] + 64, 136);
+			ctx.fill();
+
+		} else { //bonfire[x] frame 2
+
+			ctx.fillStyle = '#ff9966';
+
+			ctx.beginPath();
+			ctx.moveTo(fireposition[x] + 50, 156);
+			ctx.lineTo(fireposition[x] + 30, 156);
+			ctx.lineTo(fireposition[x] + 24, 130);
+			ctx.lineTo(fireposition[x] + 40, 150);
+			ctx.lineTo(fireposition[x] + 54, 130);
+			ctx.fill();
+		}
+
+		if(fireposition[x] < 0) {
+			fireposition[x] = 660; //respawn
+			score++;
+		}
+
+		if(fireposition[x] < 30 && fireposition[x] > -40 && deathposition > 66) collision = true;
+	}
+
+	firecolor = !firecolor; //fire 'blink' animation
+
+	//handle position on screen
+	if(deathposition % 2 == 0 && deathposition < 94) deathposition -= 8; //character jumping up
+	else if(deathposition < 88) deathposition += 8; //character falling (if does not hit the ground) 
+	if(deathposition < 26) deathposition = 23; //if character reach top it start fall
+
+	if(collision) {
+		alert('game over'); //'game over' message
+		deathposition = 94; //reset jump
+		fireposition = [600, 800]; //reset both bonfire position
+		score = 0; //reset score
+	}
+}
+
+setInterval(gameloop, 50);
+
+document.addEventListener("keydown", function() {
+	if(deathposition > 80) deathposition = 88; //start the jump
+});</script>
+</body>
+</html>

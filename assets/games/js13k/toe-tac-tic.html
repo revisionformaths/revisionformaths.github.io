@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Toe Tac Tic</title>
+  <meta name="monetization" content="$coil.xrptipbot.com/8wCYXpSjRJ67qwDLasYc3g">
+  <style>body{
+	background: rgb(55,57,61);
+	background: radial-gradient(circle, rgba(55,57,61,1) 0%, rgba(12,12,13,1) 100%, rgba(0,212,255,1) 100%);
+	overflow: hidden;
+}
+
+h1{
+	color: white;
+	text-align: center;
+}
+.wrapper{
+	color: white;
+	position: absolute;
+	display: block;
+	width: 100%;
+	height: 100%;
+	background-color: black;
+	z-index: 99;
+	top: 0;
+	text-align: center;
+}
+
+td {
+	border:  10px solid white;
+	height:  100px;
+	width:  100px;
+	color: white;
+	text-align:  center;
+	vertical-align:  middle;
+	font-family:  "Comic Sans MS", cursive, sans-serif;
+	font-size:  70px;
+	cursor: pointer;
+}
+
+table {
+	border-collapse: collapse;
+	position: absolute;
+	left: 50%;
+	margin-left: -155px;
+	top: 100px;
+}
+
+table tr:first-child td {
+	border-top: 0;
+}
+
+table tr:last-child td {
+	border-bottom: 0;
+}
+
+table tr td:first-child {
+	border-left: 0;
+}
+
+table tr td:last-child {
+	border-right: 0;
+}
+
+.endgame {
+  display: none;
+  width: 200px;
+  top: 120px;
+  background-color: rgba(205,133,63, 0.8);
+  position: absolute;
+  left: 50%;
+  margin-left: -100px;
+  padding-top: 50px;
+  padding-bottom: 50px;
+  text-align: center;
+  border-radius: 5px;
+  color: white;
+  font-size: 2em;
+}
+button {
+  background-color: #4CAF50;
+  border: none;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 65vh 46%;
+}
+.button{
+	background-color: white;
+  border: 2px solid black;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  position: absolute;
+  top: 90vh;
+  left: 43.5%;
+}
+
+
+
+
+
+
+
+</style>
+
+</head>
+
+<body>
+	<div class="wrapper">
+	<h1>Rules</h1>
+	<p style="font-size: 2em">1) This is back-ward Tic-Tak-Toe</p>
+	<p style="font-size: 2em">2) If you make 3-O in a row or column or diagonally you loose the game</p>
+	<p style="font-size: 2em">3) If you have a friend click start and then click the "Play with friends" mode</p>
+	<button onClick="begin()" style="margin: 30vh 46%;">Start</button>
+	</div>
+	<h1>Toe-Tac-Tic</h1>
+
+	<table>
+		<tr>
+			<td class="cell" id="0"></td>
+			<td class="cell" id="1"></td>
+			<td class="cell" id="2"></td>
+		</tr>
+		<tr>
+			<td class="cell" id="3"></td>
+			<td class="cell" id="4"></td>
+			<td class="cell" id="5"></td>
+		</tr>
+		<tr>
+			<td class="cell" id="6"></td>
+			<td class="cell" id="7"></td>
+			<td class="cell" id="8"></td>
+		</tr>
+	</table>
+	<div class="endgame">
+		<div class="text"></div>
+	</div>
+	<button onClick="startGame()">Replay</button>
+	<a href="data:text/html;base64,PCFET0NUWVBFIGh0bWw+Cgo8aHRtbD4KPGhlYWQ+CiAgPG1ldGEgY2hhcnNldD0iVVRGLTgiPgogIDx0aXRsZT5Ub2UgVGFjIFRpYzwvdGl0bGU+CiAgPG1ldGEgbmFtZT0ibW9uZXRpemF0aW9uIiBjb250ZW50PSIkY29pbC54cnB0aXBib3QuY29tLzh3Q1lYcFNqUko2N3F3RExhc1ljM2ciPgogIDxsaW5rIHJlbD0ic3R5bGVzaGVldCIgaHJlZj0ic3R5bGUuY3NzIj4KCjwvaGVhZD4KCjxib2R5PgoJPGRpdiBjbGFzcz0id3JhcHBlciI+CgkJPGgxPlJ1bGVzPC9oMT4KCQk8cCBzdHlsZT0iZm9udC1zaXplOiAyZW0iPjEpIFlvdSBjYW4gb25seSBwbGFjZSBYIGluIHRoaXMgZ2FtZTwvcD4KCQk8cCBzdHlsZT0iZm9udC1zaXplOiAyZW0iPjIpIElmIHlvdSBtYWtlIDMtWCBpbiBhIHJvdyBvciBjb2x1bW4gb3IgZGlhZ29uYWxseSB5b3UgbG9vc2UgdGhlIGdhbWU8L3A+CgkJPHAgc3R5bGU9ImZvbnQtc2l6ZTogMmVtIj4zKSBUaGlzIGlzIGEgb2ZmbGluZSBnYW1lIHNvIHRoZSBvcHBvbmVudC9mcmllbmQgc2hvdWxkIGJlIHNpdHRpbmcgd2l0aCB5b3UgdG8gcGxheSB0aGUgZ2FtZTwvcD4KCQk8YnV0dG9uIG9uQ2xpY2s9ImJlZ2luKCkiIHN0eWxlPSJtYXJnaW46IDMwdmggNDYlOyI+U3RhcnQ8L2J1dHRvbj4KCTwvZGl2PgoJPGgxPlRvZS1UYWMtVGljPC9oMT4KCgk8dGFibGU+CgkJPHRyPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSIwIj48L3RkPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSIxIj48L3RkPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSIyIj48L3RkPgoJCTwvdHI+CgkJPHRyPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSIzIj48L3RkPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSI0Ij48L3RkPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSI1Ij48L3RkPgoJCTwvdHI+CgkJPHRyPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSI2Ij48L3RkPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSI3Ij48L3RkPgoJCQk8dGQgY2xhc3M9ImNlbGwiIGlkPSI4Ij48L3RkPgoJCTwvdHI+Cgk8L3RhYmxlPgoJPGRpdiBjbGFzcz0iZW5kZ2FtZSI+CgkJPGRpdiBjbGFzcz0idGV4dCI+PC9kaXY+Cgk8L2Rpdj4KCTxidXR0b24gb25DbGljaz0ic3RhcnRHYW1lKCkiPlJlcGxheTwvYnV0dG9uPgoKICA8c2NyaXB0IHNyYz0ib2ZmaW5lLmpzIj48L3NjcmlwdD4KPC9ib2R5Pgo8L2h0bWw+Cg==" class="button">Play with friends</a>
+
+  <script>var origBoard;
+const huPlayer = 'O';
+const aiPlayer = 'X';
+const winCombos = [
+	[0, 1, 2],
+	[3, 4, 5],
+	[6, 7, 8],
+	[0, 3, 6],
+	[1, 4, 7],
+	[2, 5, 8],
+	[0, 4, 8],
+	[6, 4, 2]
+]
+
+const cells = document.querySelectorAll('.cell');
+startGame();
+
+function startGame() {
+	document.querySelectorAll("td").forEach((td) => td.style.color = "white")
+	document.querySelector(".endgame").style.display = "none";
+	origBoard = Array.from(Array(9).keys());
+	for (var i = 0; i < cells.length; i++) {
+		cells[i].innerText = '';
+		cells[i].style.removeProperty('background-color');
+		cells[i].addEventListener('click', turnClick, false);
+	}
+}
+
+function turnClick(square) {
+	if (typeof origBoard[square.target.id] == 'number') {
+		turn(square.target.id, huPlayer)
+		if (!checkTie()) turn(bestSpot(), aiPlayer);
+	}
+}
+
+function turn(squareId, player) {
+	origBoard[squareId] = player;
+	document.getElementById(squareId).innerText = player;
+	let gameWon = checkWin(origBoard, player)
+	if (gameWon) gameOver(gameWon)
+}
+
+function checkWin(board, player) {
+	let plays = board.reduce((a, e, i) => 
+		(e === player) ? a.concat(i) : a, []);
+	let gameWon = null;
+	for (let [index, win] of winCombos.entries()) {
+		if (win.every(elem => plays.indexOf(elem) > -1)) {
+			gameWon = {index: index, player: player};
+			break;
+		}
+	}
+	return gameWon;
+}
+
+function gameOver(gameWon) {
+	for (let index of winCombos[gameWon.index]) {
+		document.getElementById(index).style.backgroundColor =
+			gameWon.player == huPlayer ? "white" : "white";
+	}
+	for (var i = 0; i < cells.length; i++) {
+		cells[i].removeEventListener('click', turnClick, false);
+	}
+	declareWinner(gameWon.player == huPlayer ? "You lose :(" : "You win :)");
+}
+
+function declareWinner(who) {
+	document.querySelector(".endgame").style.display = "block";
+	document.querySelector(".endgame .text").innerText = who;
+	document.querySelectorAll("td").forEach((td) => td.style.color = "black")
+}
+
+function emptySquares() {
+	return origBoard.filter(s => typeof s == 'number');
+}
+
+function bestSpot() {
+	return emptySquares()[Math.floor((Math.random() * emptySquares().length))];
+}
+
+function checkTie() {
+	if (emptySquares().length == 0) {
+		for (var i = 0; i < cells.length; i++) {
+			cells[i].style.backgroundColor = "green";
+			cells[i].removeEventListener('click', turnClick, false);
+		}
+		declareWinner("Tie Game!")
+		return true;
+	}
+	return false;
+}
+
+function begin(){
+	document.querySelector(".wrapper").style.display = "none";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+</body>
+</html>

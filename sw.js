@@ -1,5 +1,5 @@
 /* GitHub Pages-only offline shell and explicitly saved local games. */
-const VERSION = "classroom-shell-v15";
+const VERSION = "classroom-shell-v16";
 const GAME_CACHE = "classroom-offline-games-v1";
 /* Ad and auction networks that came bundled inside some of the game files
    (doubleclick, googlesyndication and adnxs are all present today). Blocking

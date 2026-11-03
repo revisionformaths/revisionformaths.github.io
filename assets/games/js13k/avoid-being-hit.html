@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<meta name="viewport" content="minimal-ui,width=device-width, height=device-height, initial-scale=1.0 ,user-scalable=no">
+<head>
+<title>AVOID_BEING_HIT</title>
+<script>
+var top_pos = 0;
+var score=0;
+var lives = 5;
+var loop ; 
+var add_lives;
+
+var shoot = new Audio();
+shoot.load();
+var loose_life = new Audio();
+loose_life.load();
+var game_over = new Audio();
+game_over.load();
+
+function move_left(){
+var x = document.getElementById("ball");
+if(top_pos == 0){
+x.style.top = "20.5vw";
+x.style.left = "2.5vw";
+top_pos = 3;
+}
+else if (top_pos == 1 ){
+x.style.top = "39vw";
+x.style.left = "20.5vw";
+top_pos--;
+}
+else if (top_pos == 2 ){
+x.style.top = "20.5vw";
+x.style.left = "39vw";
+top_pos--;
+}
+else if (top_pos == 3 ){
+x.style.top = "2vw";
+x.style.left = "20.5vw";
+top_pos--;
+}
+
+if(!navigator.onLine){
+x.style.background = "#" + Math.floor(Math.random()* 1000);
+document.getElementById("square_core").style.background  = "#" + Math.floor(Math.random()* 1000);
+document.getElementById("launcher").style.background  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("screen").style.background  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_u").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_l").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_r").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_d").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+}
+}	
+
+function move_right(){
+var x = document.getElementById("ball");
+if(top_pos == 0){
+x.style.top = "20.5vw";
+x.style.left = "39vw";
+top_pos++;
+}
+else if (top_pos == 1 ){
+x.style.top = "2vw";
+x.style.left = "20.5vw";
+top_pos++;
+}
+else if (top_pos == 2 ){
+x.style.top = "20.5vw";
+x.style.left = "2vw";
+top_pos++;
+}
+else if (top_pos == 3 ){
+x.style.top = "39vw";
+x.style.left = "20.5vw";
+top_pos = 0;
+}
+
+if(!navigator.onLine){
+x.style.background = "#" + Math.floor(Math.random()* 1000);
+document.getElementById("square_core").style.background  = "#" + Math.floor(Math.random()* 1000);
+document.getElementById("launcher").style.background  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("screen").style.background  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_u").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_l").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_r").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+document.getElementById("tile_d").style.borderBottomColor  = "#" +  Math.floor(Math.random()* 1000);
+}
+}	
+
+function create_obstacles(){
+var obj = document.getElementById("obstacles_handler");
+var box  = document.createElement("div");
+box.setAttribute("class","obstacles");
+box.style.background = "#" + Math.floor(Math.random()* 1000);
+obj.appendChild(box);
+var pos =22;
+var ran = Math.floor(Math.random() * 4);
+if(ran == 0){
+	document.getElementById("launcher").style.transform = "rotateZ(90deg)";
+	var timer_d = setInterval(move_obstacles_d,60);
+	function move_obstacles_d(){
+		if(pos == 39){
+			obj.removeChild(box);
+			if(lives > 0) {
+			score++;
+			document.getElementById("score").innerHTML = "Score : " + score;
+			}
+			
+		}
+		pos++;
+		box.style.top = pos + 'vw';
+		
+		
+		if(top_pos == 0 && parseFloat(box.style.top,10) == 39){
+			if(lives > 0) {
+			lives--;
+			loose_life_sound();
+			add_lives.removeChild(add_lives.lastChild);
+			}
+			if(lives==0){
+			show_result();
+			}
+			
+		}
+	}
+}
+else if(ran == 1){
+		document.getElementById("launcher").style.transform = "rotateZ(-90deg)";
+var timer_u = setInterval(move_obstacles_u,60);
+function move_obstacles_u()
+{
+		
+		if(pos == 3){
+			obj.removeChild(box);
+			if(lives > 0) {
+			score++;
+			document.getElementById("score").innerHTML = "Score : " + score;
+			}
+		}
+		pos--;
+		box.style.top =  pos + 'vw';
+		
+		if(top_pos == 2 && parseFloat(box.style.top,10) == 4){
+		if(lives > 0) {
+			lives--;
+			loose_life_sound();
+			add_lives.removeChild(add_lives.lastChild);
+			}
+			if(lives==0)
+			{
+			show_result();
+			}
+			
+		}
+	}
+}
+else if(ran==2){
+		document.getElementById("launcher").style.transform = "rotateZ(180deg)";
+ var timer_l = setInterval(move_obstacles_l,60);
+function move_obstacles_l()
+{
+		
+		if(pos == 4){
+		
+			obj.removeChild(box);
+			if(lives > 0) {
+			score++;
+			document.getElementById("score").innerHTML = "Score : " + score;
+			}
+		}
+		pos--;
+		box.style.left =  pos + 'vw';
+		
+		if(top_pos == 3 && parseInt(box.style.left,10) == 5){
+		if(lives > 0) {
+			lives--;
+			loose_life_sound();
+			add_lives.removeChild(add_lives.lastChild);
+			}
+			if(lives==0)
+			{
+			show_result();
+			}	
+		}
+	}
+}
+else if(ran ==3){
+		document.getElementById("launcher").style.transform = "rotateZ(0deg)";
+		var timer_r = setInterval(move_obstacles_r,60);
+	function move_obstacles_r()
+{
+		
+		if(pos == 40){
+		
+			obj.removeChild(box);
+			if(lives > 0) {
+			score++;
+			document.getElementById("score").innerHTML = "Score : " + score;
+			}
+		}
+		pos++;
+		box.style.left =  pos + 'vw';
+		
+		if(top_pos == 1 && parseInt(box.style.left,10) == 39){
+		if(lives > 0) {
+			lives--;
+			loose_life_sound();
+			add_lives.removeChild(add_lives.lastChild);
+			}
+			if(lives==0)
+			{
+			show_result();
+			}
+		}
+	}
+}
+
+document.getElementById("score").innerHTML = "Score : " + score;
+shoot_objects_sound();
+}
+
+function game_loop(){
+lives_count(5);
+loop = setInterval(create_obstacles, 500);
+}
+
+function play(){
+var start =screenorientation();
+if(start){
+document.getElementById("main_menu").style.display = "none";
+document.getElementById("screen").style.opacity = "1";
+game_loop();
+}
+}
+
+function screenorientation(){
+var elem = document.documentElement;
+if(screen.width < screen.height){
+window.alert("Landscape Mode is requied, Please switch to landscape mode before playing");
+return false;
+}
+else{
+if(screen.width < screen.height){
+if(elem.requestFullscreen){
+elem.requestFullscreen();
+}
+else if(elem.mozRequestFullScreen){
+elem.mozRequestFullScreen();
+}
+else if(elem.webkitRequestFullscreen){
+elem.webkitRequestFullscreen();
+}
+else if(elem.msRequestFullscreen){
+elem.msRequestFullscreen();
+}
+}
+return true;
+}
+}
+
+function show_result(){
+clearTimeout(loop);
+document.getElementById("score_result").innerHTML = "Your Score is : " + score;
+document.getElementById("play_again").style.opacity = "1";
+document.getElementById("score_result").style.opacity = "1";
+document.getElementById("screen").style.opacity = "0.2";
+document.getElementById("btn_l").disabled=  true;
+document.getElementById("btn_r").disabled=  true;
+
+game_over.src="data:audio/x-wav;base64,UklGRrYJAABXQVZFZm10IBAAAAABAAEAiBUAAIgVAAABAAgAZGF0YZIJAACJoLCjf1pIU3Wbsa2Qak5IW36htK+UcFNHUW6RrbeqjGpPR1Nvka24rpNxVEdNZYelt7Sff15KSVt6nLO3p4lnTkhXdpmxt6eHZExKX4KktrCVcFJKXH+jtayNZk1QbpWwr5JpT1R1nrGjfFhQbJevonlWVnqiq41iVG+aqo9kVnSepoNdXoammG1ZdJ2he1tok6SHYGCIpZFnWnyhnXNYa5amiV9ZfaOjfVhagaamgVpUc52umG5RVnqhsZ52VE1ljayymnRUSlt+orWvkm1RSFZ0l7G3p4hnTkdTbo+rubSdfl9LR1Nsi6e4uKiMbVRHSVt2la66tqSIaVFGSl16mLC6taGEZU5GTmWDobW5rZJyVkdLYH+ftLipjGpQR1Ryla+3qotnTUpfg6W1rY9pTk5oj66ymnNTTmmSr62NZE5dhKitj2VQYoyrpn9ZVXegq41iU26aq5FmVGyYq5JnU2uWq5RpU2eSrJxxU1uDp6mHXk9mkK2ohV1NXoapsZpzU0xhh6i1poNfSk1liam3rpJwU0dOZoelt7ekhmdPRkxgfJqxu7SghGhRRkhXboult7yzoIVqU0dGUWaAmrC7uq2We2FORUhWbomitby2pYxxWEhFT2SAnLG7t6aMb1ZHR1Zxj6m4uKiNblNGS2KCobW3qIpoTkdXdpmxtqSDYEpOaY+ttaJ+WkpYfKKzp4NdTFyDp7GZcFJTdJ2wn3dVUnKcr551VFR1nq+bclJUdp+wnXVTUG2XsKmGX0xXe6GzqIZgS1Bska61ooBeSktfgaG2tqKCY01GUWiHpLe5rJN2W0pFTWB6la26uq6Zf2VRRkVPYXiRqLe9uKmTe2NRRkRMW3CIn7G8vLOjjXVeTUVFTmB3j6W1vLqvnIRrVkhDSlpxi6KzvLmrlntiTkRHV3CMpba7sp6CZk9FS2B9m7G5spt8XUlIWniZsbeqjWpPSFh5nbOznXlXSVZ3nLOvk2xPTWeOrbKac1NMZIursZlyUk1ljKyxmnNTS2CGqLSkgV1KUGyRrrWkg2BLSlx8nbS3pohnT0ZNYX+cs7qynIBkT0VHVWqEnrK8uayWfWVSRkRKWGyCma26vrirmIJsWUtERExZa4CVqLa9vbWnlIBrWUtEREpXaX2SpbO8vbirmYRvW01EQ0tZbYOZq7i9uq+dh29aSkNGUmZ/l6u4vLWljnNbSkNKXXeTqri5rpd7XkpFT2iHpLW4qo9vU0ZNZoemtrOefFtITGSIp7aukm5RSFh5nbOymnZWSFNylrC0oX9dSUxjhqa2sJd1V0dLYICftbiojW1TRkhXcI2nuLqul3xiT0VGUWN6k6m4vbeolH1nVEhDRk9ecISYq7i+vLSmlIBtXE5GQ0ZOWml6jZ+uub6+uK2ejHpoWU1FQ0VNWWl7jZ6tuL6+ua6gjntpWEtEQkdSYnWJnKy3vby1qJaBbFlLQ0NMXXOKn6+5vLaok3tjT0RET2R+mKy4urCcgmZQREdZdJGqt7ipj3BVRkhbeZiwuK+Xd1lHSFx7nLK3qY1sUUZOZ4eltrWig2RNRU9mhaK1uKuSdFlIRE5hfJeuurmrlXxjUEVETFpuhZuvur23qZaBbFpNRUNHUF1tfpGjsru/vLWomYh2ZlhNRkNESVJda3qKmaizu7++urGll4d3aFtQSENDRk1YZXSElKKvuL2/vLWqnY18bFxQR0JCSFJhcoSWpbG6vby1qZmHc2BRRkFET190ip2tuLy5r56IcVxLQkRQZH2Wqre7taWOc1tJQ0pdeJOqt7mtl3pfS0NLYX6bsLm0oYVoUERIWXORqri4qpF1W0lDS1x1kKi3u7Kfh25YSUNGUWJ3jqO0vLyzpJF8aFdLRENHT1tqeoudrLi+vrqxpZaGdmdaT0hEQ0ZLU11odYKQnqq0vL/AvLatopaIe21hVk1HRENFSVFaZnJ/jZqmsLi9v766s6mekIJzZVlOR0JCRUxWZHODk6Gstry+vLasn49+bVxPRUFDSldpfZCgrri8u7OmlH9qV0lCQ01fdYyhsLm7s6SOdl5MQ0RQZX6YrLi6sqCHbVZHQkpbdI6mtbu1pY50XEtDRVBjepKotry4q5iCbFhLQ0NJVWR2iZytub68taiZh3ZmWE1GQ0NHTldibnqIlqSwub7AvrixppuOgXRoXlRNSERDREdMU1pjbXiCjZmkrbW7v8C/vLevppyRhnpuZFpRSkVDQkRIT1dhbXmGkp6osbe8v768tq6kmIt9b2JWTEVBQUVNWGZ3h5ajrra7vbu0qZyLemhYS0NARE5ecYWYp7O6vLesnIhzX05EQUdUaX+Vp7S7ua+finNdTENCSlpvhputuLu2qZeBbFlKQ0JIVGR2ip2uuL27s6aWhXNjVUtEQkNIUFplcX6Mmqizur6/vLauo5iMf3NoXlVOSUZEREZJTVNaYWlyeoOMlqCqsri9v8DAvbmzrKSckoh+dWtiWlNNSEVDQ0RHTFFYYWp0fomTnaattLm9v7+9urStpZuQhHhsYVdOR0JBQUVMVmJwf42ZpK21ur29ubKpnY5/b2BSSEJAQ0tZaXyOnaq0ury4sKOSgG1bTENARE5ecYWZqLS7u7WpmYZyX1BFQUJKV2d5jJ6tt7y7taqci3pqW09HQkJESlJcZ3N/jZuosrq+v7y3sKeckYZ6b2VcVU9KRkVERUdKTlNZX2Vsc3qBiJCYoamwtru+wMC/vbq1sKmim5OLgnpyamNcVlBMSEVERERGSU1SWF9mb3eBipObo6qwtbq9v7++vLizraWck4h+c2heVU1HQ0BAQ0hQWmZ0gY6Zo6yzuLy9u7ewp5uOf3BiVUpDP0BFT1xtfo+dqbK5vLq1q56OfWxcTkVAQEZQXm6AkaCttru8t6+jlYV1ZlhORkJBQ0lQWmVxfYqXpK63vL69urStpJqPhHpwZl5XUUxIRkVFRUdKTVFVWl9lanB2e4GGjJGYoKeutLi8vsDAv767uLSvqqSel5CKg3x1bmhiXFdSTktIRkVEREZHSk5SV11janJ6goqSmaCmrLG2uby+v769u7eyrKaelYyDeW9lXFRMRkJAQEJGTVZgbXqHkpylrLO4u7y7t7Kqn5SHeWteUklCPz9ETFdldYWTn6qzubu7t6+lmYp8bV9TSkNAQENKUl1pdoOQnaixuLy9u7exqZ+Vin91a2JaU05JRkREREZIS05SV1xiZ2xxdnp+goWIio6SlpmbnJ2dnJuamJaUko+NioiGhYOCgYCAfw==";
+game_over.play();
+}
+
+function play_again(){
+window.location.reload();
+}
+
+function loose_life_sound(){
+navigator.vibrate(50);
+loose_life.src="data:audio/x-wav;base64,UklGRoAFAABXQVZFZm10IBAAAAABAAEAiBUAAIgVAAABAAgAZGF0YVwFAABKSUVFlcqtbm5kY5KyoTMzKSMu1taKKChtgIXV1aQ5OYnPz6KOjr7Ix66upmlpdJKSpcTEqGdkZGRkZGRkZGRkZGVloLCwsLCwsLCwsLCvojY2Nzc3Nzc3Nzc3KigpKSkpKSkpMNHR0dHR0NDQmy4uLi4uLi5egICAgICAtc/Ozs7OnD8/Pz8/kMnJycm2jY2NjZ7CwsHBsaqqqpZra2tykJCQmb6+vsHIx8d4TU1SpaenjGtrazs4OFt8fH6cnJyCbW1sOjY2OD09PWOHh4eiv7+/uIeHh4eHh2JFRUVFRUh/gYGBgYF4ZmZmZmZmbX9/f39/f39fUlJSUlJSUllycnJycnJycnJgQEBBQUFBQUFBQUGGx8fHx8fHx8fHxsbGxsWopKSkpKOjo6Ojo6Ojo6Ojo7S5ubm5ubm5ubi4uLi4uLi4jkxMTU1NTU1NTU1NTU1NWcLGxsbFxcXFxcXFxcO9vb29vb29vb29hjo6Ojo6Ojo6PklJSUlJSUlVenp6enp6end3d3d3d6+5ubm4s5CPj4+Qn6CgoJ6Ojo6OdGRkZF5XV1dWVlZWZ2pqdIWFhIGAgZKVlVlNUYuTi1lXc6ysrKysq4ZbW1tbW2e0uLi4uLWqqqqqqqalpaWlmIuLi4uLi4uLi3BkZGVnhIiIiJKwsLCwnYmJiYlcQ0NERE5VVVVVbq6tra2tgE5OTk5OUnN4eHh4eHiDo6Ojo6Ojo6OjfEhISEhISElJSUlJSUlKb3p6enp6enp6enp6enp6enp6enp6enp6enqDioqKioqKiYmJiYmJiYmJiYmJiYmJiYmJiYmKioqKioqKioqKioqKioqKfnFxcXFxcXFxcXFxXlJSUlJSUlJSVVtbW1xcXFxjbGxsbGxsiJWVlZWVfXR0dHRwaWlpaW1wcHB4n6Wln3FnZ2dlZWV5jY2MjIyMinp3d3d3d3JYVVVVVVV8jo6Ojo6Vl5eXl4VoaGhodpKSkpKEfHx8gY+QkJGbnZ2ajouLi4iIiHZjY2RvcnJ1enp4bGpqiZ+flHh4dWBbW2JnZ2hqa2yPnJyepaWloJubm4l+fn5zY2NjZXd9fX19g4iIiIiIj6CgoKCgoJ+elZOTk5OTk5OTk5OTk5OTgmVjY2NjY2NjY2NkZGRkZGRkZGRkZGRkZGVlZWVlZWVlZWVlZWVlZWZmZmZmZmZmZmZmZmZmZ2dnZ2dnZ2dnZ2dneZycnJycnJycnJycnJuPcW5ubm5udIySkpKSkpB5cHBwcHBwh5eXl5aWloN3d3d3d3dycXFxcXGGnJycnJyPfX19fX5/f39/f4GDg4ODjJmZmZd/c3NzcnBwcHWEhoaFgoKCi5WVkomGhoaGhoSBgYOHiImNjYqGhoyPiHFrbXB2jJSRjYl/fX19eXN8j452f5GSkpKKhYWFhYWFhYWEgYGBgYSGhoaGiYuLi4uIhISEhIWJjIyMjIyFdG5vb29vb29xc3Nzc3NzdHR0dHR0dHR0dHR6i4+Pj4+Pj4+PjoV4dXV1dXV1dXV1dXV1dXV1dXV2dnZ2dnZ2dnZ2dnVzc3Nzc3Nzc3N0dHR0dHR0dHR0dHR0dHR1dXV1dXV1dXV1dXV1dXV2dnZ2dnZ2dnZ2dnZ2dnZ3d3d4eXl5eXl5eXl5enp6e4SIiIiIiIiIiIeFhYWFhYWFgn9/f39/f39/f39/fn18fHx+g4aGhoF7eXl7f4GBgYGBgYGBgYGBgYGAgICAgIGCg4OCgoKCgoB/f39/f3+AgYGBgYGBf35+fn5+gIGBgYGBgH9/f39/gICAgICAgYCAgICAgIB/f39/f39/f39/f39/f3+A";
+loose_life.play();
+}
+
+function shoot_objects_sound(){
+shoot.src="data:audio/x-wav;base64,UklGRnABAABXQVZFZm10IBAAAAABAAEAiBUAAIgVAAABAAgAZGF0YUwBAACTnntmWlm7n3xmWmzBlXZjV4i6jHBgVqWthGxdWbmjfmhbZMGaeWVZc8GTdWJXhbyOcmFWlLaKb19Wn7KHbl9VpLCHbV9WpbCHbl9Wn7SJb2BXkrqNcmJYfsCTdmRaacKefGhcWLGthm5gWIPBlHdmW125qoRuYFl8w5l6aF1XnrqPdWVcW7CyinJkXF2zsYpzZVxbqriOdmdeWY7DmHxrYVtqvqyIc2ZeWojEnoBuZF5bmMOafm5kXluRxJ6BcGZgXXW8rIt3bGVhYJC+noR1bGdkY5G5nYV3bmpnZnutqY19c25raWiGraGKfHVwbmxsep+nkIF5dHFwb29/naKOgXp2dHNycnSLnZeIf3p4dnV1dXWBkpiMg357eXh4eHh4e4iQj4aBfnx7e3p6e3t7gIeKiYOAf359fX19fX19fn+Cg4OCgIB/f39/fw==";
+shoot.play();
+}
+
+function lives_count( x){
+for(x=0;x<=4;x++){
+add_lives = document.getElementById("lives");
+var life = document.createElement("div");
+life.setAttribute("class","add_life");
+add_lives.appendChild(life);
+}
+}
+
+</script>
+
+<style type="text/css">
+.add_life {
+	background-color:#FF6347;
+	transform:rotateZ(45deg);
+	height: 1.5vw;
+	width: 1.5vw;
+	margin:0.5vw;
+}
+
+.lives_handler{
+	height:2vw;
+	transform:rotateZ(-90deg);
+	position:absolute;
+	font-size:1.5vw;
+	font-family:courier;
+	font-weight:bold;
+	color:white;
+}
+.lives_box{
+	position:absolute;
+	left:55vw;
+	top:3vw;
+	height:5vw;
+	width:auto;
+	background-color: #00008b;
+	border:0.3vw solid white;
+	border-radius : 10%;
+	color: white;
+	font-size: 2vw;
+	font-family:courier;
+	}
+
+.title{
+	color:#4169E1;
+	font-size: 6vw;
+	font-family:courier;
+	font-weight:bold;
+}
+
+
+.score_box{
+	position:absolute;
+	left:27vw;
+	top:3vw;
+	height:auto;
+	width:auto;
+	background-color: #00008b;
+	border:0.3vw solid white;
+	border-radius : 10%;
+	color: white;
+	font-size: 2vw;
+	font-family:courier;
+	}
+	
+.score_result{
+	position:absolute;
+	left:30vw;
+	top:15vw;
+	height:auto;
+	width:auto;
+	background-color: #FF6347;
+	border:0.3vw solid white;
+	border-radius : 10%;
+	color: white;
+	font-size: 4vw;
+	font-family:courier;
+	opacity:0;
+	}
+	
+.main_menu {  
+	position:absolute;
+	background-color:#000080;
+	width:60vw;
+	height:40vw;
+	left:15vw;
+	top:2vw;
+	overflow:hidden;
+	display:block;
+	border:0.5vw solid white;
+	border-radius : 3%;
+	font-size:1.5vw;
+	color:white;
+	text-align:center;
+	line-height:3.5vw;
+	padding:1vw;
+	font-family:courier;
+	z-index:1;
+}
+
+.main_body {
+	position:fixed;
+	background-color:#483D8B;
+	width:100%;
+	height:100%;
+	overflow:hidden;
+}
+
+.btn_l{
+	position:absolute;
+	height:45vw;
+	width:22.5vw;
+	left:-23vw;
+	background-color: #2F4F4F;
+	border:0.5vw solid white;
+	border-radius : 10%;
+	color: white;
+	font-size: 7vw;
+	font-family:courier;
+}
+
+.btn_r{
+	position:absolute;
+	left:45.5vw;
+	height:45vw;
+	width:22.5vw;
+	background-color: #2F4F4F;
+	border:0.5vw solid white;
+	border-radius : 10%;
+	color: white;
+	font-size: 7vw;
+	font-family:courier;
+}
+
+.play_again{
+	position:absolute;
+	height:10vw;
+	width :30vw;
+	left:35vw;
+	top:25vw;
+	background-color:#2F4F4F;
+	border:0.5vw solid white;
+	border-radius : 10%;
+	color: white;
+	font-size: 4.5vw;
+	opacity:0;
+	font-family:courier;
+}
+
+.btn_l:active ,.btn_r:active, .play_btn:active, .play_again:active { 
+	background-color:#8FBC8F;
+	border:0.5vw solid white;
+	color: white;
+	font-weight:bold;
+}
+
+.play_btn{
+	position:absolute;
+	height:5vw;
+	width :20vw;
+	left:20vw;
+	top:36vw;
+	background-color:#2F4F4F;
+	border:0.5vw solid white;
+	border-radius : 15%;
+	color: white;
+	font-size: 3vw;
+	font-family:courier;
+}
+
+
+
+.screen{
+	position:absolute;
+	left:25vw;
+	top:0vw;
+	height:45vw;
+	width:45vw;
+	background-color:#483D8B;
+	border:0.5vw solid white;
+	opacity:0;
+	}
+	
+.tile_d {
+	position:absolute;
+	top:16vw;
+	left:15vw;
+	height: 10vw;
+	width: 7vw;
+	border-bottom : 19vw solid  #1E90FF;
+	border-left : 4vw solid transparent;
+	border-right : 4vw solid transparent;
+	}
+.tile_l {
+	position:absolute;
+	top:8vw;
+	left:7vw;
+	transform : rotateZ(90deg);
+	height: 10vw;
+	width: 7vw;
+	border-bottom : 19vw solid 	#1E90FF;
+	border-left : 4vw solid transparent;
+	border-right : 4vw  solid transparent;
+	}
+.tile_r {
+	position:absolute;
+	top:8vw;
+	left:23vw;
+	transform : rotateZ(-90deg);
+	height: 10vw;
+	width: 7vw;
+	border-bottom : 19vw solid  #1E90FF;
+	border-left : 4vw solid transparent;
+	border-right : 4vw solid transparent;
+	}
+.tile_u {
+	position:absolute;
+	top:0vw;
+	left:15vw;
+	transform : rotateX(180deg);
+	height: 10vw;
+	width: 7vw;
+	border-bottom : 19vw solid 	#1E90FF;
+	border-left : 4vw solid transparent;
+	border-right : 4vw solid transparent;
+	}
+	
+.ball {
+	position:absolute;
+	background-color:#FF4500;
+	top:39vw; 
+	left:20.5vw;
+	height: 3.5vw;
+	width: 3.5vw;
+	border-radius : 50%;
+	border:0.2vw solid #FFA500;
+}
+.square_core{
+	position:absolute;
+	background-color:#006400;
+	border-radius : 40%;
+	border:0.2vw solid #228B22;
+	top:20.5vw; 
+	left:20.5vw;
+	height: 4vw;
+	width: 4vw;
+}
+
+.launcher{
+	position:absolute;
+	background-color:#006400;
+	transform : rotateZ(0deg);
+	border-radius : 50% 15% 15% 50%;
+	border:0.2vw solid #228B22;
+	top:1vw;
+	left:-0.5vw;
+	height: 2vw;
+	width: 5vw;
+}
+	
+.obstacles{
+	position:absolute;
+	background-color:#909;
+	transform : rotateZ(45deg);
+	border:0.2vw solid 	#FFA500;
+	top:22vw; 
+	left:22vw;
+	height: 1vw;
+	width: 1vw;
+}	
+</style>
+
+</head>
+<body class= "main_body" id="main">
+<div id="game_area">
+<div class = "screen" id="screen">
+<div class ="tile_u" id="tile_u"></div>
+<div class ="tile_l" id="tile_l"></div>
+<div class ="tile_r" id="tile_r"></div>
+<div class ="tile_d" id="tile_d"></div>
+<div id="ball" class= "ball"></div>
+<div id ="obstacles_handler"></div>
+<div class = "square_core" id="square_core">
+<div class="launcher" id="launcher">
+</div>
+</div>
+<input type=submit onclick="move_left();" class="btn_l" value="&#8635;" id="btn_l">
+<input type=submit onclick="move_right();" class="btn_r" value="&#8634;" id="btn_r">
+</div>
+<label id="score_result" class="score_result">Your Score is : 0</label>
+<input type=submit onclick="play_again();" id="play_again" class="play_again" value="Play Again">
+<label id="score" class="score_box">Score : 0</label>
+<div class="lives_box">Lives left:<div id="lives" class="lives_handler"></div></div>
+</div>
+<div class ="main_menu" id="main_menu">
+<div class="title">AVOID BEING HIT</div>
+Created by Shubham7997</br>
+<label style="color:#FF6347">Warning : Landscape mode on handheld devices is required.</label> </br>
+<label style="color:#00FF7F">How to Play : You have to move the ball to avoid being hit </br>
+by objects shoot by core shooting tank by two buttons :</br>
+|&#8635;| to move Clockwise </br>
+|&#8634;| to move Anti-clockwise</br>
+with available 5x Lives provided to you.</br></label>
+<label style="color:#FFD700">Extras : System in offline mode will add extra color changing distracting difficulty during gameplay.</label>
+<input type=submit onclick="play();" class="play_btn" value="Play">
+</div>
+</body>
+</html>

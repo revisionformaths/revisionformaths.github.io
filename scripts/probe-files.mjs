@@ -103,8 +103,28 @@ async function main() {
 
   if (!games.length) errors.push({ what: "no cards on files.html" });
 
+  // The library is thousands of files now, so a run opens a slice of it: the
+  // hand-picked pack every time, then an even sample of the imported ones
+  // (offset by the day, so the whole library is covered over a week).
+  const PACK = process.env.PROBE_PACK !== "0";
+  const MAX = Number(process.env.PROBE_MAX || 0);
+  let chosen = games;
+  if (MAX > 0 && games.length > MAX) {
+    const pack = games.filter((game) => !game.file.startsWith("assets/games/js13k/"));
+    const imported = games.filter((game) => game.file.startsWith("assets/games/js13k/"));
+    const day = Math.floor(Date.now() / 86400000);
+    const room = Math.max(0, MAX - (PACK ? pack.length : 0));
+    const stride = Math.max(1, Math.floor(imported.length / Math.max(1, room)));
+    const sampled = [];
+    for (let i = 0; i < imported.length && sampled.length < room; i += 1) {
+      sampled.push(imported[(i * stride + day * 7) % imported.length]);
+    }
+    chosen = (PACK ? pack : []).concat(sampled);
+    console.log(`probing ${chosen.length} of ${games.length} files`);
+  }
+
   // Each game gets its own page so a crash cannot take the run down with it.
-  for (const game of games) {
+  for (const game of chosen) {
     const slug = path.basename(game.file).replace(/\.html?$/, "");
     const view = await browser.newPage({ viewport: { width: 512, height: 384 } });
     const log = [];

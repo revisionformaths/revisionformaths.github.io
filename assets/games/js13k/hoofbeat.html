@@ -1,0 +1,1849 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>HOOFBEAT</title>
+<style>
+html,body{margin:0;height:100%;background:#f6e7f2;overflow:hidden;touch-action:none;cursor:pointer;
+ -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+canvas{display:block;width:100%;height:100%}
+</style></head><body><canvas id=c></canvas><script>
+"use strict";
+// =====================================================================
+//  HOOFBEAT - js13k 2026 (theme: Unicorns and Rainbows)
+//
+//  You can only run forward. Your rainbow trail is recorded.
+//  Next run, it turns SOLID. Some chasms are deliberately
+//  impassable: you die to lay the path.
+//  Permanent progression, Dead Cells style (memory, double jump, dash).
+//
+//  Readable source. Compression happens only through build.sh.
+// =====================================================================
+
+// ---------- Canvas ------------------------------------------------------
+var C = document.getElementById('c'), X = C.getContext('2d'), W, H, DPR;
+function resize(){
+  DPR = Math.min(2, devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  C.width = W * DPR; C.height = H * DPR;
+  X.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+// ---------- Seeded PRNG (mulberry32) ------------------------------------
+function rng(s){ return function(){ s |= 0; s = s + 0x6D2B79F5 | 0;
+  var t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------- Save game ---------------------------------------------------
+// localStorage when available, in-memory mirror otherwise (sandboxed previews).
+var MEM = {};
+function sset(k, v){ MEM[k] = v; try{ localStorage.setItem(k, v); }catch(e){} }
+function sget(k){ try{ var v = localStorage.getItem(k); if(v != null) return v; }catch(e){}
+  return MEM[k] != null ? MEM[k] : null; }
+
+function fresh(){ return { p:0, best:0, mem:0, dbl:0, dash:0, glide:0,
+  sh:0, sht:0, rew:0, skin:0, ngp:0, runs:0, seed:0 }; }
+var S = fresh();
+(function(){ var raw = sget('hb');
+  if(raw){ try{ var o = JSON.parse(raw); for(var k in S) if(o[k] != null) S[k] = o[k]; }catch(e){} } })();
+// Empty save: roll a brand-new world. The seed is persisted, so the same
+// player gets exactly their course back, trails included.
+function newSeed(){ return (Math.random() * 2e9 | 0) || 7; }
+if(!S.seed) S.seed = newSeed();
+
+// ---------- World -------------------------------------------------------
+// The level is an array indexed by 8 px "bucket". The runner only moves
+// right, so a trail is a pure function of x:
+// O(1) collision and a tiny memory footprint.
+var BW = 8, NB = 2508;                 // bucket width, bucket count (20 000 px exactly)
+var EASY = 100;                        // first trap-free metres, time to learn
+var MS = 40;                           // buckets between two credit tiers (320 px)
+var CP = 200;                          // buckets between two distance markers
+var GRAV = 1500, JUMPV = -470, SPD = 270;
+// Max jump range = 2*470/1500 * 270 = 169 px = ~21 buckets.
+// Any wider chasm is impassable on the first run. That is intended.
+var GOAL = NB - 8;
+var ground, plats, spk, prisms, clouds, crows, flags;
+
+// Ten flags mark the course in 10 % slices. Passing a flag permanently
+// unlocks a skill family: that is what turns distance into content
+// rather than a mere score.
+var FLAG = ['MEMORY', 'DOUBLE JUMP', 'GLIDE', 'SHIELD', 'DASH', 'BEAM',
+            'NEW WORLD', 'COAT', 'REWIND', 'NEW GAME +'];
+// Course percentages. MEMORY comes early: without a second trail, the
+// first hard chasms are unfair.
+var FP = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+function unl(i){ return S.best >= flags[i].b; }
+
+function genLevel(seed){
+  var r = rng(seed), gy = 380, i = 0, j;
+  ground = new Int16Array(NB).fill(-1);
+  plats  = new Int16Array(NB).fill(-1);
+  spk    = new Uint8Array(NB);
+  prisms = []; crows = [];
+
+  // Curriculum: one new thing at a time, aligned with the flags.
+  //     0 to 100 m  learning ramp: narrow chasms, nothing else
+  //   100 to 250 m  hard chasms, hence the trail mechanic
+  //   250 m (flag 1) spikes
+  //   500 m (flag 2) platforms get shorter, chasms get wider
+  //   750 m (flag 3) crows
+  var F1 = GOAL * FP[0] / 100, F2 = GOAL * FP[1] / 100, F3 = GOAL * FP[2] / 100;
+
+  for(; i < 30; i++) ground[i] = gy;                    // safe run-up strip
+
+  while(i < NB - 16){
+    var prog = i / NB;                                  // 0 -> 1, rising difficulty
+    // Learning zone: a RAMP, not a playground. Everything converges to the
+    // normal values over the first 100 metres. The only absolute guarantee
+    // is the absence of hard chasms, which would be impassable without a
+    // trail, hence unfair before the mechanic has been understood.
+    var easy = i < EASY, ramp = easy ? i / EASY : 1;
+    // spc: 0 before flag 2, then 1 at the finish. It is what shortens the
+    // platforms and widens the chasms, hence the spacing.
+    // Do NOT call it sp: that name is already the spike index, and since var
+    // is function-scoped the two would collide.
+    var spc = i < F2 ? 0 : (i - F2) / (GOAL - F2);
+    var len = easy ? 10 + ((1 - ramp) * 8 | 0) + (r() * 10 | 0)
+                   : (11 - spc * 4 | 0) + (r() * (11 - spc * 4) | 0), runStart = i;
+    for(j = 0; j < len && i < NB - 16; j++, i++) ground[i] = gy;
+
+    // No spike before the first flag. We test runStart and not i: i is the
+    // END of the platform, so a spike could land just before 250 m.
+    if(runStart > F1 && len > 9 &&
+       r() < Math.min(0.45, 0.06 + (i - F1) / GOAL)){       // never crammed against the finish
+      var sp = runStart + 4 + (r() * (len - 6) | 0);
+      if(sp < NB) spk[sp] = 1;
+      if(r() < 0.3 && sp + 1 < NB) spk[sp + 1] = 1;
+    }
+
+    var hard = !easy && r() < 0.12 + prog * 0.5;        // "impossible" chasm
+    // The landing height is decided BEFORE digging, to guarantee the chasm
+    // stays crossable: a jump only rises 73 px, so a higher ledge forces a
+    // short chasm, and a hard chasm always lands lower (it is crossed by
+    // the trail, not by the jump).
+    var dy = (r() < 0.5 ? -1 : 1) *
+             (easy ? 8 + (r() * (12 + ramp * 32) | 0) : 12 + (r() * 52 | 0));
+    if(hard && dy < 0) dy = -dy;
+    var ngy = Math.max(230, Math.min(470, gy + dy));
+    var gap = hard ? 25 + (r() * 13 | 0)
+            : easy ? 6 + (r() * (3 + ramp * 9) | 0)         // 6 to 8 at the start, 6 to 17 at the end of the ramp
+                   : 7 + (r() * (9 + spc * 5) | 0);         // 7 to 15, then up to 7 to 20
+    if(!hard && ngy < gy) gap = Math.min(gap, 12);
+    var gapStart = i;
+    for(j = 0; j < gap && i < NB - 16; j++, i++) ground[i] = -1;
+
+    if(!hard && r() < 0.42){                            // floating islet
+      var pl = gy - 55 - (r() * 70 | 0), pw = 3 + (r() * 4 | 0);
+      var st = gapStart + (gap / 2 | 0) - 1;
+      for(j = 0; j < pw; j++) if(st + j < NB) plats[st + j] = pl;
+    }
+
+    gy = ngy;
+
+    // Crows from the third flag on, sparse at first.
+    if(i > F3 && r() < 0.25 + (i - F3) / GOAL * 0.9){
+      crows.push({ b:i + (r() * 30 | 0), y:gy - 55 - r() * 130, ph:r() * 6.283, k:0 });
+      if(r() < prog * 0.6)
+        crows.push({ b:i + (r() * 40 | 0), y:gy - 50 - r() * 140, ph:r() * 6.283, k:0 });
+    }
+
+    prisms.push(r() < 0.55
+      ? { b: gapStart + (gap / 2 | 0), y: gy - 45 - (r() * 95 | 0), t: 0 }   // in the air, above the void
+      : { b: i + 2,                    y: gy - 32,                  t: 0 });
+  }
+  for(; i < NB; i++) ground[i] = gy;
+
+  // Flags snapped to solid ground: never planted above a chasm.
+  flags = [];
+  for(j = 0; j < 10; j++){
+    var fb = Math.round(GOAL * FP[j] / 100);
+    while(fb < NB - 2 && ground[fb] < 0) fb++;
+    flags.push({ b:fb, y:ground[fb] });
+  }
+  // New Game +: every other floating platform disappears.
+  if(S.ngp){ var n = 0;
+    for(i = 0; i < NB; i++) if(plats[i] >= 0){
+      var e = i; while(e < NB && plats[e] >= 0) e++;
+      if(n++ % 2 === 0) for(j = i; j < e; j++) plats[j] = -1;
+      i = e;
+    } }
+
+  clouds = [];
+  for(j = 0; j < 40; j++) clouds.push({ x: r() * NB * BW, y: 40 + r() * 280, s: 0.25 + r() * 0.45, w: 60 + r() * 110 });
+}
+genLevel(S.seed);
+if(!sget('hb')) saveMeta();
+
+// ---------- Wavedash (API injected by the platform) ---------------------
+var WD = window.Wavedash, wdReady = false, wdLoading = false,
+    wdFlushing = false, wdPending = new Set(), wdDone = new Set();
+var WD_IDS = 'MEMORY,DOUBLE_JUMP,GLIDE,SHIELD,DASH,BEAM,NEW_WORLD,COAT,REWIND,NEW_GAME_PLUS'.split(',');
+async function wdCall(method, ...args){
+  try{ if(WD) return await WD[method](...args); }catch(e){}
+}
+async function wdFlush(){
+  if(!wdReady || wdFlushing) return;
+  wdFlushing = true;
+  for(var id of wdPending){
+    wdPending.delete(id);
+    if(await wdCall('getAchievement', id) === true ||
+       await wdCall('setAchievement', id, true) === true) wdDone.add(id);
+    else { wdPending.add(id); break; }
+  }
+  wdFlushing = false;
+}
+function wdAward(i){
+  if(WD && !wdDone.has(WD_IDS[i])) wdPending.add(WD_IDS[i]);
+  wdFlush();
+}
+async function wdSync(){
+  if(!WD) return;
+  for(var i = 0; i < 10; i++) if(unl(i)) wdAward(i);
+  if(!wdReady && !wdLoading){
+    wdLoading = true;
+    var r = await wdCall('requestStats');
+    wdReady = !!(r && r.success && r.data === true);
+    wdLoading = false;
+  }
+  wdFlush();
+}
+async function wdScore(score){
+  var r = await wdCall('getOrCreateLeaderboard', 'best-distance-v1', 1, 0);
+  if(r && r.success && r.data && r.data.id)
+    await wdCall('uploadLeaderboardScore', r.data.id, Math.round(score), true);
+}
+wdCall('init');
+wdSync();
+
+// ---------- Trails ------------------------------------------------------
+var cur = null, ghosts = [];
+(function(){ var raw = sget('hbG');
+  if(raw){ try{ ghosts = JSON.parse(raw) || []; }catch(e){ ghosts = []; } } })();
+function slots(){ return 1 + S.mem; }
+function newTrail(){ var a = new Array(NB); for(var i = 0; i < NB; i++) a[i] = -1; return a; }
+function saveMeta(){ sset('hb', JSON.stringify(S)); }
+function save(){ saveMeta(); sset('hbG', JSON.stringify(ghosts)); }
+
+// ---------- Audio -------------------------------------------------------
+var AC, musGain, musOn = false, musNext = 0, musStep = 0, STEP16, muted = false, NBUF;
+function ensureAudio(){
+  if(!AC){ try{ AC = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
+  if(AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function snd(f, d, type, v){ if(!ensureAudio() || muted) return; try{
+  var o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'sine'; o.frequency.value = f; g.gain.value = v || 0.05;
+  o.connect(g); g.connect(AC.destination); o.start();
+  o.frequency.exponentialRampToValueAtTime(f * 0.55, AC.currentTime + d);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + d);
+  o.stop(AC.currentTime + d);
+}catch(e){} }
+
+// Note scheduled in the future: used to play an arpeggio without setTimeout.
+function sndAt(f, d, type, v, wait){ if(!ensureAudio() || muted) return; try{
+  var t = AC.currentTime + (wait || 0);
+  var o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(v || 0.05, t);
+  o.connect(g); g.connect(AC.destination); o.start(t);
+  o.frequency.exponentialRampToValueAtTime(f * 0.6, t + d);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.stop(t + d + 0.03);
+}catch(e){} }
+
+// BUBBLEGUM POP: I - V - vi - IV, four strong beats.
+// T3 is 3 on the sixth degree, the only minor chord in the progression.
+var PROG = [0, 7, 9, 5], T3 = [4, 4, 3, 4], MEL = [0, 0, 4, 7, 9, 7, 4, 2];
+function hz(s){ return 261.6 * Math.pow(2, s / 12); }
+function mTone(f, t, dur, type, vol, det){
+  var o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f; if(det) o.detune.value = det;
+  o.connect(g); g.connect(musGain);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+// Filtered noise: wide snare, narrow hi-hat.
+function mNoise(t, dur, vol, freq, q){
+  var s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  s.buffer = NBUF;
+  f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+  s.connect(f); f.connect(g); g.connect(musGain);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.start(t); s.stop(t + dur + 0.03);
+}
+// Kick drum: a sine whose pitch dives in 90 ms.
+function mKick(t){
+  var o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(150, t);
+  o.frequency.exponentialRampToValueAtTime(46, t + 0.09);
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.23);
+  o.connect(g); g.connect(musGain); o.start(t); o.stop(t + 0.26);
+}
+function musStepFn(i, t){
+  var bar = (i / 16 | 0) % 4, r = PROG[bar], b = i % 16, k;
+  if(b % 4 === 0){ mKick(t); mTone(hz(r - 24), t, 0.22, 'triangle', 0.19); }
+  if(b === 4 || b === 12) mNoise(t, 0.13, 0.15, 2200, 0.8);        // snare
+  if(b % 2 === 1) mNoise(t, 0.03, 0.045, 9200, 1.5);               // hi-hat
+  if(b % 4 === 2) for(k = 0; k < 3; k++)                           // stabbed chord
+    mTone(hz(r + [0, T3[bar], 7][k]), t, 0.17, 'triangle', 0.075);
+  if(b % 2 === 0) mTone(hz(r + MEL[b / 2] + 12), t, 0.24, 'sine', 0.14);
+}
+function musTick(){ if(!AC || !musOn) return; var a = AC.currentTime + 0.25;
+  while(musNext < a){ musStepFn(musStep, musNext); musNext += STEP16; musStep++; } }
+function startMusic(){ if(musOn || !ensureAudio()) return; musOn = true;
+  NBUF = AC.createBuffer(1, AC.sampleRate * 0.3, AC.sampleRate);
+  var nd = NBUF.getChannelData(0), q;
+  for(q = 0; q < nd.length; q++) nd[q] = Math.random() * 2 - 1;
+  musGain = AC.createGain(); musGain.gain.value = 0; musGain.connect(AC.destination);
+  musGain.gain.linearRampToValueAtTime(0.55, AC.currentTime + 2);
+  STEP16 = 60 / 126 / 4; musNext = AC.currentTime + 0.1; musStep = 0;
+  setInterval(musTick, 60); }
+
+// Crow position: a function of run time, hence identical from one attempt
+// to the next since the running speed is constant.
+function crowX(c){ return c.b * BW - (RT * 95 + c.ph * 60) % 470; }
+function crowY(c){ return c.y + Math.sin(RT * 2.6 + c.ph) * 15; }
+
+// ---------- State -------------------------------------------------------
+// 'attract' is the starting state on EVERY page load, even with a game in
+// progress: the title and a unicorn playing by itself make a better first
+// impression than a panel of text.
+var mode = 'attract';                     // attract | title | play | dead | shop | win
+var P = { x:0, y:0, vy:0, ground:false, jumps:0, dash:0, dashUsed:false, anim:0, sh:0, inv:0, cd:0, gl:0 };
+var RT = 0, beam = 0, rew = [], rewT = 0, rewUsed = 0, pushed = 0, puffT = 0, glT = 0;
+var camX = 0, camY = 0, shake = 0, T = 0, runGain = 0, flash = 0, parts = [], sparkT = 0;
+var pops = [], banner = 0, bannerTxt = '', lastBand = 0, gemPulse = 0, wipeArm = 0;
+var i;
+// A tier every MS buckets, worth more with distance. As a percentage of
+// the level, a tier would have been too rare to reward the first runs,
+// which die within the first hundredth of the course.
+function bandValue(q){ return 1 + Math.min(4, Math.floor(q * 5 * MS / GOAL)); }
+function pop(x, y, t, c, sz){ pops.push({ x:x, y:y, t:t, c:c, s:sz || 18, l:1 }); }
+var conf = [], party = 0, partyX = 0, partyY = 0, confT = 0, boom = 0, boomX = 0, boomY = 0;
+// Delay before the death panel: without it, the panel covered the explosion
+// the very instant it went off, and a tapping player restarted without seeing.
+var deadT = 0;
+function confetti(n, sx, sy, spread){
+  n = Math.min(n, 210 - conf.length);
+  for(var i = 0; i < n; i++) conf.push({
+    x:sx + (Math.random() - 0.5) * spread, y:sy + (Math.random() - 0.5) * spread * 0.3,
+    vx:(Math.random() - 0.5) * 420, vy:-140 - Math.random() * 430,
+    r:Math.random() * 6.283, vr:(Math.random() - 0.5) * 15,
+    w:4 + Math.random() * 7, h:6 + Math.random() * 9,
+    c:Math.random() * 360, l:1.2 + Math.random() * 1.1
+  });
+}
+
+// k: 0 dot, 1 star, 2 puff. g: gravity multiplier.
+function burst(x, y, n, hue, k, g){
+  for(var i = 0; i < n; i++){ var a = Math.random() * 6.283, s = 40 + Math.random() * 160;
+    parts.push({ x:x, y:y, vx:Math.cos(a) * s, vy:Math.sin(a) * s - 40,
+                 l:0.4 + Math.random() * 0.5, h:hue + Math.random() * 60,
+                 k:k || 0, g:g == null ? 1 : g }); }
+}
+function pk(x, y, vx, vy, hue, k, g, life){
+  parts.push({ x:x, y:y, vx:vx, vy:vy, l:life, h:hue, k:k, g:g });
+}
+
+// REAL terrain only. The jump decision must ignore trails: the previous
+// run's arc passes above the ledge, and the bot would believe the ground
+// goes on while it runs straight into the void.
+function solid(b, y){
+  return b >= NB
+    || (ground[b] >= 0 && ground[b] > y - 30 && ground[b] < y + 90)
+    || (plats[b] >= 0 && plats[b] > y - 30 && plats[b] < y + 90);
+}
+// Terrain + trails: used to decide on a mid-air recovery.
+function walk(b, y){
+  if(b >= NB) return 1;
+  if(ground[b] >= 0 && ground[b] > y - 30 && ground[b] < y + 90) return 1;
+  if(plats[b] >= 0 && plats[b] > y - 30 && plats[b] < y + 90) return 1;
+  for(var i = 0; i < ghosts.length; i++){
+    var g = ghosts[i][b];
+    if(g != null && g >= 0 && g - TLIFT > y - 30 && g - TLIFT < y + 90) return 1;
+  }
+  return 0;
+}
+var dReal = null;
+// Autopilot: jumps when the ground runs out ahead or a spike approaches,
+// and recovers with a double jump if nothing comes. Used by the attract
+// screen demo, and by the DEV menu capture pilot.
+function botJump(){
+  var db = bucket(P.x), k3;
+  if(P.ground){
+    for(k3 = 1; k3 <= 3; k3++) if(spk[db + k3]){ tapped = 1; break; }
+    if(!tapped){
+      if(ground[db] >= 0){                       // on solid ground
+        for(k3 = 1; k3 <= 2; k3++) if(!solid(db + k3, P.y)){ tapped = 1; break; }
+      } else {                                   // on a trail above the void
+        for(k3 = 8; k3 <= 21; k3++)
+          if(ground[db + k3] >= 0 && ground[db + k3] > P.y - 80){ tapped = 1; break; }
+      }
+    }
+  } else if(P.jumps === 1 && P.vy > 200){
+    var far = 1;
+    for(k3 = 0; k3 < 18; k3++) if(walk(db + k3, P.y + 60)){ far = 0; break; }
+    if(far) tapped = 1;
+  }
+}
+function demoStart(first){
+  // The demo plays with its own trails, in a copy: on every fall it lays a
+  // bridge and gets further next time. The attract screen thus demonstrates
+  // the core of the game without a single line of text.
+  if(first){ dReal = ghosts; ghosts = ghosts.slice(0, 4); }
+  else {
+    ghosts.unshift(cur.slice(0, Math.min(NB, (P.x / BW | 0) + 3)));
+    while(ghosts.length > 4) ghosts.pop();
+  }
+  cur = newTrail();
+  P.x = 40; P.y = ground[5]; P.vy = 0; P.ground = true; P.jumps = 0;
+  P.dash = 0; P.dashUsed = false; P.sh = 0; P.inv = 0; P.cd = 9e9;
+  RT = 0; runGain = 0; lastBand = 9e9;      // the demo earns nothing
+  pops = []; conf = []; party = 0; banner = 0;
+  camX = P.x - W * 0.32; camY = P.y - H * 0.55;
+  mode = 'attract';
+}
+function startRun(){
+  if(dReal){ ghosts = dReal; dReal = null; }   // give the player their real trails back
+  cur = newTrail();
+  // No resuming: every run restarts from the first metre. What progresses
+  // is the trails and the upgrades, not the starting position.
+  P.x = 40; P.y = ground[5]; P.vy = 0; P.ground = true;
+  P.jumps = 0; P.dash = 0; P.dashUsed = false;
+  for(var i = 0; i < prisms.length; i++) prisms[i].t = 0;
+  runGain = 0; pops = []; banner = 0; gemPulse = 0; lastBand = 0; deadT = 0;
+  RT = 0; beam = 0; boom = 0; rew = []; rewT = 0; rewUsed = 0; conf = []; party = 0;
+  P.sh = S.sh; P.inv = 0; P.cd = 20 - S.sht;
+  for(i = 0; i < crows.length; i++) crows[i].k = 0;
+  camX = P.x - W * 0.32; camY = P.y - H * 0.55;
+  mode = 'play'; startMusic(); wdSync();
+}
+function endRun(won){
+  var reached = P.x / BW | 0;
+  pushed = reached > 20;
+  if(pushed){                        // a false start does not cost a trail
+    ghosts.unshift(cur.slice(0, Math.min(NB, reached + 3)));
+    while(ghosts.length > slots()) ghosts.pop();
+  }
+  S.p += runGain; S.runs++;
+  var d = P.x / BW | 0; if(d > S.best) S.best = d;
+  save();
+  wdSync(); wdScore(S.best);
+  mode = won ? 'win' : 'dead'; flash = 1; shake = won ? 4 : 9; deadT = 1;
+  snd(won ? 520 : 180, won ? 0.5 : 0.45, won ? 'triangle' : 'sine', 0.07);
+}
+
+// Wipes the save and starts over in a brand-new world. Two presses are
+// required: a single gesture must not destroy hours of trails.
+function newWorld(){
+  try{ localStorage.removeItem('hb'); localStorage.removeItem('hbG'); }catch(e){}
+  MEM = {};
+  S = fresh(); S.seed = newSeed();
+  ghosts = []; cur = null; parts = []; pops = []; banner = 0; wipeArm = 0;
+  genLevel(S.seed);
+  save();
+  camX = 0; camY = 360 - H * 0.5; flash = 1; mode = 'title';
+  sndAt(392, 0.2, 'triangle', 0.05, 0);
+  sndAt(523, 0.2, 'triangle', 0.05, 0.08);
+  sndAt(659, 0.3, 'triangle', 0.05, 0.16);
+}
+
+// New Game +: new world, upgrades and unlocks kept, but every other
+// floating platform disappears.
+function newGamePlus(){
+  S.ngp = (S.ngp || 0) + 1; S.seed = newSeed();
+  ghosts = []; cur = null; parts = []; pops = []; banner = 0;
+  genLevel(S.seed); save();
+  camX = 0; camY = 360 - H * 0.5; flash = 1; mode = 'title';
+  sndAt(440, 0.2, 'triangle', 0.05, 0);
+  sndAt(659, 0.2, 'triangle', 0.05, 0.09);
+  sndAt(880, 0.34, 'triangle', 0.05, 0.18);
+}
+
+//<DEV>
+// ---------- Capture autopilot -------------------------------------------
+// Chains games, buys what it can, and plays with every power it owns.
+// Entirely inside the DEV block: removed by --strip-dev.
+var AUTO = 0;
+function autoShop(){
+  for(var pass = 0; pass < 14; pass++){
+    var best = -1, bc = 1e9, i, u, lv;
+    for(i = 0; i < UP.length; i++){
+      u = UP[i]; lv = S[u.k];
+      if(unl(u.f) && lv < u.max && S.p >= u.c[lv] && u.c[lv] < bc){ bc = u.c[lv]; best = i; }
+    }
+    if(best < 0) break;
+    S.p -= bc; S[UP[best].k]++;
+  }
+  save();
+}
+function autoPilot(){
+  if(mode === 'shop' || mode === 'dev') return;
+  if(mode === 'attract' || mode === 'title'){ startRun(); return; }
+  if(mode === 'dead' || mode === 'win'){
+    if(deadT > 0) return;
+    if(mode === 'dead' && canRew()){ doRewind(); return; }   // extend the run
+    autoShop(); startRun(); return;
+  }
+  botJump();
+  var db = bucket(P.x), k, reach = 0;
+  for(k = 1; k < 26; k++) if(ground[db + k] >= 0 && ground[db + k] > P.y - 60){ reach = k; break; }
+  // glide: brake as soon as we descend above the void
+  jumpHeld = !P.ground && P.vy > 140 && ground[db] < 0;
+  // dash: when the next ground is too far for the double jump alone
+  if(S.dash && !P.dashUsed && !P.ground && P.vy > 0 && (reach > 18 || (!reach && ground[db] < 0)))
+    dashTap = 1;
+}
+
+// ---------- Debugging ---------------------------------------------------
+// Set DEV to 0 before submitting: the button and its panel disappear.
+var DEV = 1, devBack = 'title';
+function devBtn(){ return { x:W - 60, y:H - 50, w:46, h:28 }; }
+function devRow(i){ var w = Math.min(300, W - 56); return { x:W / 2 - w / 2, y:H / 2 - 148 + i * 60, w:w, h:50 }; }
+var DEVL = ['WIPE SAVE', 'UNLOCK ALL', 'SKIP +1000 m', 'AUTOPILOT', 'CLOSE'];
+function devClick(x, y){
+  for(var i = 0; i < 5; i++) if(inRect(devRow(i), x, y)){
+    if(i === 0){ newWorld(); return; }
+    if(i === 1){
+      S.best = GOAL; S.p = 999; S.mem = 3; S.dbl = 1; S.glide = 1;
+      S.sh = 3; S.dash = 1; S.sht = 3; S.rew = 3; save();
+      flash = 0.6; snd(900, 0.2, 'triangle', 0.05);
+    }
+    if(i === 3){                                   // toggle the pilot
+      AUTO = !AUTO;
+      snd(AUTO ? 880 : 300, 0.12, 'triangle', 0.05);
+      if(AUTO){ mode = devBack === 'dev' ? 'title' : devBack; }
+      return;
+    }
+    if(i === 2){
+      if(devBack !== 'play') startRun();
+      var nb = Math.min(GOAL - 20, (P.x / BW | 0) + 1000);
+      while(nb < NB - 2 && ground[nb] < 0) nb++;
+      P.x = nb * BW; P.y = ground[nb]; P.vy = 0; P.ground = 1; P.jumps = 0;
+      cur = newTrail(); lastBand = Math.floor(P.x / BW / MS);
+      camX = P.x - W * 0.32; camY = P.y - H * 0.55;
+      mode = 'play'; devBack = 'play'; return;
+    }
+    mode = devBack === 'dev' ? 'title' : devBack;
+    return;
+  }
+}
+function drawDev(){
+  X.fillStyle = 'rgba(60,32,68,.62)'; X.fillRect(0, 0, W, H);
+  txt('DEBUG', W / 2, H / 2 - 172, 22, '#fff', 'center', '900');
+  for(var i = 0; i < 5; i++){
+    var r = devRow(i), on = i === 3 && AUTO;
+    X.fillStyle = on ? 'rgba(206,250,224,.96)' : i === 4 ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.95)';
+    X.strokeStyle = on ? '#5cbf95' : '#c9b0ea'; X.lineWidth = 2;
+    rrect(r.x, r.y, r.w, r.h, 13); X.fill(); X.stroke();
+    txt(DEVL[i] + (i === 3 ? (AUTO ? '   ON' : '   OFF') : ''), W / 2, r.y + 31, 17,
+        i === 0 ? '#c94f92' : on ? '#2f7d5e' : '#5f4570', 'center', '800');
+  }
+  txt('seed ' + S.seed + '   ·   best ' + S.best + ' m', W / 2, H / 2 + 158, 13, '#e8d8f0', 'center', '600');
+}
+function drawDevBtn(){
+  var r = devBtn();
+  X.globalAlpha = 0.55;
+  X.fillStyle = '#4a3358'; rrect(r.x, r.y, r.w, r.h, 14); X.fill();
+  X.globalAlpha = 1;
+  txt('DEV', r.x + r.w / 2, r.y + 19, 13, '#ffd6ec', 'center', '800');
+}
+//</DEV>
+
+// ---------- Input: tap/space = jump, button or Shift = dash -------------
+var jumpHeld = false, tapped = false, dashTap = false;
+function dashBtn(){ return { x:74, y:H - 74, r:46 }; }
+// Shop button: there is no A key on a phone.
+function upBtn(){ var w = 230;
+  return { x:W / 2 - w / 2, y:H / 2 + (mode === 'title' ? 112 : (canRew() ? 140 : 84)), w:w, h:44 }; }
+function newBtn(){ var two = unl(9), w = two ? 148 : 190;
+  return { x:two ? W / 2 - 152 : W / 2 - w / 2, y:H / 2 + 166, w:w, h:38 }; }
+function ngBtn(){ return { x:W / 2 + 4, y:H / 2 + 166, w:148, h:38 }; }
+function rewBtn(){ return { x:W / 2 - 110, y:H / 2 + 66, w:220, h:42 }; }
+function inRect(r, x, y){ return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
+function inDash(x, y){ var b = dashBtn();
+  return S.dash && (x - b.x) * (x - b.x) + (y - b.y) * (y - b.y) <= b.r * b.r; }
+function press(x, y){
+  ensureAudio();
+  //<DEV>
+  if(DEV){
+    if(mode === 'dev'){ devClick(x, y); return; }
+    if(inRect(devBtn(), x, y)){ devBack = mode; mode = 'dev'; return; }
+  }
+  //</DEV>
+  if(mode === 'attract'){ startRun(); return; }
+  if(mode === 'shop'){ shopClick(x, y); return; }
+  if(deadT > 0) return;                          // the screen ignores input during the explosion
+  if(mode === 'play'){ if(inDash(x, y)){ dashTap = true; return; } }
+  else {
+    if(mode === 'dead' && canRew() && inRect(rewBtn(), x, y)){ doRewind(); return; }
+    if(mode === 'title' && unl(9) && inRect(ngBtn(), x, y)){ newGamePlus(); return; }
+    if(mode === 'title' && unl(6) && inRect(newBtn(), x, y)){
+      if(wipeArm > 0) newWorld();
+      else { wipeArm = 3; snd(300, 0.12, 'sawtooth', 0.045); }
+      return;
+    }
+    if(inRect(upBtn(), x, y)){ mode = 'shop'; snd(620, 0.09, 'triangle', 0.04); return; }
+    wipeArm = 0;
+  }
+  jumpHeld = true; tapped = true;
+}
+addEventListener('keydown', function(e){
+  var k = e.key.toLowerCase();
+  if(k === ' ' || k === 'arrowup' || k === 'w' || k === 'z'){
+    e.preventDefault();
+    if(mode === 'attract'){ ensureAudio(); startRun(); return; }
+    if(!jumpHeld) tapped = true; jumpHeld = true; }
+  if(k === 'shift' || k === 'x') dashTap = true;
+  if(k === 'm'){ muted = !muted; if(musGain) musGain.gain.setTargetAtTime(muted ? 0 : 0.55, AC.currentTime, 0.05); }
+  if(k === 'n' && mode === 'title' && unl(6)){ if(wipeArm > 0) newWorld(); else wipeArm = 3; }
+  if(k === 'r' && mode === 'dead' && deadT <= 0 && canRew()) doRewind();
+  if(k === 'a' && mode !== 'play' && mode !== 'shop' && deadT <= 0) mode = 'shop';
+  else if(k === 'escape' && mode === 'shop') mode = 'title';
+  ensureAudio();
+});
+addEventListener('keyup', function(e){
+  var k = e.key.toLowerCase();
+  if(k === ' ' || k === 'arrowup' || k === 'w' || k === 'z') jumpHeld = false;
+});
+C.addEventListener('mousedown', function(e){ press(e.clientX, e.clientY); });
+addEventListener('mouseup', function(){ jumpHeld = false; });
+C.addEventListener('touchstart', function(e){ e.preventDefault();
+  var t = e.changedTouches[0]; press(t.clientX, t.clientY); }, { passive:false });
+C.addEventListener('touchend', function(e){ e.preventDefault(); jumpHeld = false; }, { passive:false });
+C.addEventListener('touchcancel', function(){ jumpHeld = false; }, { passive:false });
+
+// ---------- Physics -----------------------------------------------------
+function bucket(x){ var b = x / BW | 0; return b < 0 ? 0 : (b >= NB ? NB - 1 : b); }
+
+// The collision is EXACTLY on the line the hooves went through, and the
+// ribbon is painted just below: its top edge is therefore the surface.
+// Any positive value here would make the trail unreachable when redoing
+// the same jump, since we would systematically pass under it.
+var TLIFT = 0;
+
+// Trail height at the EXACT abscissa, interpolated between two samples.
+// A continuous surface instead of a staircase: that is what makes landing
+// precise when the bridge slopes.
+function trailY(t, x){
+  var f = x / BW - 0.5, i = Math.floor(f);
+  if(i < 0 || i + 1 >= NB) return -1;
+  var a = t[i], c = t[i + 1];
+  if(a == null || a < 0 || c == null || c < 0) return -1;
+  return a + (c - a) * (f - i) - TLIFT;
+}
+
+// Surface crossed between y0 and y1 at abscissa x. Passable from below:
+// we only catch on the way down.
+function surfaceHit(x, y0, y1){
+  var b = bucket(x), best = -1;
+  function chk(s){ if(s >= 0 && y0 <= s + 4 && y1 >= s && (best < 0 || s < best)) best = s; }
+  chk(ground[b]); chk(plats[b]);
+  for(var i = 0; i < ghosts.length; i++) chk(trailY(ghosts[i], x));
+  return best;
+}
+// Surface just above the hooves: small steps, including on a bridge that
+// climbs back up.
+function surfaceStep(x, y, tol){
+  var b = bucket(x), best = -1;
+  function chk(s){ if(s >= 0 && s <= y + 1 && s >= y - tol && (best < 0 || s < best)) best = s; }
+  chk(ground[b]); chk(plats[b]);
+  for(var i = 0; i < ghosts.length; i++) chk(trailY(ghosts[i], x));
+  return best;
+}
+// Lowest ground (largest y) within 40 buckets: chasms are at most 37
+// buckets wide, so there is always a ledge in the window.
+function fallRef(b){
+  var lo = -1, k, g;
+  for(k = Math.max(0, b - 40); k < Math.min(NB, b + 41); k++){ g = ground[k]; if(g > lo) lo = g; }
+  return lo < 0 ? 470 : lo;
+}
+function die(){
+  // The unicorn disintegrates into confetti. In a game where you die to
+  // build the path, death must be a party, not a punishment.
+  boom = 1.9; boomX = P.x; boomY = P.y - 24;
+  confetti(130, P.x, P.y - 24, 34);
+  for(var z = 0; z < 26; z++){
+    var za = Math.random() * 6.283, zs = 90 + Math.random() * 270;
+    pk(P.x, P.y - 24, Math.cos(za) * zs, Math.sin(za) * zs - 60,
+       T * 100 + Math.random() * 360, 1, 0.5, 0.5 + Math.random() * 0.6);
+  }
+  sndAt(1200, 0.12, 'triangle', 0.05, 0);
+  sndAt(880, 0.22, 'triangle', 0.04, 0.07);
+  if(mode === 'attract'){ demoStart(); return; }   // the demo loops, no death screen
+  endRun(false);
+}
+// The shield absorbs spikes and crows, never the void.
+function hurt(){
+  if(P.inv > 0) return;
+  if(P.sh > 0){
+    P.sh--; P.inv = 1.4; burst(P.x, P.y - 20, 22, T * 80);
+    shake = 7; flash = 0.5; snd(220, 0.18, 'square', 0.05);
+    pop(P.x, P.y - 58, 'SHIELD', '#7c4fd0', 18);
+    return;
+  }
+  die();
+}
+// Rewind: also undo what endRun had banked.
+function doRewind(){
+  var b = rew[0]; if(!b) return;
+  if(pushed) ghosts.shift();
+  S.p -= runGain;
+  P.x = b[0]; P.y = b[1]; P.vy = b[2];
+  P.ground = false; P.jumps = 0; P.dash = 0; P.dashUsed = false;
+  P.inv = 1.6; rewUsed = 1; rew = [];
+  mode = 'play'; flash = 0.7; shake = 5;
+  pop(P.x, P.y - 60, 'REWOUND', '#7c4fd0', 20);
+  sndAt(880, 0.18, 'sine', 0.05, 0);
+  sndAt(660, 0.18, 'sine', 0.05, 0.08);
+  sndAt(440, 0.3, 'sine', 0.05, 0.16);
+}
+function canRew(){ return S.rew > 0 && !rewUsed && rew.length > 4; }
+
+function update(dt){
+  T += dt;
+  if(shake > 0){ shake -= dt * 26; if(shake < 0) shake = 0; }
+  if(flash > 0) flash -= dt * 2.2;
+  if(banner > 0) banner -= dt * 1.5;
+  if(beam > 0) beam -= dt;
+  if(boom > 0) boom -= dt;
+  if(deadT > 0) deadT -= dt;
+  if(party > 0){ party = Math.max(0, party - dt);
+    if((confT -= dt) <= 0){ confT = 0.2; confetti(12, P.x, P.y - 80, 240); } }
+  for(i = conf.length - 1; i >= 0; i--){ var cf = conf[i]; cf.l -= dt * 0.75;
+    if(cf.l <= 0){ conf.splice(i, 1); continue; }
+    cf.vy += 560 * dt; cf.vx *= 0.985;
+    cf.x += (cf.vx + Math.sin(cf.r) * 32) * dt; cf.y += cf.vy * dt; cf.r += cf.vr * dt; }
+  if(wipeArm > 0) wipeArm -= dt;
+  if(gemPulse > 0) gemPulse -= dt * 3;
+  for(var i = parts.length - 1; i >= 0; i--){ var p = parts[i]; p.l -= dt;
+    if(p.l <= 0){ parts.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 320 * (p.g == null ? 1 : p.g) * dt; }
+  for(i = pops.length - 1; i >= 0; i--){ var q = pops[i]; q.l -= dt * 0.85;
+    if(q.l <= 0){ pops.splice(i, 1); continue; }
+    q.y -= 34 * dt; }
+
+  //<DEV>
+  // Before the per-mode exits: the pilot must also act on the death screen.
+  if(AUTO) autoPilot();
+  //</DEV>
+
+  // The title screen lets the world scroll in the background: first impression.
+  if(mode === 'title'){
+    camX += 52 * dt; if(camX > NB * BW - W) camX = 0;
+    camY += ((360 - H * 0.5) - camY) * Math.min(1, dt * 2);
+    if(tapped){ tapped = false; startRun(); }
+    return;
+  }
+  if(mode === 'dead' || mode === 'win'){
+    if(deadT > 0){ tapped = false; return; }     // let the explosion play out
+    if(tapped){ tapped = false; startRun(); }
+    return;
+  }
+  if(mode === 'shop' || mode === 'dev'){ tapped = false; return; }
+
+  RT += dt;
+  if(P.inv > 0) P.inv -= dt;
+
+  // rewind buffer: one sample every 50 ms
+  if(S.rew > 0 && (rewT -= dt) <= 0){
+    rewT = 0.05; rew.push([P.x, P.y, P.vy]);
+    while(rew.length > (2 + S.rew) * 20) rew.shift();
+  }
+
+  if(mode === 'attract') botJump();
+  // jump / double jump
+  if(tapped){
+    tapped = false;
+    if(P.ground || P.jumps === 0){
+      P.vy = JUMPV; P.ground = false; P.jumps = 1;
+      snd(660, 0.09, 'sine', 0.045); burst(P.x, P.y, 5, 50);
+    } else if((S.dbl || mode === 'attract') && P.jumps === 1){
+      P.vy = JUMPV * 0.88; P.jumps = 2;
+      snd(880, 0.09, 'triangle', 0.04);
+      // crown of glitter falling gently under the hooves
+      for(var q = 0; q < 14; q++){
+        var qa = q / 14 * 6.283;
+        pk(P.x, P.y - 3, Math.cos(qa) * 130, Math.sin(qa) * 75 + 55,
+           T * 90 + q * 26, 1, 0.22, 0.55 + Math.random() * 0.4);
+      }
+    }
+  }
+  // dash
+  if(dashTap){ dashTap = false;
+    if(S.dash && !P.dashUsed && P.dash <= 0){
+      P.dash = 0.19; P.dashUsed = true; P.vy = 0;
+      snd(230, 0.24, 'sawtooth', 0.05);
+      for(var pz = 0; pz < 8; pz++)
+        pk(P.x - 14, P.y - 16 + (Math.random() - 0.5) * 18,
+           -120 - Math.random() * 220, (Math.random() - 0.5) * 120,
+           270 + Math.random() * 90, 2, -0.1, 0.45 + Math.random() * 0.5);
+    } }
+  // During the dash, a trail of coloured puffs streams from the hindquarters.
+  if(P.dash > 0){
+    P.dash -= dt;
+    if((puffT -= dt) <= 0){ puffT = 0.022;
+      pk(P.x - 18, P.y - 16 + (Math.random() - 0.5) * 16,
+         -200 - Math.random() * 170, (Math.random() - 0.5) * 100,
+         T * 150 + Math.random() * 80, 2, -0.14, 0.5 + Math.random() * 0.5);
+    }
+  }
+
+  // horizontal: always forward
+  var ox = P.x, oy = P.y, wasAir = !P.ground;
+  P.x += SPD * (P.dash > 0 ? 2.7 : 1) * dt;
+  var b = bucket(P.x);
+
+  // small step up (ground, islet or a bridge that climbs)
+  if(P.ground){ var up = surfaceStep(P.x, P.y, 14); if(up >= 0 && up < P.y){ P.y = up; oy = up; } }
+
+  if(P.dash <= 0) P.vy += GRAV * dt;
+  P.gl = S.glide && jumpHeld && P.vy > 110 ? 1 : 0;                                            // glide
+  if(P.gl) P.vy = 110;
+  if(P.gl && (glT -= dt) <= 0){ glT = 0.055;
+    pk(P.x - 12 - Math.random() * 16, P.y - 26 + (Math.random() - 0.5) * 20,
+       -80 - Math.random() * 70, -12 + Math.random() * 45,
+       T * 80 + Math.random() * 130, 1, 0.12, 0.5 + Math.random() * 0.5);
+  }
+  var y1 = P.y + P.vy * dt;
+  P.ground = false;
+  if(P.vy >= 0){
+    // Sweep: the frame's movement is sliced so we never pass through a
+    // bridge, even mid-dash (12 px per frame).
+    var n = Math.max(1, Math.ceil(Math.max(Math.abs(P.x - ox) / (BW * 0.5), Math.abs(y1 - oy) / 5)));
+    for(var k = 1; k <= n; k++){
+      var xb = ox + (P.x - ox) * k / n;
+      var ya = oy + (y1 - oy) * (k - 1) / n, yb = oy + (y1 - oy) * k / n;
+      var s = surfaceHit(xb, ya, yb);
+      if(s >= 0){
+        if(wasAir){
+          // Landing on a trail rather than on solid ground deserves its own
+          // sparkle, whatever the speed: it is the MEMORY power made visible.
+          // wasAir avoids sowing one every frame while running along the
+          // bridge.
+          var bb2 = bucket(xb), onGhost = s !== ground[bb2] && s !== plats[bb2];
+          if(onGhost){ burst(xb, s, 9, T * 120, 1, 0.3); snd(700, 0.07, 'sine', 0.03); }
+          else if(P.vy > 260){ burst(xb, s, 7, xb * 0.4); snd(240, 0.06, 'sine', 0.03); }
+          if(P.vy > 260) shake = Math.min(shake + 1.6, 5);
+        }
+        // P.x is NOT pulled back to the sub-step: the sweep is there to find
+        // the right surface, not to cancel the movement. Pulling it back
+        // halved the speed as soon as we touched the ground, since we then
+        // land on the very first sub-step.
+        y1 = s; P.vy = 0; P.ground = true; P.jumps = 0; P.dashUsed = false;
+        break;
+      }
+    }
+  }
+  // Snap on the way down. On a slope, the ground drops faster than gravity
+  // during the first frames: without this we keep taking off, and both the
+  // animation and the double jump become inconsistent.
+  if(!P.ground && !wasAir && P.vy >= 0){
+    var sd = surfaceHit(P.x, y1, y1 + 9);
+    if(sd >= 0){ y1 = sd; P.vy = 0; P.ground = true; P.jumps = 0; P.dashUsed = false; }
+  }
+  P.y = y1;
+  b = bucket(P.x);
+
+  // Recording: only IN THE AIR, but on EVERY bucket crossed during the
+  // frame, not just the last one. At 270 px/s an 8 px bucket goes by in
+  // 30 ms: as soon as the frame exceeds that budget, or during a dash at
+  // 729 px/s, some were skipped and the ribbon came out dotted.
+  if(!P.ground){
+    var r0 = bucket(ox), r1 = bucket(P.x), rk, rf;
+    for(rk = r0; rk <= r1; rk++) if(cur[rk] < 0){
+      rf = r1 > r0 ? (rk - r0) / (r1 - r0) : 1;
+      cur[rk] = Math.round(oy + (P.y - oy) * rf);
+    }
+  }
+
+  // hazards
+  // The spike only hurts within its real height: otherwise it nibbled the
+  // shield while we were falling a hundred pixels below.
+  if(spk[b] && ground[b] >= 0 && P.y > ground[b] - 20 && P.y < ground[b] + 12){
+    hurt(); if(mode !== 'play') return;
+  }
+  // Fatal fall: 220 px below the lowest nearby ground. The reference is the
+  // TERRAIN and never a trail: ribbons pile up towards the sky over the
+  // runs, and using the last ribbon walked on as the reference killed you
+  // in mid-flight, before even reaching the platform.
+  // die() ignores the shield, by construction.
+  if(P.y > fallRef(b) + 220){ die(); return; }
+
+  // crows
+  for(i = 0; i < crows.length; i++){
+    var cw = crows[i];
+    if(cw.k || Math.abs(cw.b * BW - P.x) > 800) continue;
+    var wx = crowX(cw), wy = crowY(cw);
+    if(Math.abs(P.x - wx) < 15 && Math.abs(P.y - 17 - wy) < 17){
+      hurt(); if(mode !== 'play') return;
+    }
+  }
+
+  // Shot: only fires if there is a target ahead, otherwise the charge
+  // would be wasted while the reload is very long.
+  if(S.sht > 0 && (P.cd -= dt) <= 0){
+    for(i = 0; i < crows.length; i++){
+      var t1 = crows[i]; if(t1.k) continue;
+      var tx = crowX(t1);
+      if(tx > P.x && tx < P.x + W * 0.9){
+        beam = 0.3; P.cd = 20 - S.sht; shake = Math.min(shake + 2, 6);
+        snd(1500, 0.32, 'sawtooth', 0.055);
+        for(var j = 0; j < crows.length; j++){
+          var t2 = crows[j]; if(t2.k) continue;
+          var x2 = crowX(t2);
+          if(x2 > P.x - 30 && x2 < P.x + W){
+            t2.k = 1; runGain++; gemPulse = 1;
+            burst(x2, crowY(t2), 16, 300);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // prisms
+  for(i = 0; i < prisms.length; i++){ var pr = prisms[i];
+    if(!pr.t && Math.abs(P.x - pr.b * BW) < 16 && Math.abs(P.y - 16 - pr.y) < 26){
+      pr.t = 1; runGain++; gemPulse = 1; burst(pr.b * BW, pr.y, 12, P.x * 0.5);
+      pop(pr.b * BW, pr.y - 12, '+1', '#d2679f', 19);
+      snd(900 + runGain * 30, 0.09, 'triangle', 0.05);
+    } }
+
+  // 5 % tiers: progress alone must already pay, otherwise a failed run
+  // earns nothing and the loop runs out of steam.
+  var band = Math.floor(P.x / BW / MS);
+  if(band > lastBand){
+    var gain = 0;
+    for(var q = lastBand + 1; q <= band; q++) gain += bandValue(q);
+    lastBand = band; runGain += gain; gemPulse = 1;
+    banner = 1; bannerTxt = band * MS + ' m';
+    pop(P.x, P.y - 52, '+' + gain, '#c94f92', 26);
+    burst(P.x, P.y - 22, 20, T * 70);
+    shake = Math.min(shake + 2.6, 7);
+    sndAt(660, 0.16, 'triangle', 0.05, 0);
+    sndAt(880, 0.16, 'triangle', 0.05, 0.07);
+    sndAt(1320, 0.24, 'triangle', 0.045, 0.14);
+  }
+
+  // Flags: the record advances live, so the unlock is immediate.
+  var dm = P.x / BW | 0;
+  if(mode === 'play' && dm > S.best){
+    for(i = 0; i < 10; i++){
+      var fb2 = flags[i].b;
+      if(S.best < fb2 && dm >= fb2){
+        wdAward(i);
+        banner = 1.7; bannerTxt = FLAG[i];
+        party = 2.6; partyX = P.x; partyY = P.y - 26; confT = 0;
+        confetti(90, P.x, P.y - 40, 70);
+        burst(P.x, P.y - 26, 44, i * 36); shake = 9; flash = 0.85;
+        sndAt(523, 0.22, 'triangle', 0.06, 0);
+        sndAt(659, 0.22, 'triangle', 0.06, 0.1);
+        sndAt(784, 0.22, 'triangle', 0.06, 0.2);
+        sndAt(1047, 0.45, 'triangle', 0.06, 0.3);
+        S.best = dm; saveMeta();
+      }
+    }
+    S.best = dm;
+  }
+
+
+  if(b >= GOAL){ burst(P.x, P.y - 20, 40, 0); endRun(true); return; }
+
+  P.anim += dt * (P.ground ? 9 : 3); if(P.anim > 100) P.anim -= 100;
+  sparkT -= dt;
+  if(sparkT <= 0){ sparkT = 0.045;
+    parts.push({ x:P.x - 8 - Math.random() * 10, y:P.y - Math.random() * 6,
+                 vx:-30 - Math.random() * 50, vy:-20 - Math.random() * 40,
+                 l:0.3 + Math.random() * 0.4, h:P.x * 0.5 + Math.random() * 90 }); }
+  camX += ((P.x - W * 0.32) - camX) * Math.min(1, dt * 9);
+  camY += ((P.y - H * 0.58) - camY) * Math.min(1, dt * 3.5);
+}
+
+// ---------- Rendering ---------------------------------------------------
+// Rule governing the whole art direction: pastel does not mean no contrast.
+// A deep ink carries the silhouettes, the flat fills stay soft.
+var INK = '#6a4a7a';
+// Coats: light body, dark body, mane hue offset, horn.
+var SKIN = [
+  ['#fffdff', '#ffe6f2',   0, '#ffd274', 'PEARL'],
+  ['#eef6ff', '#c9e2ff', 150, '#9fe8ff', 'FROST'],
+  ['#fff4de', '#ffd6a0',  40, '#ffb45c', 'DAWN'],
+  ['#f2e8ff', '#cdb6f2', 250, '#c9a6ff', 'NIGHT'],
+  ['#ffe8e6', '#ffbfc6', 330, '#ff9a7a', 'EMBER']
+];
+function sk(){ return SKIN[S.skin] || SKIN[0]; }
+
+function pastel(h, l, s){ return 'hsl(' + ((h % 360 + 360) % 360) + ',' + (s || 78) + '%,' + (l || 78) + '%)'; }
+// Four-pointed star, used by the glitter, the shield and the title.
+function star(x, y, r){
+  var q = r * 2.3;
+  X.beginPath();
+  X.moveTo(x, y - q); X.quadraticCurveTo(x, y, x + q, y);
+  X.quadraticCurveTo(x, y, x, y + q); X.quadraticCurveTo(x, y, x - q, y);
+  X.quadraticCurveTo(x, y, x, y - q); X.fill();
+}
+function rrect(x, y, w, h, r){
+  X.beginPath();
+  if(X.roundRect) X.roundRect(x, y, w, h, r); else X.rect(x, y, w, h);
+}
+
+// --- Background: gradient, sun, big rainbow, three layers of hills -------
+function sky(cx, cy){
+  var g = X.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0,    '#ffd7ea');
+  g.addColorStop(0.30, '#f4d6ff');
+  g.addColorStop(0.60, '#dadcff');
+  g.addColorStop(1,    '#c6f2e2');
+  X.fillStyle = g; X.fillRect(0, 0, W, H);
+
+  var sx = W * 0.78 - cx * 0.03, sy = H * 0.18 - cy * 0.03;
+  var sg = X.createRadialGradient(sx, sy, 6, sx, sy, 210);
+  sg.addColorStop(0,    'rgba(255,255,232,.95)');
+  sg.addColorStop(0.18, 'rgba(255,238,190,.6)');
+  sg.addColorStop(1,    'rgba(255,214,205,0)');
+  X.fillStyle = sg; X.fillRect(sx - 220, sy - 220, 440, 440);
+
+  // The theme, set as scenery for almost nothing: seven low-opacity arcs.
+  var ax = W * 0.4 - cx * 0.05, ay = H * 1.22 - cy * 0.05, ar = H * 1.0;
+  for(var i = 0; i < 7; i++){
+    X.strokeStyle = 'hsla(' + (i * 46 + 338) + ',85%,70%,.15)';
+    X.lineWidth = 30;
+    X.beginPath(); X.arc(ax, ay, ar - i * 30, Math.PI * 1.05, Math.PI * 1.95); X.stroke();
+  }
+}
+function ridge(cx, cy, par, base, amp, col, off){
+  X.fillStyle = col; X.beginPath(); X.moveTo(-10, H + 80);
+  for(var x = -10; x <= W + 20; x += 16){
+    var wx = cx * par + x;
+    X.lineTo(x, base - cy * par
+      + Math.sin(wx * 0.0017 + off) * amp
+      + Math.sin(wx * 0.0049 + off * 2.3) * amp * 0.42
+      + Math.sin(wx * 0.0115 + off * 0.7) * amp * 0.16);
+  }
+  X.lineTo(W + 20, H + 80); X.closePath(); X.fill();
+}
+function backdrop(cx, cy){
+  ridge(cx, cy, 0.08, H * 0.50, 58, '#e6cef9', 0.4);
+  ridge(cx, cy, 0.17, H * 0.60, 44, '#cdb3f0', 2.1);
+  ridge(cx, cy, 0.30, H * 0.72, 32, '#a9d9c9', 4.4);
+}
+
+// --- Clouds: a single path per cloud, otherwise the arcs join up --------
+function drawClouds(cx, cy){
+  var span = NB * BW;
+  for(var i = 0; i < clouds.length; i++){
+    var c = clouds[i];
+    var x = ((c.x - cx * c.s) % span + span) % span, y = c.y - cy * c.s * 0.3;
+    if(x > W + 300) x -= span;
+    if(x < -300 || x > W + 300) continue;
+    var r = c.w * 0.27;
+    X.globalAlpha = 0.5; X.fillStyle = '#d9c6ee';
+    blob(x, y + 9, r); X.fill();
+    X.globalAlpha = 0.92; X.fillStyle = '#fff';
+    blob(x, y, r); X.fill();
+    X.globalAlpha = 1;
+  }
+}
+function blob(x, y, r){
+  X.beginPath();
+  X.moveTo(x + r, y);                 X.arc(x, y, r, 0, 6.283);
+  X.moveTo(x + r * 1.9, y - r * 0.3); X.arc(x + r * 1.1, y - r * 0.3, r * 0.8, 0, 6.283);
+  X.moveTo(x - r * 0.3, y + r * 0.2); X.arc(x - r * 1.0, y + r * 0.2, r * 0.7, 0, 6.283);
+  X.moveTo(x + r * 0.9, y + r * 0.5); X.arc(x + r * 0.2, y + r * 0.5, r * 0.7, 0, 6.283);
+}
+
+// --- Trails: a smooth ribbon, not a staircase of squares -----------------
+// off shifts the ribbon BELOW the collision line, so that its top edge is
+// exactly the surface we run on.
+function trailPath(t, cx, cy, b0, b1, off){
+  var on = false;
+  X.beginPath();
+  for(var b = b0; b < b1; b++){
+    var y = t[b];
+    if(y == null || y < 0){ on = false; continue; }
+    var px = b * BW - cx + BW / 2, py = y - cy + off;
+    if(on) X.lineTo(px, py); else { X.moveTo(px, py); on = true; }
+  }
+}
+function drawTrail(t, cx, cy, b0, b1, alpha, w){
+  var g = X.createLinearGradient(0, 0, W, H * 0.4);
+  for(var i = 0; i <= 6; i++) g.addColorStop(i / 6, 'hsl(' + ((i * 52 + T * 26) % 360) + ',88%,68%)');
+  X.save(); X.lineCap = 'round'; X.lineJoin = 'round';
+  X.globalAlpha = alpha * 0.22; X.strokeStyle = g; X.lineWidth = w + 16;
+  trailPath(t, cx, cy, b0, b1, w / 2); X.stroke();
+  X.globalAlpha = alpha; X.lineWidth = w;
+  trailPath(t, cx, cy, b0, b1, w / 2); X.stroke();
+  X.globalAlpha = alpha * 0.5; X.strokeStyle = '#fff'; X.lineWidth = w * 0.26;
+  trailPath(t, cx, cy, b0, b1, w * 0.32); X.stroke();
+  X.restore();
+}
+
+// --- Terrain: gradient body, grass strip, tufts, flowers ----------------
+// Deterministic noise in world coordinates: the sprinkles and swirls do
+// not flicker when the camera moves.
+var TCX = 0;
+function hsh(n){ return (n * 2654435761 % 1009) / 1009; }
+var SPR = ['#ff9ec7', '#ffd274', '#8ee2ba', '#9fd8ff', '#c9a6ff'];
+
+// First half of the course: iced biscuit, drips and sprinkles.
+function frost(x0, x1, gy, a){
+  // W0 and W1 are the bounds in WORLD coordinates. All the repetitions
+  // (drips, sprinkles) are pinned to a world grid: they do not move when
+  // the screen clips an edge of the platform.
+  var w = x1 - x0, W0 = x0 + TCX, W1 = x1 + TCX, wx, q;
+  X.globalAlpha = a;
+  X.save(); X.beginPath(); X.rect(x0, gy - 60, w, H + 300); X.clip();
+  var g = X.createLinearGradient(0, gy + 20, 0, gy + 300);
+  g.addColorStop(0, '#ffe9c9'); g.addColorStop(0.25, '#eec090'); g.addColorStop(1, '#a86f52');
+  X.fillStyle = g; X.fillRect(x0, gy + 20, w, H + 220);
+  X.beginPath();
+  X.moveTo(x0, gy + 26); X.lineTo(x0, gy); X.lineTo(x1, gy); X.lineTo(x1, gy + 26);
+  for(wx = Math.floor(W1 / 24) * 24; wx > W0 - 24; wx -= 24){
+    q = hsh(wx);
+    X.quadraticCurveTo(wx - 12 - TCX, gy + 26 + q * 24, wx - 24 - TCX, gy + 24);
+  }
+  X.closePath();
+  var ig = X.createLinearGradient(0, gy - 3, 0, gy + 48);
+  ig.addColorStop(0, '#fffdff'); ig.addColorStop(0.4, '#ffe6f4'); ig.addColorStop(1, '#f3bcdc');
+  X.fillStyle = ig; X.fill();
+  X.fillStyle = 'rgba(255,255,255,.62)'; X.fillRect(x0, gy + 3, w, 5);
+  for(wx = Math.ceil(W0 / 16) * 16; wx < W1; wx += 16){
+    q = hsh(wx + 7);
+    X.save(); X.translate(wx - TCX + q * 12, gy + 8 + q * 18); X.rotate(q * 6);
+    X.fillStyle = SPR[q * 5 | 0]; X.fillRect(-4, -1.5, 8, 3); X.restore();
+  }
+  X.restore();
+  X.globalAlpha = 1;
+}
+// Second half: cloud mass, lilac underside, pearly crest. Same world
+// anchoring rule for the arcs.
+function cldg(x0, x1, gy, a){
+  var W0 = x0 + TCX, W1 = x1 + TCX, wx, q;
+  X.save(); X.beginPath(); X.rect(x0 - 20, gy - 60, x1 - x0 + 40, H + 300); X.clip();
+  X.globalAlpha = a * 0.5; X.fillStyle = '#b79ce6';
+  X.beginPath(); X.moveTo(x0, gy + 18);
+  for(wx = Math.floor(W0 / 26) * 26; wx < W1 + 26; wx += 26){ q = hsh(wx); X.arc(wx - TCX + 13, gy + 22 + q * 6, 15 + q * 9, Math.PI, 0); }
+  X.lineTo(x1, H + 220); X.lineTo(x0, H + 220); X.closePath(); X.fill();
+  X.globalAlpha = a;
+  X.beginPath(); X.moveTo(x0, gy + 10);
+  for(wx = Math.floor(W0 / 24) * 24; wx < W1 + 24; wx += 24){ q = hsh(wx * 3); X.arc(wx - TCX + 12, gy + 8, 15 + q * 11, Math.PI, 0); }
+  X.lineTo(x1, H + 220); X.lineTo(x0, H + 220); X.closePath();
+  var g = X.createLinearGradient(0, gy - 14, 0, gy + 300);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.25, '#fdf7ff');
+  g.addColorStop(0.65, '#e2d2f4'); g.addColorStop(1, '#bda6e2');
+  X.fillStyle = g; X.fill();
+  X.beginPath();
+  for(wx = Math.floor(W0 / 24) * 24; wx < W1 + 24; wx += 24){ q = hsh(wx * 3); X.arc(wx - TCX + 12, gy + 8, 15 + q * 11, Math.PI, 0); }
+  X.strokeStyle = 'rgba(255,255,255,.95)'; X.lineWidth = 3.4; X.stroke();
+  X.restore();
+  X.globalAlpha = 1;
+}
+function drawTerrain(cx, cy, b0, b1){
+  TCX = cx;
+  var runs = [], s = -1, b, k;
+  for(b = b0; b <= b1; b++){
+    var solid = b < NB && ground[b] >= 0;
+    if(solid && s < 0) s = b;
+    if(!solid && s >= 0){ runs.push([s, b - 1]); s = -1; }
+  }
+  if(s >= 0) runs.push([s, Math.min(b1, NB - 1)]);
+
+  for(var i = 0; i < runs.length; i++){
+    var r = runs[i], x0 = r[0] * BW - cx, x1 = (r[1] + 1) * BW - cx, gy = ground[r[0]] - cy;
+    // Cross-fade between the two terrains around the middle of the course.
+    var m = Math.min(1, Math.max(0, (r[0] / GOAL - 0.45) / 0.1));
+    if(m < 1) frost(x0, x1, gy, 1 - m);
+    if(m > 0) cldg(x0, x1, gy, m);
+    for(k = r[0]; k <= r[1]; k++) if(spk[k]) spike(k * BW - cx, gy);
+  }
+
+  for(b = b0; b < b1; b++){
+    var pl = plats[b]; if(pl < 0) continue;
+    if(b > b0 && plats[b - 1] >= 0) continue;
+    var e = b; while(e < NB && plats[e] >= 0) e++;
+    var px2 = b * BW - cx, pw = (e - b) * BW, py2 = pl - cy;
+    X.fillStyle = 'rgba(120,70,130,.13)'; rrect(px2 + 3, py2 + 6, pw, 16, 8); X.fill();
+    X.fillStyle = '#b79ce6'; rrect(px2, py2, pw, 17, 8); X.fill();
+    X.fillStyle = '#dcc9f7'; rrect(px2, py2, pw, 7, [8, 8, 0, 0]); X.fill();
+    b = e;
+  }
+}
+function spike(x, gy){
+  X.beginPath(); X.moveTo(x - 1, gy + 2); X.lineTo(x + BW / 2, gy - 24); X.lineTo(x + BW + 1, gy + 2); X.closePath();
+  X.fillStyle = '#ff7ea4'; X.fill();
+  X.strokeStyle = INK; X.lineWidth = 2; X.lineJoin = 'round'; X.stroke();
+  X.fillStyle = 'rgba(255,255,255,.6)';
+  X.beginPath(); X.moveTo(x + BW / 2, gy - 22); X.lineTo(x + BW / 2 + 2.5, gy - 4); X.lineTo(x + BW / 2 - 1, gy - 4); X.fill();
+}
+
+// --- Prisms: real gems, with halo and facet ------------------------------
+function drawPrisms(cx, cy){
+  for(var i = 0; i < prisms.length; i++){
+    var p = prisms[i]; if(p.t) continue;
+    var x = p.b * BW - cx, y = p.y - cy + Math.sin(T * 2.4 + i) * 5;
+    if(x < -50 || x > W + 50) continue;
+    var rg = X.createRadialGradient(x, y, 2, x, y, 30);
+    rg.addColorStop(0, 'rgba(255,255,255,.5)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    X.fillStyle = rg; X.fillRect(x - 30, y - 30, 60, 60);
+    X.save(); X.translate(x, y); X.rotate(Math.sin(T * 1.8 + i) * 0.22);
+    var h = T * 70 + i * 47;
+    X.beginPath(); X.moveTo(0, -14); X.lineTo(11, -1); X.lineTo(0, 15); X.lineTo(-11, -1); X.closePath();
+    X.fillStyle = pastel(h, 72, 92); X.fill();
+    X.strokeStyle = INK; X.lineWidth = 2; X.lineJoin = 'round'; X.stroke();
+    X.beginPath(); X.moveTo(0, -14); X.lineTo(-11, -1); X.lineTo(0, 15); X.closePath();
+    X.fillStyle = 'rgba(255,255,255,.42)'; X.fill();
+    X.fillStyle = '#fff';
+    X.beginPath(); X.ellipse(-4, -6, 2.4, 3.4, 0.5, 0, 6.283); X.fill();
+    X.restore();
+  }
+}
+
+// --- Unicorn ------------------------------------------------------------
+// Two-pass silhouette: first all the shapes, enlarged, in ink, then the
+// same ones filled in light. A single clean outline, zero internal seam,
+// for the price of two drawing passes.
+function bodyPath(){
+  X.beginPath();
+  X.moveTo(-14, -22);
+  X.bezierCurveTo(-17, -31, -8, -34, 2, -33);
+  X.bezierCurveTo(10, -32, 14, -28, 14, -23);
+  X.bezierCurveTo(14, -17, 6, -15, -2, -15);
+  X.bezierCurveTo(-9, -15, -13, -17, -14, -22);
+  X.closePath();
+}
+function horseShapes(ink){
+  X.lineJoin = 'round'; X.lineCap = 'round';
+  bodyPath(); X.fill(); if(ink){ X.lineWidth = 5; X.stroke(); }
+  X.lineWidth = ink ? 18 : 13;                                  // neck
+  X.beginPath(); X.moveTo(6, -26); X.lineTo(17, -42); X.stroke();
+  X.save(); X.translate(22, -45.5); X.rotate(0.55);             // skull
+  X.beginPath(); X.ellipse(0, 0, 9.6, 6.9, 0, 0, 6.283); X.fill();
+  if(ink){ X.lineWidth = 5; X.stroke(); }
+  X.restore();
+  X.beginPath(); X.arc(29.5, -40.5, 4.4, 0, 6.283); X.fill();   // muzzle
+  if(ink){ X.lineWidth = 5; X.stroke(); }
+  X.beginPath(); X.moveTo(18.5, -50); X.lineTo(20.5, -57.5); X.lineTo(24, -50.5); X.closePath();
+  X.fill(); if(ink){ X.lineWidth = 5; X.stroke(); }             // ear
+}
+// Gallop cycle: stance sliding back, arced flight.
+function foot(ph, gx, stride, lift){
+  ph -= Math.floor(ph);
+  if(ph < 0.62){ return [gx + stride * (0.5 - ph / 0.62), 0]; }
+  var v = (ph - 0.62) / 0.38;
+  return [gx + stride * (v - 0.5), -Math.sin(v * Math.PI) * lift];
+}
+// Two-segment inverse kinematics: hip and hoof are given, the knee is
+// derived. That is what separates a leg from a stick.
+function legIK(hx, hy, fx, fy, len, bend, far){
+  var dx = fx - hx, dy = fy - hy, d = Math.min(Math.hypot(dx, dy), len * 1.97);
+  var a = Math.atan2(dy, dx), h = Math.sqrt(Math.max(0, len * len - d * d / 4));
+  var kx = hx + Math.cos(a) * d / 2 + Math.cos(a + 1.5708) * h * bend;
+  var ky = hy + Math.sin(a) * d / 2 + Math.sin(a + 1.5708) * h * bend;
+  X.lineCap = 'round'; X.lineJoin = 'round';
+  X.strokeStyle = INK; X.lineWidth = 5.6;
+  X.beginPath(); X.moveTo(hx, hy); X.lineTo(kx, ky); X.lineTo(fx, fy); X.stroke();
+  X.strokeStyle = far ? sk()[1] : sk()[0]; X.lineWidth = 3.2;
+  X.beginPath(); X.moveTo(hx, hy); X.lineTo(kx, ky); X.lineTo(fx, fy); X.stroke();
+  X.strokeStyle = '#f0b45c'; X.lineWidth = 4.2;                 // hoof
+  X.beginPath(); X.moveTo(fx - 1.4, fy - 1.4); X.lineTo(fx + 1.6, fy - 0.6); X.stroke();
+}
+var HIP = [[-8, -20], [-5, -20.5], [8, -22], [10.5, -22.5]];
+var PHS = [0, 0.5, 0.28, 0.74];
+
+function drawUnicorn(x, y, vy, onG, anim){
+  var sq = Math.max(0.86, Math.min(1.14, 1 - vy / 4600)), i;
+  X.save(); X.translate(x, y);
+
+  X.fillStyle = 'rgba(106,74,122,.15)';
+  X.beginPath(); X.ellipse(0, 1, 16, 4.6, 0, 0, 6.283); X.fill();
+
+  X.rotate(Math.max(-0.24, Math.min(0.3, vy / 1900)));
+  X.scale(0.86 / sq, 0.86 * sq);
+  var bob = onG ? Math.sin(anim * 2) * 1.4 : 0, air = onG ? 0 : 1;
+  var wind = 1 + air * 0.7 + Math.min(0.7, Math.abs(vy) / 900);
+  X.translate(0, bob);
+
+  // Tail: it floats horizontally instead of dropping to the ground. Two
+  // out-of-phase control points run a wave along the strand.
+  for(i = 0; i < 8; i++){
+    var v = i / 7;
+    X.strokeStyle = pastel(i * 33 + T * 85 + sk()[2], 66, 94);
+    X.lineWidth = 4.4 - v * 2; X.lineCap = 'round';
+    var w1 = Math.sin(T * 8.5 - i * 0.5) * 3.2 * wind;
+    var w2 = Math.sin(T * 8.5 - i * 0.5 - 1.3) * 5.5 * wind;
+    X.beginPath(); X.moveTo(-13, -30 + i * 1.3);
+    X.bezierCurveTo(-22, -32 + i * 1.7 + w1, -30, -31 + i * 2.1 + w2, -38, -29 + i * 2.4 + w2 * 1.3);
+    X.stroke();
+  }
+
+  // far legs, then body, then near legs
+  // While gliding, the four legs spread out in a cross: the silhouette
+  // alone says the power is active.
+  for(i = 1; i < 4; i += 2){
+    var f = onG ? foot(anim * 0.5 + PHS[i], HIP[i][0] * 0.55, 14, 8)
+                : P.gl ? [HIP[i][0] * 0.55 + (i > 1 ? 19 : -18), -15 - (i > 1 ? 5 : 0)]
+                       : [HIP[i][0] * 0.55 + (i > 1 ? 10 : -9), -6 - (i > 1 ? 3 : 0)];
+    legIK(HIP[i][0], HIP[i][1], f[0], f[1], 11, i > 1 ? -1 : 1, 1);
+  }
+
+  X.fillStyle = INK; X.strokeStyle = INK; horseShapes(1);
+  var K = sk(), bg = X.createLinearGradient(0, -56, 0, -14);
+  bg.addColorStop(0, K[0]); bg.addColorStop(1, K[1]);
+  X.fillStyle = bg; X.strokeStyle = K[0]; horseShapes(0);
+
+  for(i = 0; i < 4; i += 2){
+    var f2 = onG ? foot(anim * 0.5 + PHS[i], HIP[i][0] * 0.55, 14, 8)
+                 : P.gl ? [HIP[i][0] * 0.55 + (i > 1 ? 19 : -18), -15 - (i > 1 ? 5 : 0)]
+                        : [HIP[i][0] * 0.55 + (i > 1 ? 10 : -9), -6 - (i > 1 ? 3 : 0)];
+    legIK(HIP[i][0], HIP[i][1], f2[0], f2[1], 11, i > 1 ? -1 : 1, 0);
+  }
+
+  // horn, with spiral
+  X.beginPath(); X.moveTo(20.4, -50.5); X.lineTo(27.5, -64.5); X.lineTo(26.4, -49); X.closePath();
+  var hg = X.createLinearGradient(20, -64, 28, -49);
+  hg.addColorStop(0, '#fff7d4'); hg.addColorStop(0.55, sk()[3]); hg.addColorStop(1, '#f0a94a');
+  X.fillStyle = hg; X.fill();
+  X.strokeStyle = INK; X.lineWidth = 2.2; X.lineJoin = 'round'; X.stroke();
+  X.strokeStyle = 'rgba(180,110,40,.55)'; X.lineWidth = 1.2;
+  for(i = 1; i < 4; i++){
+    var u = i / 4;
+    X.beginPath();
+    X.moveTo(20.4 + (26.4 - 20.4) * u * 0.5 + 0.6, -50.5 + (-64.5 + 50.5) * u);
+    X.lineTo(26.4 + (27.5 - 26.4) * u - (26.4 - 20.4) * u * 0.5, -49 + (-64.5 + 49) * u);
+    X.stroke();
+  }
+
+  // Mane: anchored on the neck line, each strand goes backwards AND
+  // upwards. The middle strands are the longest, and the wave is
+  // out of phase between the two control points so that it travels.
+  for(i = 0; i < 10; i++){
+    var u = i / 9;
+    var ax = 20 - u * 15.5, ay = -51.5 + u * 18;
+    var len = 14 + Math.sin(u * 3.14159) * 8;
+    var m1 = Math.sin(T * 9.5 - i * 0.62) * 3.4 * wind;
+    var m2 = Math.sin(T * 9.5 - i * 0.62 - 1.25) * 5.6 * wind;
+    X.strokeStyle = pastel(i * 27 + T * 85 + sk()[2], 64, 95);
+    X.lineWidth = 4.2 - u * 1.4;
+    X.beginPath(); X.moveTo(ax, ay);
+    X.bezierCurveTo(ax - len * 0.4, ay - 1.5 + m1,
+                    ax - len * 0.8, ay - 3 + m2,
+                    ax - len, ay - 4 + m2 * 1.2);
+    X.stroke();
+  }
+
+  // eye
+  X.fillStyle = 'rgba(255,150,190,.4)';
+  X.beginPath(); X.arc(26.5, -42.5, 3.1, 0, 6.283); X.fill();
+  X.fillStyle = INK;
+  X.beginPath(); X.ellipse(23.6, -46.6, 2.3, 2.7, 0, 0, 6.283); X.fill();
+  X.beginPath(); X.arc(31.4, -39.6, 1.1, 0, 6.283); X.fill();
+  X.fillStyle = '#fff';
+  X.beginPath(); X.arc(24.4, -47.5, 1, 0, 6.283); X.fill();
+
+  // horn glint
+  var tw = (Math.sin(T * 3.4) + 1) * 0.5;
+  X.globalAlpha = 0.3 + tw * 0.7; X.fillStyle = '#fff';
+  X.beginPath(); X.arc(27.5, -64.5, 1.4 + tw * 1.8, 0, 6.283); X.fill();
+  X.globalAlpha = 1;
+  X.restore();
+}
+
+function drawCrows(cx, cy){
+  for(var i = 0; i < crows.length; i++){
+    var c = crows[i]; if(c.k) continue;
+    var x = crowX(c) - cx; if(x < -40 || x > W + 40) continue;
+    var y = crowY(c) - cy, f = Math.sin(RT * 14 + c.ph) * 0.85;
+    X.save(); X.translate(x, y);
+    X.strokeStyle = '#33223f'; X.lineWidth = 3.6; X.lineCap = 'round';
+    X.beginPath(); X.moveTo(1, -2); X.lineTo(8, -3 - f * 10); X.stroke();
+    X.fillStyle = '#4a3358';
+    X.beginPath(); X.ellipse(0, 0, 9.5, 6.2, 0, 0, 6.283); X.fill();
+    X.beginPath(); X.arc(-7, -2, 4.6, 0, 6.283); X.fill();
+    X.fillStyle = '#ffb85c';
+    X.beginPath(); X.moveTo(-11, -2); X.lineTo(-18, 0); X.lineTo(-11, 2); X.fill();
+    X.strokeStyle = '#3d2a4c'; X.lineWidth = 3.6;
+    X.beginPath(); X.moveTo(1, 0); X.lineTo(9, 5 + f * 8); X.stroke();
+    X.fillStyle = '#ff6b8a'; X.beginPath(); X.arc(-8.4, -3, 1.6, 0, 6.283); X.fill();
+    X.restore();
+  }
+}
+function drawBeam(cx, cy){
+  if(beam <= 0) return;
+  X.save(); X.globalAlpha = Math.min(1, beam * 3.6);
+  var by = P.y - cy - 46, bx = P.x - cx + 20;
+  for(var i = 0; i < 7; i++){
+    X.fillStyle = pastel(i * 50 + T * 140, 66, 95);
+    X.fillRect(bx, by - 14 + i * 4.2, W, 4.2);
+  }
+  X.globalAlpha = Math.min(1, beam * 2) * 0.5; X.fillStyle = '#fff';
+  X.fillRect(bx, by - 3, W, 5);
+  X.restore(); X.globalAlpha = 1;
+}
+// Concentric ripples anchored at the exact spot of the unlock.
+function rings(x, y, age, mul){
+  var k, w;
+  X.save(); X.lineCap = 'butt'; X.lineWidth = 10;
+  for(w = 0; w < 3; w++){
+    var a2 = age - w * 0.2; if(a2 <= 0 || a2 > 1.5) continue;
+    var rr = a2 * 660 * mul, al = (1 - a2 / 1.5) * 0.45;
+    for(k = 0; k < 7; k++){
+      X.globalAlpha = al; X.strokeStyle = pastel(k * 50 + T * 90, 66, 95);
+      X.beginPath(); X.arc(x, y, Math.max(1, rr - k * 10), 0, 6.283); X.stroke();
+    }
+  }
+  X.restore(); X.globalAlpha = 1;
+}
+function drawParty(cx, cy){
+  if(party > 0) rings(partyX - cx, partyY - cy, 2.6 - party, 1);
+  if(boom > 0) rings(boomX - cx, boomY - cy, 1.9 - boom, 0.72);
+}
+function drawConfetti(cx, cy){
+  for(var k = 0; k < conf.length; k++){
+    var c = conf[k];
+    X.save(); X.globalAlpha = Math.min(1, c.l * 1.3);
+    X.translate(c.x - cx, c.y - cy); X.rotate(c.r);
+    X.fillStyle = pastel(c.c, 66, 95);
+    X.fillRect(-c.w / 2, -c.h / 2, c.w, c.h * Math.abs(Math.cos(c.r * 1.7)) + 1);
+    X.restore();
+  }
+  X.globalAlpha = 1;
+}
+function drawShield(cx, cy){
+  if(P.sh <= 0 && P.inv <= 0) return;
+  var x = P.x - cx, y = P.y - cy - 24, i;
+  var a0 = P.inv > 0 ? 0.35 + Math.sin(T * 42) * 0.35 : 0.62;
+  X.save();
+  var rg = X.createRadialGradient(x, y, 14, x, y, 42);
+  rg.addColorStop(0, 'rgba(255,255,255,0)');
+  rg.addColorStop(0.72, 'hsla(' + (T * 120 % 360) + ',92%,80%,' + a0 * 0.4 + ')');
+  rg.addColorStop(1, 'rgba(255,255,255,0)');
+  X.fillStyle = rg; X.fillRect(x - 44, y - 44, 88, 88);
+  X.globalAlpha = a0; X.lineWidth = 3.8; X.lineCap = 'round';
+  for(i = 0; i < P.sh * 3; i++){                 // three arcs per charge
+    X.strokeStyle = pastel(i * 38 + T * 140, 64, 96);
+    var a = T * (2.3 + (i % 3) * 0.55) + i * 2.1;
+    X.beginPath(); X.arc(x, y, 27 + (i % 3) * 5.5, a, a + 1.45); X.stroke();
+  }
+  X.fillStyle = '#fff';
+  for(i = 0; i < P.sh; i++){                     // sparks in reverse orbit
+    var a2 = -T * 2.1 + i * 2.1;
+    star(x + Math.cos(a2) * 35, y + Math.sin(a2) * 35, 1.4 + Math.sin(T * 6 + i) * 0.8);
+  }
+  X.restore(); X.globalAlpha = 1;
+}
+
+// --- Panels and typography ---------------------------------------------
+function panel(x, y, w, h, r){
+  r = r || 26;
+  X.save();
+  X.shadowColor = 'rgba(120,70,130,.28)'; X.shadowBlur = 34; X.shadowOffsetY = 12;
+  var g = X.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, 'rgba(255,255,255,.97)'); g.addColorStop(1, 'rgba(255,243,251,.95)');
+  X.fillStyle = g; rrect(x, y, w, h, r); X.fill();
+  X.restore();
+  X.save(); rrect(x, y, w, h, r); X.clip();
+  for(var i = 0; i < 7; i++){ X.fillStyle = pastel(i * 50 + T * 34, 70, 92); X.fillRect(x + i * w / 7, y, w / 7 + 1, 7); }
+  X.restore();
+  X.strokeStyle = 'rgba(214,180,224,.7)'; X.lineWidth = 2; rrect(x, y, w, h, r); X.stroke();
+}
+function txt(s, x, y, size, col, align, weight){
+  X.fillStyle = col || '#5f4570'; X.textAlign = align || 'center';
+  X.font = (weight || '700') + ' ' + size + 'px system-ui,-apple-system,Segoe UI,sans-serif';
+  X.fillText(s, x, y);
+}
+// Bubble title. No external font fits in 13 kB, so round letters are
+// made from the system font: thick outline with round joins to fatten,
+// extrusion for depth, a gradient inside and a highlight painted only
+// on the top of the glyph.
+function bubbleTitle(str, x, y, size){
+  X.save();
+  X.font = '900 ' + size + 'px system-ui,-apple-system,Segoe UI,sans-serif';
+  try{ X.letterSpacing = size * 0.07 + 'px'; }catch(e){}
+  X.textAlign = 'center'; X.lineJoin = 'round'; X.lineCap = 'round';
+  var w = [], tot = 0, i, d;
+  for(i = 0; i < str.length; i++){ w.push(X.measureText(str[i]).width); tot += w[i]; }
+  var px = x - tot / 2;
+  for(i = 0; i < str.length; i++){
+    var ch = str[i], cx2 = px + w[i] / 2;
+    px += w[i];
+    X.save();
+    X.translate(cx2, y + Math.sin(T * 2.1 + i * 0.55) * size * 0.06);
+    X.rotate(Math.sin(T * 1.5 + i * 0.7) * 0.055);
+    for(d = 7; d > 0; d--){                                  // depth
+      X.fillStyle = 'rgba(120,72,140,.09)';
+      X.fillText(ch, 0, d * size * 0.032);
+    }
+    X.lineWidth = size * 0.30; X.strokeStyle = INK; X.strokeText(ch, 0, 0);
+    X.lineWidth = size * 0.19; X.strokeStyle = '#fffdff'; X.strokeText(ch, 0, 0);
+    var h = i * 34 + T * 45;
+    var g = X.createLinearGradient(0, -size * 0.78, 0, size * 0.16);
+    g.addColorStop(0, pastel(h, 84, 96));
+    g.addColorStop(0.55, pastel(h, 66, 96));
+    g.addColorStop(1, pastel(h - 18, 54, 92));
+    X.fillStyle = g; X.fillText(ch, 0, 0);
+    var gl = X.createLinearGradient(0, -size * 0.76, 0, -size * 0.2);
+    gl.addColorStop(0, 'rgba(255,255,255,.9)');
+    gl.addColorStop(1, 'rgba(255,255,255,0)');
+    X.fillStyle = gl; X.fillText(ch, 0, 0);                  // highlight
+    X.restore();
+  }
+  // sparks around the title
+  for(i = 0; i < 5; i++){
+    var a = T * 0.7 + i * 1.257, tw = (Math.sin(T * 3 + i * 2) + 1) * 0.5;
+    X.globalAlpha = 0.25 + tw * 0.75; X.fillStyle = '#fff';
+    var sx2 = x + Math.cos(a) * (tot * 0.56), sy2 = y - size * 0.3 + Math.sin(a * 1.3) * size * 0.7;
+    star(sx2, sy2, 1.5 + tw * 3.5);
+  }
+  X.globalAlpha = 1; X.restore();
+}
+function rainbowTitle(s, x, y, size){
+  X.save();
+  X.font = '900 ' + size + 'px system-ui,-apple-system,Segoe UI,sans-serif';
+  try{ X.letterSpacing = (size * 0.04) + 'px'; }catch(e){}
+  var px = x - X.measureText(s).width / 2;
+  X.textAlign = 'left';
+  X.shadowColor = 'rgba(120,70,130,.3)'; X.shadowBlur = 10; X.shadowOffsetY = 3;
+  for(var i = 0; i < s.length; i++){
+    X.fillStyle = pastel(i * 34 + T * 50, 62, 92);
+    X.fillText(s[i], px, y); px += X.measureText(s[i]).width;
+  }
+  X.restore(); X.textAlign = 'center';
+}
+// 0: no family open, 1: open but nothing affordable, 2: purchase possible.
+// The old counter also took still-locked families into account, so it
+// announced impossible purchases.
+function shopState(){
+  var st = unl(7) ? 1 : 0, i, u;
+  for(i = 0; i < UP.length; i++){
+    u = UP[i];
+    if(unl(u.f)){ st = st || 1; if(S[u.k] < u.max && S.p >= u.c[S[u.k]]) return 2; }
+  }
+  return st;
+}
+function shopButton(){
+  var r = upBtn(), st = shopState(), i;
+  X.save();
+  if(st === 2){                                   // breathing rainbow border
+    var g = X.createLinearGradient(r.x, 0, r.x + r.w, 0);
+    for(i = 0; i <= 6; i++) g.addColorStop(i / 6, pastel(i * 52 + T * 30, 66, 92));
+    X.fillStyle = g;
+  } else X.fillStyle = st ? '#e4d8f0' : '#ded7e6';
+  rrect(r.x, r.y, r.w, r.h, 22); X.fill();
+  var ins = st === 2 ? 3 + Math.sin(T * 5) * 1.2 : 3;
+  X.globalAlpha = st ? 0.88 : 0.5;
+  X.fillStyle = '#fff'; rrect(r.x + ins, r.y + ins, r.w - ins * 2, r.h - ins * 2, 19); X.fill();
+  X.globalAlpha = 1;
+  if(st === 2){                                   // highlight sweeping across the surface
+    var sw = (T * 0.5 % 1) * (r.w + 70) - 35;
+    var gl = X.createLinearGradient(r.x + sw - 28, 0, r.x + sw + 28, 0);
+    gl.addColorStop(0, 'rgba(255,255,255,0)');
+    gl.addColorStop(0.5, 'rgba(255,196,232,.8)');
+    gl.addColorStop(1, 'rgba(255,255,255,0)');
+    X.save(); rrect(r.x + 4, r.y + 4, r.w - 8, r.h - 8, 18); X.clip();
+    X.fillStyle = gl; X.fillRect(r.x, r.y, r.w, r.h); X.restore();
+  }
+  X.restore();
+  txt('UPGRADES', W / 2, r.y + 28, 17,
+      st === 2 ? '#d2679f' : (st ? '#8a7299' : '#b8a6c4'), 'center', '800');
+}
+function ngButton(){
+  var r = ngBtn();
+  X.fillStyle = 'rgba(255,255,255,.6)'; rrect(r.x, r.y, r.w, r.h, 19); X.fill();
+  X.strokeStyle = 'rgba(200,170,215,.7)'; X.lineWidth = 2;
+  rrect(r.x, r.y, r.w, r.h, 19); X.stroke();
+  txt('NEW GAME +' + (S.ngp ? ' ' + S.ngp : ''), r.x + r.w / 2, r.y + 25, 14, '#9c86ab', 'center', '800');
+}
+function rewButton(){
+  var r = rewBtn();
+  var g = X.createLinearGradient(r.x, 0, r.x + r.w, 0);
+  for(var i = 0; i <= 6; i++) g.addColorStop(i / 6, pastel(i * 52 + T * 40, 66, 92));
+  X.fillStyle = g; rrect(r.x, r.y, r.w, r.h, 21); X.fill();
+  X.fillStyle = 'rgba(255,255,255,.8)'; rrect(r.x + 3, r.y + 3, r.w - 6, r.h - 6, 18); X.fill();
+  txt('REWIND  (' + (2 + S.rew) + 's)', W / 2, r.y + 27, 16, '#7c4fd0', 'center', '800');
+}
+function newButton(){
+  var r = newBtn(), arm = wipeArm > 0;
+  X.fillStyle = arm ? 'rgba(255,214,232,.95)' : 'rgba(255,255,255,.6)';
+  rrect(r.x, r.y, r.w, r.h, 19); X.fill();
+  X.strokeStyle = arm ? '#e07aa8' : 'rgba(200,170,215,.7)'; X.lineWidth = 2;
+  rrect(r.x, r.y, r.w, r.h, 19); X.stroke();
+  txt(arm ? 'CONFIRM ?' : 'NEW WORLD', W / 2, r.y + 25, 15,
+      arm ? '#c94f92' : '#9c86ab', 'center', '800');
+}
+function pill(x, y, w, h){
+  X.fillStyle = 'rgba(255,255,255,.72)'; rrect(x, y, w, h, h / 2); X.fill();
+}
+
+// Markers visible in the scenery: you see the next tier coming, so you
+// know what you gain by pushing a little further.
+function drawMilestones(cx, cy, b0, b1){
+  for(var mb = Math.ceil(b0 / MS) * MS; mb <= b1; mb += MS){
+    if(mb <= 0 || mb > GOAL) continue;
+    var x = mb * BW - cx, isCp = mb % CP === 0;
+    var done = mode === 'play' && P.x / BW >= mb, hu = mb / MS * 13 + T * 20;
+    var a = (done ? 0.12 : 0.05) * (isCp ? 1.8 : 1), wd = isCp ? 13 : 7;
+    var g = X.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, 'hsla(' + hu + ',90%,70%,0)');
+    g.addColorStop(0.5, 'hsla(' + hu + ',90%,70%,' + a + ')');
+    g.addColorStop(1, 'hsla(' + hu + ',90%,70%,0)');
+    X.fillStyle = g; X.fillRect(x - wd, 0, wd * 2, H);
+    if(isCp || mb % (MS * 2) === 0){
+      X.fillStyle = 'rgba(255,255,255,.8)'; rrect(x - 32, 92, 64, 22, 11); X.fill();
+      txt(mb + ' m', x, 108, 13, done ? '#d2679f' : '#8a7299', 'center', '800');
+    }
+  }
+}
+
+// The ten flags, with the name of the family they unlock.
+function drawFlags(cx, cy){
+  for(var i = 0; i < 10; i++){
+    var fl = flags[i], x = fl.b * BW - cx;
+    if(x < -150 || x > W + 150) continue;
+    var gy = fl.y - cy, got = unl(i);
+    X.strokeStyle = INK; X.lineWidth = 4; X.lineCap = 'round';
+    X.beginPath(); X.moveTo(x, gy); X.lineTo(x, gy - 84); X.stroke();
+    for(var k = 0; k < 7; k++){
+      X.fillStyle = got ? pastel(k * 50 + T * 60, 64, 95) : '#ded2ea';
+      X.fillRect(x + 3, gy - 84 + k * 5.2, 28 + Math.sin(T * 5 - k * 0.6) * 5, 5.2);
+    }
+    // Until the flag is passed, the name stays hidden: the surprise beats
+    // a shopping list.
+    var lab = got ? FLAG[i] : '? ? ?   ' + fl.b + ' m', lw = got ? 128 : 150;
+    X.fillStyle = 'rgba(255,255,255,.88)'; rrect(x - lw / 2, gy - 122, lw, 25, 12); X.fill();
+    txt(lab, x, gy - 105, 12.5, got ? '#c94f92' : '#8a7299', 'center', '800');
+  }
+}
+
+function render(){
+  var sx = shake ? (Math.random() - 0.5) * shake : 0, sy = shake ? (Math.random() - 0.5) * shake : 0;
+  var cx = camX + sx, cy = camY + sy, i;
+
+  sky(cx, cy);
+  backdrop(cx, cy);
+  drawClouds(cx, cy);
+
+  var b0 = Math.max(0, bucket(cx) - 2), b1 = Math.min(NB, bucket(cx + W) + 3);
+  drawMilestones(cx, cy, b0, b1);
+  drawTerrain(cx, cy, b0, b1);
+
+  // finish gate: a rainbow arch
+  var gx = GOAL * BW - cx, gyy = (ground[GOAL] >= 0 ? ground[GOAL] : 380) - cy;
+  if(gx > -220 && gx < W + 220)
+    for(i = 0; i < 7; i++){
+      X.strokeStyle = pastel(i * 50 + T * 30, 66, 92); X.lineWidth = 15;
+      X.beginPath(); X.arc(gx, gyy, 160 - i * 15, Math.PI, 0); X.stroke();
+    }
+
+  for(i = ghosts.length - 1; i >= 0; i--) drawTrail(ghosts[i], cx, cy, b0, b1, 0.5 + 0.14 * (ghosts.length - i), 10);
+  if(cur && mode === 'play') drawTrail(cur, cx, cy, b0, b1, 1, 8);
+  drawFlags(cx, cy);
+  drawPrisms(cx, cy);
+  drawCrows(cx, cy);
+
+  for(i = 0; i < parts.length; i++){
+    var p = parts[i], px2 = p.x - cx, py2 = p.y - cy;
+    X.fillStyle = pastel(p.h, 72, 92);
+    if(p.k === 2){                                  // swelling puff
+      X.globalAlpha = Math.min(1, p.l) * 0.4;
+      X.beginPath(); X.arc(px2, py2, 5 + (1 - p.l) * 26, 0, 6.283); X.fill();
+    } else if(p.k === 1){                           // glitter
+      X.globalAlpha = Math.min(1, p.l * 2.4);
+      star(px2, py2, 1.2 + p.l * 3.2);
+    } else {
+      X.globalAlpha = Math.min(1, p.l * 2.4);
+      X.beginPath(); X.arc(px2, py2, (3 + p.l * 4) / 2, 0, 6.283); X.fill();
+    }
+  }
+  X.globalAlpha = 1;
+
+  drawParty(cx, cy);
+  if(mode !== 'title' && mode !== 'shop' && mode !== 'dead'){
+    drawUnicorn(P.x - cx, P.y - cy, P.vy, P.ground, P.anim);
+    drawShield(cx, cy); drawBeam(cx, cy);
+  }
+  drawConfetti(cx, cy);
+
+  // floating numbers: the gain must be seen where it is earned
+  for(i = 0; i < pops.length; i++){
+    var q = pops[i], a = Math.min(1, q.l * 1.9), sc = 1.35 - q.l * 0.35;
+    X.save(); X.globalAlpha = a;
+    X.translate(q.x - cx, q.y - cy); X.scale(sc, sc);
+    X.font = '900 ' + q.s + 'px system-ui,-apple-system,Segoe UI,sans-serif';
+    X.textAlign = 'center'; X.lineJoin = 'round';
+    X.lineWidth = 5; X.strokeStyle = 'rgba(255,255,255,.95)'; X.strokeText(q.t, 0, 0);
+    X.fillStyle = q.c; X.fillText(q.t, 0, 0);
+    X.restore();
+  }
+  X.globalAlpha = 1;
+
+  if(banner > 0){
+    var ba = Math.min(1, banner * 1.6), bs = 1.5 - banner * 0.55;
+    X.save(); X.globalAlpha = ba * 0.42;
+    for(i = 0; i < 7; i++){
+      X.fillStyle = pastel(i * 50 + T * 60, 68, 95);
+      X.fillRect(0, H * 0.3 + i * 10 - (1 - banner) * 30, W, 10);
+    }
+    X.globalAlpha = ba;
+    X.translate(W / 2, H * 0.34); X.scale(bs, bs);
+    X.textAlign = 'center'; X.lineJoin = 'round';
+    if(party > 0){
+      X.font = '900 22px system-ui,-apple-system,Segoe UI,sans-serif';
+      X.lineWidth = 6; X.strokeStyle = '#fff'; X.strokeText('POWER UP', 0, -44);
+      X.fillStyle = '#7c4fd0'; X.fillText('POWER UP', 0, -44);
+    }
+    X.font = '900 ' + (party > 0 ? 44 : 56) + 'px system-ui,-apple-system,Segoe UI,sans-serif';
+    X.lineWidth = 10; X.strokeStyle = '#fff'; X.strokeText(bannerTxt, 0, 0);
+    X.fillStyle = '#c94f92'; X.fillText(bannerTxt, 0, 0);
+    X.restore(); X.globalAlpha = 1;
+  }
+
+  // vignette: depth for three lines of code
+  var vg = X.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.32, W / 2, H * 0.45, Math.max(W, H) * 0.78);
+  vg.addColorStop(0, 'rgba(96,52,102,0)'); vg.addColorStop(1, 'rgba(96,52,102,.24)');
+  X.fillStyle = vg; X.fillRect(0, 0, W, H);
+
+  if(flash > 0){ X.globalAlpha = Math.min(0.7, flash * 0.7); X.fillStyle = '#fff'; X.fillRect(0, 0, W, H); X.globalAlpha = 1; }
+
+  if(mode === 'play'){
+    pill(14, 18, 132, 32);
+    txt((P.x / BW | 0) + ' m', 30, 41, 21, '#5f4570', 'left', '800');
+    var gp = 1 + Math.max(0, gemPulse) * 0.35;
+    X.save(); X.translate(14, 56); X.scale(gp, gp);
+    pill(0, 0, 74, 30);
+    txt('\u25C6 ' + runGain, 14, 22, 18, gemPulse > 0 ? '#c94f92' : '#d2679f', 'left', '800');
+    X.restore();
+    if(S.dash){
+      var d = dashBtn();
+      X.globalAlpha = P.dashUsed ? 0.3 : 0.9;
+      X.fillStyle = 'rgba(255,255,255,.9)'; X.beginPath(); X.arc(d.x, d.y, d.r, 0, 6.283); X.fill();
+      X.strokeStyle = '#b79ce6'; X.lineWidth = 4; X.stroke(); X.globalAlpha = 1;
+      txt('DASH', d.x, d.y + 6, 17, '#7d5f8e', 'center', '800');
+    }
+  }
+
+  if(mode === 'attract'){
+    bubbleTitle('HOOFBEAT', W / 2, H * 0.27, Math.min(66, W / 7.4));
+    X.globalAlpha = 0.5 + Math.sin(T * 3.4) * 0.5;
+    txt('TAP  TO  RUN', W / 2, H * 0.27 + 54, 18, '#5f4570', 'center', '800');
+    X.globalAlpha = 1;
+  }
+
+  if(mode === 'title'){
+    panel(W / 2 - 197, H / 2 - 172, 394, 388);
+    bubbleTitle('HOOFBEAT', W / 2, H / 2 - 96, Math.min(46, W / 9.5));
+    txt('You can only run forward.', W / 2, H / 2 - 56, 17, '#6f5580', 'center', '600');
+    txt('Your trail is recorded.', W / 2, H / 2 - 32, 17, '#6f5580', 'center', '600');
+    txt('Next run, it turns solid.', W / 2, H / 2 - 8, 17, '#d2679f', 'center', '800');
+    txt('You die to build the path.', W / 2, H / 2 + 24, 15, '#8f7a9d', 'center', '500');
+    txt('\u25C6 ' + S.p + '   ·   best ' + S.best + ' m', W / 2, H / 2 + 60, 16, '#9c86ab');
+    txt('TAP / SPACE  to run', W / 2, H / 2 + 96, 19, '#5f4570', 'center', '800');
+    shopButton();
+    if(unl(6)) newButton();
+    else { var nb = newBtn();
+      txt('Unlock a new PowerUp at ' + flags[6].b + ' m', W / 2, nb.y + 25, 12.5, '#bda8c9', 'center', '600'); }
+    if(unl(9)) ngButton();
+    txt('world #' + S.seed.toString(36).toUpperCase() + (S.ngp ? '  ·  NG+' + S.ngp : ''),
+        W / 2, H / 2 + 78, 13, '#bda8c9', 'center', '600');
+  }
+  if((mode === 'dead' || mode === 'win') && deadT <= 0){
+    panel(W / 2 - 182, H / 2 - 122, 364, canRew() ? 322 : 258);
+    rainbowTitle(mode === 'win' ? 'RAINBOW !' : 'TRAIL LAID', W / 2, H / 2 - 58, mode === 'win' ? 33 : 28);
+    txt(mode === 'win' ? 'You reached the gate.' : 'It will be solid next run.', W / 2, H / 2 - 24, 16, '#6f5580', 'center', '600');
+    txt('\u25C6 +' + runGain + '   ·   ' + (P.x / BW | 0) + ' m', W / 2, H / 2 + 10, 21, '#d2679f', 'center', '800');
+    txt('memory  ' + Math.min(ghosts.length, slots()) + ' / ' + slots(), W / 2, H / 2 + 36, 15, '#9c86ab', 'center', '500');
+    if(canRew()) rewButton();
+    txt(canRew() ? 'TAP elsewhere  ·  retry' : 'TAP  ·  retry',
+        W / 2, H / 2 + (canRew() ? 128 : 68), canRew() ? 15 : 19, '#5f4570', 'center', '800');
+    shopButton();
+  }
+  if(mode === 'shop') drawShop();
+  //<DEV>
+  if(DEV){ if(mode === 'dev') drawDev(); else drawDevBtn(); }
+  //</DEV>
+}
+
+// ---------- Shop (permanent progression) --------------------------------
+// f = index of the flag that opens the family. Until it is passed, the
+// row stays locked and shows the distance to reach.
+var UP = [
+  { k:'mem',   f:0, n:'MEMORY',      d:'Keep one more trail',               max:3, c:[10, 26, 55] },
+  { k:'dbl',   f:1, n:'DOUBLE JUMP', d:'A second jump in mid-air',          max:1, c:[18] },
+  { k:'glide', f:2, n:'GLIDE',       d:'Hold to slow your fall',            max:1, c:[30] },
+  { k:'sh',    f:3, n:'SHIELD',      d:'Absorb N hits per run',             max:3, c:[25, 50, 90] },
+  { k:'dash',  f:4, n:'DASH',        d:'Horizontal burst, one per jump',    max:1, c:[35] },
+  { k:'sht',   f:5, n:'BEAM',        d:'Auto beam every 20-N seconds',      max:3, c:[45, 80, 130] },
+  { k:'rew',   f:8, n:'REWIND',      d:'Rewind 2+N seconds, once per run',  max:3, c:[55, 100, 170] }
+];
+function shopRH(){ return Math.max(38, Math.min(52, (H - 230) / 8)); }
+function shopRow(i){ var w = Math.min(430, W - 26), rh = shopRH(), g = rh + 6;
+  return { x:W / 2 - w / 2, y:H / 2 - 4 * g + i * g - 4, w:w, h:rh }; }
+function shopBack(){ return { x:W / 2 - 80, y:H / 2 + 4 * (shopRH() + 6) + 14, w:160, h:44 }; }
+function shopClick(mx, my){
+  for(var i = 0; i < UP.length; i++){
+    var r = shopRow(i), u = UP[i], lv = S[u.k];
+    if(inRect(r, mx, my)){
+      if(!unl(u.f)){ snd(150, 0.12, 'sine', 0.04); return; }
+      if(lv < u.max && S.p >= u.c[lv]){
+        S.p -= u.c[lv]; S[u.k] = lv + 1; save();
+        burst(P.x, P.y, 14, i * 80); snd(700 + i * 80, 0.14, 'triangle', 0.05); flash = 0.5;
+      } else snd(160, 0.1, 'sine', 0.04);
+      return;
+    } }
+  if(inRect(shopRow(7), mx, my)){                 // coat
+    if(!unl(7)){ snd(150, 0.12, 'sine', 0.04); return; }
+    S.skin = (S.skin + 1) % SKIN.length; saveMeta();
+    snd(760, 0.12, 'triangle', 0.05); flash = 0.3;
+    return;
+  }
+  var b = shopBack();
+  if(mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) mode = 'title';
+}
+function drawShop(){
+  X.fillStyle = 'rgba(255,245,251,.92)'; X.fillRect(0, 0, W, H);
+  rainbowTitle('UPGRADES', W / 2, H / 2 - 4 * (shopRH() + 6) - 46, 27);
+  txt('\u25C6 ' + S.p, W / 2, H / 2 - 4 * (shopRH() + 6) - 22, 19, '#c98fb0');
+  var rh = shopRH();
+  for(var i = 0; i < 8; i++){
+    var r = shopRow(i), u = UP[i], sup = i === 7;
+    var open = unl(sup ? 7 : u.f), lv = sup ? S.skin : S[u.k];
+    var can = open && !sup && lv < u.max && S.p >= u.c[lv];
+    X.fillStyle = !open ? 'rgba(240,234,246,.6)'
+      : (!sup && lv >= u.max ? 'rgba(200,240,220,.75)' : (can || sup ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.5)'));
+    X.strokeStyle = can || (sup && open) ? '#c9b0ea' : '#ecdcea'; X.lineWidth = 2;
+    rrect(r.x, r.y, r.w, r.h, 13); X.fill(); X.stroke();
+    if(open){
+      txt(sup ? 'COAT' : u.n, r.x + 14, r.y + rh * 0.44, 16, '#6b5478', 'left');
+      txt(sup ? 'Unicorn colours' : u.d, r.x + 14, r.y + rh * 0.78, 12, '#a08cae', 'left', '500');
+    } else {
+      txt('Unlock a new PowerUp', r.x + 14, r.y + rh * 0.44, 15, '#a897b4', 'left');
+      txt('at ' + flags[sup ? 7 : u.f].b + ' m', r.x + 14, r.y + rh * 0.78, 12, '#b8a6c4', 'left', '500');
+    }
+    if(!open){ txt('\u25CF', r.x + r.w - 18, r.y + rh * 0.6, 15, '#c8b6d4', 'right'); continue; }
+    if(sup){ txt(SKIN[S.skin][4], r.x + r.w - 16, r.y + rh * 0.62, 15, '#c98fb0', 'right', '800'); continue; }
+    if(u.max > 1) for(var k = 0; k < u.max; k++){
+      X.fillStyle = k < lv ? pastel(k * 70, 68) : '#eadff0';
+      X.fillRect(r.x + r.w - 112 + k * 13, r.y + rh * 0.22, 9, 9); }
+    txt(lv >= u.max ? 'MAX' : '\u25C6 ' + u.c[lv], r.x + r.w - 16, r.y + rh * 0.66, 16,
+        lv >= u.max ? '#7cc4a4' : (can ? '#c98fb0' : '#d3c2dc'), 'right');
+  }
+  var b = shopBack();
+  X.fillStyle = 'rgba(255,255,255,.9)'; X.strokeStyle = '#e6cfe0'; X.lineWidth = 2;
+  rrect(b.x, b.y, b.w, b.h, 14); X.fill(); X.stroke();
+  txt('BACK', W / 2, b.y + 29, 17, '#8a6f96');
+}
+
+// ---------- Loop --------------------------------------------------------
+demoStart(1);
+var last = 0;
+function loop(t){
+  var dt = Math.min(0.045, (t - last) / 1000) || 0; last = t;
+  update(dt); render(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script></body></html>

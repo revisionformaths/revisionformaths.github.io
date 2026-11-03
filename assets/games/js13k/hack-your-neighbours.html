@@ -1,0 +1,96 @@
+<html>
+<body>
+  <h1 class="title"> Hack Your Neighbours </h1>
+  <div class="border">
+    <h2> Rules </h2>
+    <p> The goal of this game is to DDOS your neighbours to make it OFFLINE. </p>
+    <p> You must put the file in the good destination to gain % of DDOS. </p>
+    <p> Red : +4% | Green : +7% | Blue : +10%. You loose 2% every 3 seconds.</p>
+    <p> Use the <strong>arrow left</strong> and <strong>right</strong> to move the file. </p>
+    <p> Press <strong>enter</strong> to start. </p>
+  </div>
+  <div class="center text">
+    <p id="score"></p>
+    <p id="fileColor"></p>
+    <canvas id="myCanvas" width="600" height="400"></canvas>
+  </div>
+</body>
+</html>
+
+<script>var canvas=document.getElementById("myCanvas");var ctx=canvas.getContext("2d");var start=!0;var file=new Image();file.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAGhSURBVEhL3ZW9agJBEMf/p+dHIeZszBMEfILU6fIANoIgCPoMtmKViKWNCGJjYWujpaXaaGdlKaRSFBG/E3YdSe6yTi6epsgPht0dbvhxM8ud9pTNvuMPMIkexmOUy2U62SMWi+EtEqHTeVy0SkKhEO3sEQ6H0ev1YAwGlDmPSfRb5vM5RqMRms0m7vp9yqpxJNrv93JdrVZotVqszJHoKz/JHIlcLnO5kImZ3Q+HlPlEp/UiNpsNMpkMFouFPLvdbqTTaeRyOfl2L52OzAtM1/txuUQ+n6eTM8QFee126XTFGVnRNI12R1iRmIGu67IlXHg8Hqo4DyuqVqvYbrfY7XZsiFnF43GqUsOKEomEbIGdqNVqVKXmZjOywopO/RdzUoXX65VvYwdWVCqVZP/FnFSxXq+RTCbpaR5WlEqlvs3CGpVKhZ7mYUV+vx+GYSAYDLIhfi+ilRysqFgsYjqdYjabsTGZTBCNRqlKjePWnaJer1OVGlZ0Tf65SHy3rsXhcKDdEdP/6NnnQ6FQQCAQoMxliJvaaDSQbbcpYxHdDuADVNTBzzT/YEsAAAAASUVORK5CYII=";var fileX=canvas.width/2;var fileY=10;var fileColor="#ff0000";var fileSize=26;var receptacles=[];var widthReceptacle=canvas.width/3;var heightReceptacle=20;var obstacles=[];var widthObstacle=canvas.width/3;var heightObstacle=20;var paddingObstacle=40;var offsetTopObstacle=120;var score=50;var rightPressed=!1;var leftPressed=!1;initReceptacle();initObstacles();document.addEventListener("keydown",keyDownHandler,!1);document.addEventListener("keyup",keyUpHandler,!1);function keyDownHandler(e){if(e.keyCode==39){rightPressed=!0}
+else if(e.keyCode==37){leftPressed=!0}
+else if(e.keyCode==13&&start){setInterval(draw,5);start=!1;addColorToFile()}}
+function keyUpHandler(e){if(e.keyCode==39){rightPressed=!1}
+else if(e.keyCode==37){leftPressed=!1}}
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);drawFile();drawReceptacles();drawObstacles();colision();isInGoodReceptacle();if(score<=0)
+{displayScore();alert("You fail to DDOS your neighbours");start=!0;document.location.reload()}else if(score>=100)
+{displayScore();alert("Good job !! Your neighbours are OFFLINE.");start=!0;document.location.reload()}
+displayScore();moveFile()}
+function colision(){if(fileX<fileSize||fileX>canvas.width-fileSize)
+{initFilePosition()}
+else{for(var i=0;i<3;i ++)
+{if((fileX+fileSize)>obstacles[i].x&&(fileX)<(obstacles[i].x+obstacles[i].w))
+{if((fileY+fileSize)>obstacles[i].y&&(fileY)<(obstacles[i].y+heightObstacle))
+{initFilePosition()}}}}}
+function addColorToFile(){var colorOfFile="";switch(getRandomInt(3)){case 0:fileColor="#ff0000";colorOfFile="RED";break;case 1:fileColor="#00ff00";colorOfFile="GREEN";break;case 2:fileColor="#0000ff";colorOfFile="BLUE";break;default:fileColor="#ff0000"}
+document.getElementById("fileColor").style.color=colorOfFile;document.getElementById("fileColor").innerHTML="Destination of file : "+colorOfFile}
+function isInGoodReceptacle(){if(fileY>=canvas.height-heightReceptacle)
+{for(var i=0;i<3;i ++)
+{if(fileX>=receptacles[i].x&&fileX<=(receptacles[i].x+widthReceptacle))
+{if(fileColor===receptacles[i].color)
+{addPoint();initObstacles()}
+addColorToFile();initFilePosition()}}}}
+function initFilePosition(){fileX=canvas.width/2;fileY=10}
+function displayScore(){document.getElementById("score").innerHTML="DDOS "+score+"%"}
+function looseScore(){score-=2}
+setInterval(looseScore,3000);function addPoint(){switch(fileColor){case "#ff0000":score+=4;break;case "#00ff00":score+=7;break;case "#0000ff":score+=10;break;default:return}}
+function drawFile(){ctx.beginPath();ctx.drawImage(file,fileX,fileY);ctx.closePath()}
+function moveFile(){if(leftPressed)
+{fileX-=1.25}else if(rightPressed)
+{fileX+=1.25}else{fileY+=1.25}}
+function initReceptacle(){for(var i=0;i<3;i ++)
+{var r={x:i*widthReceptacle,y:canvas.height-heightReceptacle,color:returnColor(i)}
+receptacles[i]=r}}
+function initObstacles(){for(var i=0;i<3;i ++)
+{var o={x:i*widthObstacle,y:(i*(heightObstacle+paddingObstacle))+offsetTopObstacle,w:100+getRandomInt(canvas.width/3)}
+obstacles[i]=o}}
+function returnColor(i){switch(i){case 0:return"#ff0000";break;case 1:return"#00ff00";break;case 2:return"#0000ff";break;default:return"#ffffff"}}
+function drawReceptacles(){for(var i=0;i<3;i ++)
+{ctx.beginPath();ctx.rect(receptacles[i].x,receptacles[i].y,widthReceptacle,heightReceptacle);ctx.fillStyle=receptacles[i].color;ctx.fill();ctx.closePath()}}
+function drawObstacles(){for(var i=0;i<3;i ++)
+{ctx.beginPath();ctx.rect(obstacles[i].x,obstacles[i].y,obstacles[i].w,heightObstacle);ctx.fillStyle="#000000";ctx.fill();ctx.closePath()}}
+function getRandomInt(max){return Math.floor(Math.random()*Math.floor(max))}
+</script>
+
+<style>
+
+body {
+  background: #eee;
+}
+
+canvas {
+   background: #686868;
+}
+
+.center {
+  margin: auto;
+}
+
+.border {
+  border: 1px solid black;
+  text-align: center;
+}
+
+.text {
+  text-align: center;
+  font-size : 20px;
+  font-family: arial;
+}
+.title {
+  text-align: center;
+  font-size: 50px;
+  color: #800000;
+}
+
+
+</style>

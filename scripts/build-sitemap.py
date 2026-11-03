@@ -20,30 +20,35 @@ recomputes the list and fails if the committed sitemap drifts.
 import os
 import sys
 
-SITE = "https://funclassroom.github.io"
+SITE = "https://revisionformaths.github.io"
 PAGES = [("", "1.0"), ("files.html", "0.8")]
 GAMES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "games")
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sitemap.xml")
 
 
 def indexable_games():
-    """Game files that do not mention noindex, in filename order."""
+    """Game files that do not mention noindex, in path order.
+
+    Walks the whole folder, so the imported js13k entries are listed too.
+    """
     names = []
-    for name in sorted(os.listdir(GAMES)):
-        if not name.lower().endswith((".html", ".htm")):
-            continue
-        with open(os.path.join(GAMES, name), "rb") as handle:
-            if b"noindex" in handle.read().lower():
+    for root, _dirs, files in os.walk(GAMES):
+        for name in sorted(files):
+            if not name.lower().endswith((".html", ".htm")):
                 continue
-        names.append(name)
-    return names
+            full = os.path.join(root, name)
+            with open(full, "rb") as handle:
+                if b"noindex" in handle.read().lower():
+                    continue
+            names.append(os.path.relpath(full, GAMES).replace(os.sep, "/"))
+    return sorted(names)
 
 
 def urls():
     for page, priority in PAGES:
         yield SITE + "/" + page, priority
     for name in indexable_games():
-        yield SITE + "/assets/games/" + name, "0.6"
+        yield SITE + "/assets/games/" + name, "0.4"
 
 
 def main():

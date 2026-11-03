@@ -1,0 +1,1095 @@
+<!doctype HTML>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>TOWER OF TERROR</title>
+        <style>html, body {
+    background: "black";
+    overflow: hidden;
+    margin: 0px;
+    height: 100%;
+}
+ 
+#container
+{
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+#svg {
+    background: linear-gradient(to bottom,  #010212 0%, #020421 100%);
+}</style>
+    </head>
+    <body>
+        <svg id="svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+            <defs>
+                <radialGradient id="portalGradient">
+                    <stop offset="40%" stop-color="lightblue" />
+                    <stop offset="100%" stop-color="blue" />
+                </radialGradient>
+                <circle id="portal" cx="0" cy="0" r="18" fill="url('#portalGradient')"></circle>
+                <g id="goodluck">
+                    <circle cx="0" cy="0" r="18" fill="green"></circle>
+                    <circle cx="0" cy="-8" r="7" fill="none" stroke="white" stroke-width="6"></circle>
+                    <circle cx="0" cy="7" r="8" fill="none" stroke="white" stroke-width="6"></circle>
+                </g>
+                <g id="badluck">
+                    <circle cx="0" cy="0" r="18" fill="red"></circle>
+                    <line x1="-8" y1="-15" x2="-8" y2="15" stroke="orange" stroke-width="6"/>
+                    <path d="M 0 -15 A 8 5 0 1 1 0 0" fill="none" stroke="orange" stroke-width="6" />
+                    <path d="M 0 0 A 8 5 0 1 1 0 15" fill="none" stroke="orange" stroke-width="6" />
+                </g>
+                <g id="horseshoe">
+                    <circle cx="0" cy="0" r="18" fill="darkgray"></circle>
+                    <path d="M -10 0 A 10 10 0 1 0 10 0" fill="none" stroke="gray" stroke-width="10" />
+                    <line x1="-10" y1="1" x2="-9" y2="-15" stroke="gray" stroke-width="10"></line>
+                    <line x1="10" y1="1" x2="9" y2="-15" stroke="gray" stroke-width="10"></line>
+                </g>
+                <g id="head1">
+                    <circle cx="0" cy="0" r="18" fill="#d6b45c"></circle>
+                    <path d="M -18 0 A 8 8 0 1 1 18 0" fill="none" stroke="#381e06" stroke-width="6" />
+                    <circle cx="-8" cy="-2" r="2" fill="#4d4020"></circle>
+                    <circle cx="8" cy="-2" r="2" fill="#4d4020"></circle>
+                    <line x1="-4" y1="8" x2="4" y2="8" stroke="#965518" stroke-width="4" ></line>
+                </g>
+                <line id="head2hair" x1="0" y1="0" x2="2" y2="-10" stroke="#381e06" stroke-width="5" ></line>
+                <g id="head2">
+                    <circle cx="0" cy="0" r="18" fill="#d6b45c"></circle>
+                    <path d="M -17 0 A 8 8 0 1 1 17 0" fill="none" stroke="#381e06" stroke-width="6" />
+                    <circle cx="-7" cy="-2" r="3" fill="#4d4020"></circle>
+                    <circle cx="7" cy="-2" r="3" fill="#4d4020"></circle>
+                    <line x1="0" y1="13" x2="0" y2="5" stroke="#965518" stroke-width="8" ></line>
+                    <use href="#head3hair" x="-14" y="-7"></use>
+                    <use href="#head3hair" x="-5" y="-14"></use>
+                    <use href="#head3hair" x="5" y="-14"></use>
+                    <use href="#head3hair" x="14" y="-7"></use>
+                </g>
+                <line id="head3hair" x1="0" y1="0" x2="1" y2="-7" stroke="#381e06" stroke-width="5" ></line>
+                <g id="head3">
+                    <circle cx="0" cy="0" r="18" fill="#d6b45c"></circle>
+                    <path d="M -16 0 A 8 8 0 1 1 16 0" fill="none" stroke="#381e06" stroke-width="6" />
+                    <circle cx="-7" cy="-2" r="3" fill="#4d4020"></circle>
+                    <circle cx="7" cy="-2" r="3" fill="#4d4020"></circle>
+                    <line x1="0" y1="14" x2="0" y2="4" stroke="#965518" stroke-width="8" ></line>
+                    <use href="#head2hair" x="-14" y="-7"></use>
+                    <use href="#head2hair" x="-5" y="-14"></use>
+                    <use href="#head2hair" x="5" y="-14"></use>
+                    <use href="#head2hair" x="14" y="-7"></use>
+                </g>
+                <line id="head4hair" x1="0" y1="0" x2="3" y2="-15" stroke="#381e06" stroke-width="5" ></line>
+                <g id="head4">
+                    <circle cx="0" cy="0" r="18" fill="#d6b45c"></circle>
+                    <path d="M -15 0 A 8 8 0 1 1 15 0" fill="none" stroke="#381e06" stroke-width="6" />
+                    <circle cx="-7" cy="-2" r="4" fill="#4d4020"></circle>
+                    <circle cx="7" cy="-2" r="4" fill="#4d4020"></circle>
+                    <line x1="0" y1="15" x2="0" y2="3" stroke="#965518" stroke-width="8" ></line>
+                    <use href="#head4hair" x="-14" y="-7"></use>
+                    <use href="#head4hair" x="-5" y="-14"></use>
+                    <use href="#head4hair" x="5" y="-14"></use>
+                    <use href="#head4hair" x="14" y="-7"></use>
+                </g>
+                <g id="cat">
+                    <circle cx="0" cy="3" r="13" fill="#313331" stroke="black" ></circle>
+                    <polygon points="-15,-10 -10,-18 -5,-13 0,-13 5,-13 10,-18 15,-10 0,15" fill="#313331" stroke="black" />
+                    <polygon points="-8,-3 -2,-3 -6,-6" fill="red" />
+                    <polygon points="-5,-3 -3,-3 -5,-4" fill="yellow" />
+                    <polygon points="8,-3 2,-3 6,-6" fill="red" />
+                    <polygon points="5,-3 3,-3 5,-4" fill="yellow" />
+                    <polygon points="-5,0 5,0 0,5" fill="red"  stroke="black"/>
+                </g>
+            </defs>
+        </svg>
+        <script>function svgRect(x, y, w, h, fill) {
+    let r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    r.setAttribute("x", x);
+    r.setAttribute("y", y);
+    r.setAttribute("width", w);
+    r.setAttribute("height", h);
+    r.setAttribute("fill", fill);
+    return r;
+}
+
+function svgLine(x1, y1, x2, y2, stroke, strokeWidth = 1) {
+    let l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    l.setAttribute("x1", x1);
+    l.setAttribute("y1", y1);
+    l.setAttribute("x2", x2);
+    l.setAttribute("y2", y2);
+    l.setAttribute("stroke", stroke);
+    l.setAttribute("stroke-width", strokeWidth);
+    return l;
+}
+
+function svgCircle(cx, cy, r, fill) {
+    let c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    c.setAttribute("cx", cx);
+    c.setAttribute("cy", cy);
+    c.setAttribute("r", r);
+    c.setAttribute("fill", fill);
+    return c;
+}
+
+function svgText(txt, x, y, color = "black", font = "Arial", size = 20) {
+    let t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", x);
+    t.setAttribute("y", y);
+    t.setAttribute("fill", color);
+    t.setAttribute("font-family", font);
+    t.setAttribute("font-size", size);
+    t.textContent = txt;
+    return t;
+}
+
+function svgPath(path, color) {
+    let p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", path);
+    p.setAttribute("fill", color);
+    return p;
+}
+
+function svgUse(href, x, y, scale = 1.0) {
+    let u = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    u.setAttributeNS("http://www.w3.org/1999/xlink", "href", `#${href}`);
+    u.setAttribute("transform", `translate(${x} ${y}) scale(${scale})`);
+    return u;
+}
+
+function svgGroup() {
+    return document.createElementNS("http://www.w3.org/2000/svg", "g");
+}
+
+function svgCat(x, y) {
+    return svgUse("cat", x, y);
+}
+
+function svgPortal(x, y) {
+    return svgUse("portal", x, y);
+}
+
+function svgBadLuck(x, y) {
+    return svgUse("badluck", x, y);
+}
+
+function svgGoodLuck(x, y) {
+    return svgUse("goodluck", x, y);
+}
+
+function svgHorseshoe(x, y) {
+    return svgUse("horseshoe", x, y);
+}
+
+function svgTower(x, y, activeLevel, opacity = 1.0) {
+    let scene = svgGroup();
+    let moon = svgCircle(x + 80, x + 100, 80, "red");
+    scene.appendChild(moon);
+
+    let s = `M ${_t[0][0]} ${0} `
+    s += `L ${_t[0][1]} ${0} `; // Top
+    for (let i = 0; i < 19; i++) { // Right
+        s += `L ${_t[i][1]} ${(i+1)*30} `;
+        s += `L ${_t[i+1][1]} ${(i+1)*30} `;
+    }
+    s += `L ${_t[19][0]} ${19*30} `; // Bottom
+    for (let i = 19; i > 0; i--) { // Left
+        s += `L ${_t[i][0]} ${i*30} `;
+        s += `L ${_t[i-1][0]} ${i*30} `;
+    }
+    s += "Z";
+
+    let towerBlock = svgPath(s, "#080001");
+    let towerOutline = svgPath(s, "none");
+    towerOutline.setAttribute("stroke", "#B50405");
+    towerOutline.setAttribute("stroke-width", "2");
+
+    let tower = svgGroup();
+    tower.appendChild(towerBlock);
+    if (activeLevel != undefined) {
+        tower.appendChild(svgRect(_t[activeLevel][0], activeLevel * 30, _t[activeLevel][1] - _t[activeLevel][0], 30, "yellow"));
+    }
+    tower.appendChild(towerOutline);
+    tower.setAttribute("transform", `translate(${x-60} ${y+19})`);
+    scene.appendChild(tower);
+
+    scene.setAttribute("opacity", opacity);
+    return scene;
+}
+
+let _t = [
+    [40, 130],
+    [40, 140],
+    [40, 140],
+    [45, 135],
+    [40, 140],
+    [45, 145],
+    [40, 140],
+    [40, 140],
+    [40, 140],
+    [45, 145],
+    [45, 145],
+    [40, 150],
+    [35, 150],
+    [30, 155],
+    [30, 155],
+    [25, 155],
+    [20, 160],
+    [15, 165],
+    [10, 170],
+    [5, 175]
+]
+</script>
+        <script>let pl_synth_init=t=>{let e=44100,l=4096,r=4095,a=new Float32Array(16384),n=3639956645,o=(t,e,o,f,h=0,g=0,i=0,u=0,M=0,w=0,y=0,p=0,s=0,A=0,C=0,D=0,c=0,F=0,B=0,_=0,d=0,m=0,b=0,j=0,k=0,q=0,v=0,x=0,z=0,E=0,G=0,H=0,I=0,J=0)=>{let K=1/255,L=J*l,N=y*l,O=c*l,P=Math.pow(2,x-8)/t,Q=z/512,R=I/512,S=Math.pow(2,H-8)/t*l,T=0,U=0,V=k*K,W=4.6566e-10*F,X=0,Y=0,Z=0,$=1/B,tt=1/d,et=.00390625*Math.pow(1.059463094,e+12*(g-8)+i-128)*(1+8e-4*u),lt=.00390625*Math.pow(1.059463094,e+12*(p-8)+s-128)*(1+8e-4*A);for(let t=B+_+d-1;t>=0;--t){let e,g=t+h,i=a[L+(g*S&r)]*R+.5,u=0,y=j,p=1;t<B?p=t*$:t>=B+_&&(p-=(t-B-_)*tt),e=et,E&&(e*=i),M&&(e*=p*p),T+=e,u+=a[N+(T*l&r)]*w,e=lt,C&&(e*=p*p),U+=e,u+=a[O+(U*l&r)]*D,F&&(n^=n<<13,n^=n>>17,n^=n<<5,u+=n*W*p),u*=p*K,b&&(G&&(y*=i),y=1.5*a[.046439909297052155*y&r],X+=y*Y,Z=V*(u-Y)-X,Y+=y*Z,u=[u,Z,X,Y,X+Z][b]),e=a[g*P*l&r]*Q+.5,u*=.00238*m,o[g]+=u*(1-e),f[g]+=u*e}},f=t=>{for(let e=0;e<t.length;e++)t[e]=Array.isArray(t[e])?f(t[e]):t[e]??0;return t},h=(t,e)=>{let l=t[20]*e>>1,r=t[21]/255,a=Math.ceil(Math.log(.1)/Math.log(r));return t[13]+t[14]+t[15]+a*l},g=(t,e,l,r,a)=>{if(!a[21])return;let n=a[20]*r>>1,o=a[21]/255,f=t.length-n;for(let r=l,a=l+n;r<f;r++,a++)t[a]+=e[r]*o,e[a]+=t[r]*o};for(let t=0;t<l;t++)a[t]=Math.sin(6.283184*t/l),a[t+l]=a[t]<0?-1:1,a[t+8192]=t/l-.5,a[t+12288]=t<2048?t/1024-1:3-t/1024;return{sound:(l,r=147,a=5513)=>{l=f(l);let n=h(l,a),i=t.createBuffer(2,n,e),u=i.getChannelData(0),M=i.getChannelData(1);return o(a,r,u,M,0,...l),g(u,M,0,a,l),i},song:l=>{let r=(l=f(l))[0],a=l[1],n=0;for(let t of a){let e=t[1].length*r*32+h(t[0],r);e>n&&(n=e)}let i=t.createBuffer(2,n,e),u=i.getChannelData(0),M=i.getChannelData(1),w=new Float32Array(n),y=new Float32Array(n);for(let t of a){let e=t[0],l=t[1],a=0,f=n;w.fill(0),y.fill(0);for(let n of l)for(let l=0;l<32;l++){let h=t[2][n-1]?.[l];h&&(f=Math.min(f,a),o(r,h,w,y,a,...e)),a+=r}g(w,y,f,r,e);for(let t=f;t<n;t++)u[t]+=w[t],M[t]+=y[t]}return i}}};
+
+// https://phoboslab.org/synth
+
+let audioContext = new AudioContext();
+let synth;
+let badLuckSound;
+let goodLuckSound;
+let portalSound;
+let levelWonSound;
+let levelLostSound;
+let escapedSound;
+let songBuffer;
+
+function initSound() {
+    synth = pl_synth_init(audioContext);
+    badLuckSound = synth.sound([7,3,140,1,232,3,8,,9,1,139,3,,4611,1403,34215,256,4,1316,255,,,,1,,1,7,255]);
+    goodLuckSound = synth.sound([7,3,140,1,232,3,8,,9,1,139,3,,4611,1403,34215,256,4,1316,255,,,,1,,1,7,255]);
+    portalSound = synth.sound([7,3,140,1,232,3,8,,9,1,139,3,,4611,1403,34215,256,4,1316,255,,,,1,,1,7,255]);
+    levelWonSound = synth.sound([7,3,140,1,232,3,8,,9,1,139,3,,4611,1403,34215,256,4,1316,255,,,,1,,1,7,255]);
+    levelLostSound = synth.sound([7,3,140,1,232,3,8,,9,1,139,3,,4611,1403,34215,256,4,1316,255,,,,1,,1,7,255]);
+    escapedSound = synth.sound([7,3,140,1,232,3,8,,9,1,139,3,,4611,1403,34215,256,4,1316,255,,,,1,,1,7,255]);
+    songBuffer = synth.song([5513,[[[7,0,0,0,255,2,8,0,18,0,255,2,0,100000,56363,100000,199,2,200,254,8,24],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[[139,0,0,0,0,0,0,0,140,0,0,0,0,0,0,0,142,0,0,0,0,0,0,0,144]]],[[7,0,0,0,255,2,8,0,18,0,255,2,0,100000,56363,100000,199,2,200,254,8,24],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[[149]]],[[7,0,0,1,255,0,7,0,0,1,255,0,0,50,150,4800,200,2,600,254],[0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[[144,144,144,144,144,0,144,0,144,144,144,144,144,0,144,0,144,0,144,0,144,0,144,0,144,144,144,144,144,0,144]]]]]);
+}
+
+function play(sound, loop = false) {
+    if (sound) {
+        let source = audioContext.createBufferSource();
+        source.buffer = sound;
+        source.loop = loop;
+        source.connect(audioContext.destination);
+        source.start();
+        return source;
+    }
+}
+</script>
+        <script>function displayMenu() {
+    menu = svgGroup();
+    menu.appendChild(svgTower(0, 0));
+    menu.appendChild(svgText("TOWER OF TERROR", 200, 100, "red", "Arial", 60));
+    menu.appendChild(svgGoodLuck(300, 195));
+    menu.appendChild(svgText("the lucky number is on your side", 330, 200, "red"));
+    menu.appendChild(svgBadLuck(330, 235));
+    menu.appendChild(svgText("the unlucky number is not", 360, 240, "red"));
+    menu.appendChild(svgPortal(250, 275));
+    menu.appendChild(svgText("the portals... you never know where you will end up", 280, 280, "red"));
+    menu.appendChild(svgCat(120, 315));
+    menu.appendChild(svgText("the black cats... your biggest fear... the horror makes you sweat and clouds your vision", 150, 320, "red"));
+    menu.appendChild(svgHorseshoe(320, 355));
+    menu.appendChild(svgText("the horseshoe is your way out", 350, 360, "red"));
+    menu.appendChild(svgText("don't get stuck in the maze... and make sure your heart can take the horror of the black cats...", 130, 460, "red"));
+    menu.appendChild(svgText("click to escape the tower... and the terror!", 300, 500, "red"));
+    menu.appendChild(svgText("uses pl_synth (https://github.com/phoboslab/pl_synth) for audio", -150, 590, "blue"));
+    svg.setAttribute("viewBox", "0 0 800 600");
+    svg.appendChild(menu);
+    svg.addEventListener("click", _startGame);
+}
+
+function _startGame(e) {
+    svg.removeEventListener("click", _startGame);
+    svg.removeChild(menu);
+    menu = undefined;
+    lives = 0;
+    startLevel(0);
+    gameState = GSPLAYING;
+    if (!songNode) {
+        songNode = play(songBuffer, true);
+    }
+}
+
+let songNode = undefined;
+let menu = undefined;
+</script>
+        <script>function noOfLevel() {
+    return _levels.length;
+}
+
+function generateLevel(levelIndex) {
+    let lvl = _levels[levelIndex];
+
+    _level = { 
+        g : svgGroup(), 
+        game: svgGroup(),
+        maze : svgGroup(), 
+        index: levelIndex,
+        width: lvl.width, 
+        height: lvl.height,
+        portals: [],
+        badLucks: [],
+        goodLucks: [],
+        cats: [] 
+    };
+
+    _level.maze.appendChild(svgRect(0, 0, lvl.width * side, lvl.height * side, "#36332d"));
+    _level.game.appendChild(_level.maze);
+    _level.g.appendChild(_level.game);
+    
+    let openings = _generateMaze();
+    for (let y = 0; y < lvl.height; y++) {
+        for (let x = 0; x < lvl.width; x++) {
+            _level[c(x, y)] = _generateCell(x, y, _level.maze, openings);
+        }
+    }
+
+    _occupiedCells = [];
+    _level.avatar = _addObject(() => svgUse("head1", 0, 0),  lvl.width, lvl.height);
+    _level.avatar.head1 = _level.avatar.element;
+    _level.avatar.head2 = svgUse("head2",0, 0);
+    _level.game.appendChild(_level.avatar.head2);
+    _level.avatar.head2.style.display = "none";
+    _level.avatar.head3 = svgUse("head3",0, 0);
+    _level.game.appendChild(_level.avatar.head3);
+    _level.avatar.head3.style.display = "none";
+    _level.avatar.head4 = svgUse("head4",0, 0);
+    _level.game.appendChild(_level.avatar.head4);
+    _level.avatar.head4.style.display = "none";
+
+    for(let i = 0; i < lvl.cats; i++) {
+        _level.cats.push(_addObject(svgCat, lvl.width, lvl.height));
+    }
+    for(let i = 0; i < lvl.portals; i++) {
+        _level.portals.push(_addObject(svgPortal, lvl.width, lvl.height));
+    }
+    for(let i = 0; i < lvl.badLucks; i++) {
+        _level.badLucks.push(_addObject(svgBadLuck, lvl.width, lvl.height));
+    }
+    for(let i = 0; i < lvl.goodLucks; i++) {
+        _level.goodLucks.push(_addObject(svgGoodLuck, lvl.width, lvl.height));
+    }
+    _level.horseshoe = _addObject(svgHorseshoe, lvl.width, lvl.height);
+    _level.floor = svgRect(0, 0, 100, 50, "yellow");
+    _level.tower = svgTower(0, 0, levelIndex, 0.5);
+    _level.g.appendChild(_level.tower)
+
+    _level.lives = svgGroup();
+    for (let i = 0; i < lives; i++) {
+        _level.lives.appendChild(svgUse("head1", -100, i * 50));
+    }
+    _level.lives.setAttribute("opacity", 0.5);
+    _level.g.appendChild(_level.lives)
+    return _level;
+}
+
+function catAt(x, y) {
+    return _objectAt(x, y, _level.cats);
+}
+
+function portalAt(x, y) {
+    return _objectAt(x, y, _level.portals);
+}
+
+function goodLuckAt(x, y) {
+    return _objectAt(x, y, _level.goodLucks);
+}
+
+function badLuckAt(x, y) {
+    return _objectAt(x, y, _level.badLucks);
+}
+
+function consumeObjectAt(x, y, list, set) {
+    let obj = _objectAt(x, y, list);
+    if (obj) {
+        set(list.filter(o => o != obj));
+        _level.game.removeChild(obj.element);
+    }
+    return obj;
+}
+
+function getFreeCell() {
+    let cellX;
+    let cellY;
+    freeCellFound = false;
+    while (!freeCellFound) {
+        cellX = Math.floor(Math.random() * _level.width);
+        cellY = Math.floor(Math.random() * _level.height);
+        if (!_occupiedCells.find(c => c.x == cellX && c.y == cellY)) {
+            return ({ x: cellX, y: cellY })
+        }
+    }
+}
+
+function _objectAt(x, y, list) {
+    return list.find(o => o.cellX == x && o.cellY == y);
+}
+
+let _levels = [
+    { width : 10, height: 10, cats: 5, portals: 8, badLucks: 8, goodLucks: 8},
+    { width : 10, height: 10, cats: 5, portals: 8, badLucks: 8, goodLucks: 8},
+    { width : 12, height: 12, cats: 5, portals: 8, badLucks: 8, goodLucks: 8},
+    { width : 12, height: 12, cats: 5, portals: 8, badLucks: 8, goodLucks: 8},
+    { width : 14, height: 14, cats: 7, portals: 8, badLucks: 8, goodLucks: 8},
+    { width : 14, height: 14, cats: 7, portals: 8, badLucks: 8, goodLucks: 8},
+    { width : 16, height: 8, cats: 8, portals: 8, badLucks: 8, goodLucks: 10},
+    { width : 16, height: 8, cats: 8, portals: 8, badLucks: 8, goodLucks: 10},
+    { width : 8, height: 20, cats: 12, portals: 10, badLucks: 12, goodLucks: 10},
+    { width : 8, height: 20, cats: 12, portals: 10, badLucks: 12, goodLucks: 10},
+    { width : 15, height: 15, cats: 12, portals: 10, badLucks: 12, goodLucks: 10},
+    { width : 15, height: 15, cats: 12, portals: 10, badLucks: 12, goodLucks: 10},
+    { width : 15, height: 15, cats: 15, portals: 10, badLucks: 14, goodLucks: 10},
+    { width : 15, height: 15, cats: 15, portals: 10, badLucks: 14, goodLucks: 10},
+    { width : 17, height: 17, cats: 17, portals: 10, badLucks: 18, goodLucks: 12},
+    { width : 17, height: 17, cats: 17, portals: 10, badLucks: 18, goodLucks: 12},
+    { width : 18, height: 18, cats: 20, portals: 12, badLucks: 22, goodLucks: 12},
+    { width : 18, height: 18, cats: 20, portals: 12, badLucks: 22, goodLucks: 12},
+    { width : 20, height: 20, cats: 25, portals: 15, badLucks: 25, goodLucks: 15},
+    { width : 20, height: 20, cats: 25, portals: 15, badLucks: 25, goodLucks: 15},
+];
+
+function _generateCell(x, y, g, openings) {
+    let cell = { x: x, y : y };
+    if (!_openingExists(x, y, x + 1, y, openings)) { // Add right edge
+        cell.r = svgLine((x + 1) * side, y * side, (x + 1) * side, (y + 1) * side, wallColor, wallThickness);
+        g.appendChild(cell.r);
+    }
+    if (!_openingExists(x, y, x, y + 1, openings)) { // Add bottom edge
+        cell.b = svgLine(x * side, (y + 1) * side, (x + 1) * side, (y + 1) * side, wallColor, wallThickness);
+        g.appendChild(cell.b);
+    }
+    if (!_openingExists(x, y, x - 1, y, openings)) { // Add left edge
+        cell.l = svgLine(x * side, y * side, x * side, (y + 1) * side, wallColor, wallThickness);
+        g.appendChild(cell.l);
+    }
+    if (!_openingExists(x, y, x, y - 1, openings)) { // Add top edge
+        cell.t = svgLine(x * side, y * side, (x + 1) * side, y * side, wallColor, wallThickness);
+        g.appendChild(cell.t);
+    }
+    return cell;
+}
+
+function _generateMaze() {
+    const stack = [];
+    const openings = new Set();
+    const visited = new Set();
+
+    let x = Math.floor(Math.random() * _level.width);
+    let y = Math.floor(Math.random() * _level.height);
+    visited.add(_s2(x, y));
+
+    while (true) {
+        const neighbors = [];
+        if (x > 0 && !visited.has(_s2(x-1, y))) {
+            neighbors.push([x - 1, y]);
+        }
+        if (x < _level.width - 1 && !visited.has(_s2(x+1, y))) {
+            neighbors.push([x + 1, y]); 
+        }
+        if (y > 0 && !visited.has(_s2(x, y-1))) {
+            neighbors.push([x, y-1]); 
+        }
+        if (y < _level.height-1 && !visited.has(_s2(x, y+1))) {
+            neighbors.push([x, y+1]); 
+        }
+        if (neighbors.length > 0) {
+            const [nextX, nextY] = neighbors[Math.floor(Math.random() * neighbors.length)];
+            openings.add(_s4(x, y, nextX, nextY));
+            visited.add(_s2(nextX, nextY));
+            stack.push([x, y]);
+            x = nextX;
+            y = nextY;
+        } else if (stack.length > 0) {
+            [x, y] = stack.pop();
+        } else {
+            break;
+        }
+    }
+    return openings;
+}
+
+function _openingExists(x1, y1, x2, y2, openings) {
+    return openings.has(_s4(x1, y1, x2, y2)) || openings.has(_s4(x2, y2, x1, y1));
+}
+
+function _addObject(svgFunction) {
+    let cell = getFreeCell();
+    _occupiedCells.push({ x: cell.x, y: cell.y });
+    let displayX = side * (cell.x + 0.5);
+    let displayY = side * (cell.y + 0.5);
+    let element = svgFunction(displayX, displayY);
+    _level.game.appendChild(element);
+    return { 
+        cellX: cell.x, 
+        cellY: cell.y,
+        displayX: displayX, 
+        displayY: displayY, 
+        element: element
+    };
+}
+
+function _s2(x, y) {
+    return `${x},${y}`;
+}
+
+function _s4(x1, y1, x2, y2) {
+    return `${x1},${y1},${x2},${y2}`;
+}
+
+let _occupiedCells = [];
+let _level = undefined;</script>
+        <script>let left = false;
+let right = false;
+let up = false;
+let down = false;
+
+document.addEventListener('keydown', e => {
+    if (e.code == "ArrowLeft" || e.code == "KeyA") {
+        left = true;
+    }
+    if (e.code == "ArrowRight" || e.code == "KeyD") {
+        right = true;
+    }
+    if (e.code == "ArrowUp" || e.code == "KeyW") {
+        up = true;
+    }
+    if (e.code == "ArrowDown" || e.code == "KeyS") {
+        down = true;
+    }
+}, false);
+
+document.addEventListener('keyup', e => {
+    if (e.code == "ArrowLeft" || e.code == "KeyA") {
+        left = false;
+    }
+    if (e.code == "ArrowRight" || e.code == "KeyD") {
+        right = false;
+    }
+    if (e.code == "ArrowUp" || e.code == "KeyW") {
+        up = false;
+    }
+    if (e.code == "ArrowDown" || e.code == "KeyS") {
+        down = false;
+    }
+}, false);</script>
+        <script>let w = 1500;
+let h = 1500;
+let svg = document.getElementById("svg");
+let zoom = 0;
+let zoomTarget = 0;
+let visibleCells = [];
+let visibleCellsSvg = [];
+let wallThickness = 30;
+let wallColor = "#1a1815";
+let heartAttack = 0;
+
+let targetDir = undefined;
+
+function winnable() {
+    let stack = [];
+    let visited = new Set();
+    stack.push([level.avatar.cellX, level.avatar.cellY]);
+    visited.add(`${level.avatar.cellX},${level.avatar.cellY}`);
+    while (stack.length > 0) {
+        let [x, y] = stack.pop();
+        if ((x == level.horseshoe.cellX && y == level.horseshoe.cellY) || portalAt(x, y) || goodLuckAt(x, y)) {
+            return true;
+        }
+        let cell = level[c(x, y)];
+        if (!cell.r && !visited.has(`${x+1},${y}`)) {
+            visited.add(`${x+1},${y}`);
+            stack.push([x+1, y]);
+        }
+        if (!cell.b && !visited.has(`${x},${y+1}`)) {
+            visited.add(`${x},${y+1}`);
+            stack.push([x, y+1]);
+        }
+        if (!cell.l && !visited.has(`${x-1},${y}`)) {
+            visited.add(`${x-1},${y}`);
+            stack.push([x-1, y]);
+        }
+        if (!cell.t && !visited.has(`${x},${y-1}`)) {
+            visited.add(`${x},${y-1}`);
+            stack.push([x, y-1]);
+        }
+    }
+    return false;
+}
+
+function startLevel(levelIndex) {
+    level = generateLevel(levelIndex);
+    svg.appendChild(level.g);
+    zoom = 0;
+    zoomTarget = 0;
+    level.floor.setAttribute("transform", `translate(0 ${levelIndex * 50})`);
+}
+
+function c(x, y) {
+    return `x${x}y${y}`;
+}
+
+function visibleFrom(x, y) {
+    let cells = new Set();
+
+    var i = 0;
+    while(!level[c(x + i, y)].r) {
+        cells.add({ x : x + i + 1, y : y });
+        i++;
+    } 
+
+    i = 0;
+    while(!level[c(x - i, y)].l) {
+        cells.add({ x : x - i - 1, y : y });
+        i++;
+    } 
+
+    i = 0;
+    while(!level[c(x, y + i)].b) {
+        cells.add({ x : x, y : y + i + 1 });
+        i++;
+    } 
+
+    i = 0;
+    while(!level[c(x, y - i)].t) {
+        cells.add({ x : x, y : y - i - 1 });
+        i++;
+    } 
+
+    return cells;
+}
+
+function noOfVisibleOpponents() {
+    let count = 0;
+    for (let opponent of level.cats) {
+        for (let cell of visibleCells) {
+            if (opponent.cellX == cell.x && opponent.cellY == cell.y) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+function updateVisibleCells() {
+    visibleCells = visibleFrom(level.avatar.cellX, level.avatar.cellY);
+}
+
+function consumeObjectAtAvatarPosition(list, set) {
+    return consumeObjectAt(level.avatar.cellX, level.avatar.cellY, list, set);
+}
+
+function checkCollision() {
+    if (consumeObjectAtAvatarPosition(level.portals, l => level.portals = l)) {
+        play(portalSound);
+        var {x, y} = getFreeCell();
+        level.avatar.cellX = x;
+        level.avatar.cellY = y;
+        left = false;
+        right = false;
+        up = false;
+        down = false;
+        if (!winnable()) {
+            _endMaze(GSLEVELLOST);
+        }
+    }
+
+    if (consumeObjectAtAvatarPosition(level.goodLucks, l => level.goodLucks = l)) {
+        play(goodLuckSound);
+        for (let i = 0; i < 5; i++) {
+            var x = Math.floor(Math.random() * (level.width - 2)) + 1;
+            var y = Math.floor(Math.random() * (level.height - 2)) + 1;
+            let cell = level[c(x, y)];
+            if (cell.r) {
+                level.maze.removeChild(cell.r);
+                cell.r = undefined;
+                let cell2 = level[c(x + 1, y)];
+                level.maze.removeChild(cell2.l);
+                cell2.l = undefined;
+            }
+            if (cell.b) {
+                level.maze.removeChild(cell.b);
+                cell.b = undefined;
+                let cell2 = level[c(x, y + 1)];
+                level.maze.removeChild(cell2.t);
+                cell2.t = undefined;
+            }
+            if (cell.l) {
+                level.maze.removeChild(cell.l);
+                cell.l = undefined;
+                let cell2 = level[c(x - 1, y)];
+                level.maze.removeChild(cell2.r);
+                cell2.r = undefined;
+            }
+            if (cell.t) {
+                level.maze.removeChild(cell.t);
+                cell.t = undefined;
+                let cell2 = level[c(x, y - 1)];
+                level.maze.removeChild(cell2.b);
+                cell2.b = undefined;
+            }
+        }
+        if (!winnable()) {
+            _endMaze(GSLEVELLOST);
+        }
+    }
+
+    if (consumeObjectAtAvatarPosition(level.badLucks, l => level.badLucks = l)) {
+        play(badLuckSound);
+        for (let i = 0; i < 5; i++) {
+            var x = Math.floor(Math.random() * (level.width - 2)) + 1;
+            var y = Math.floor(Math.random() * (level.height - 2)) + 1;
+            let cell = level[c(x, y)];
+            if (!cell.r) {
+                cell.r = svgLine((x + 1) * side, y * side, (x + 1) * side, (y + 1) * side, wallColor, wallThickness);
+                level.maze.appendChild(cell.r);
+                let cell2 = level[c(x + 1, y)];
+                cell2.l = svgLine((x + 1) * side, y * side, (x + 1) * side, (y + 1) * side, wallColor, wallThickness);
+                level.maze.appendChild(cell2.l);
+            }
+            else if (!cell.b) {
+                cell.b = svgLine(x * side, (y + 1) * side, (x + 1) * side, (y + 1) * side, wallColor, wallThickness);
+                level.maze.appendChild(cell.b);
+                let cell2 = level[c(x, y + 1)];
+                cell2.t = svgLine(x * side, (y + 1) * side, (x + 1) * side, (y + 1) * side, wallColor, wallThickness);
+                level.maze.appendChild(cell2.t);
+            }
+            else if (!cell.l) {
+                cell.l = svgLine(x * side, y * side, x * side, (y + 1) * side, wallColor, wallThickness);
+                level.maze.appendChild(cell.l);
+                let cell2 = level[c(x - 1, y)];
+                cell2.r = svgLine(x * side, y * side, x * side, (y + 1) * side, wallColor, wallThickness);
+                level.maze.appendChild(cell2.r);
+            }
+            else if (!cell.t) {
+                cell.t = svgLine(x * side, y * side, (x + 1) * side, y * side, wallColor, wallThickness);
+                level.maze.appendChild(cell.t);
+                let cell2 = level[c(x, y - 1)];
+                cell2.b = svgLine(x * side, y * side, (x + 1) * side, y * side, wallColor, wallThickness);
+                level.maze.appendChild(cell2.b);
+            }
+        }
+        if (!winnable()) {
+            _endMaze(GSLEVELLOST);
+        }
+    }
+
+    if (level.horseshoe.cellX == level.avatar.cellX && level.horseshoe.cellY == level.avatar.cellY) {
+        if (level.index == _levels.length - 1) {
+            play(escapedSound);
+            _endGame();
+        }
+        else {
+            _endMaze(GSLEVELWON);
+        }
+    }
+}
+
+function _endMaze(newGameState) {
+    let message;
+    if (newGameState == GSLEVELWON) {
+        play(levelWonSound);
+        lives++;
+        message = `one maze closer to freedom... you now have ${lives} ${lives == 1 ? "life" : "lives"}`;
+    }
+    else {
+        if (lives < 1) {
+            message = "you failed...";
+            newGameState = GSGAMELOST;
+        }
+        else {
+            lives--;
+            let reason = heartAttack > 100 ? "your heart collapsed from the stress" : "you got stuck in the maze";
+            let youHave = lives == 1 ? "you have 1 life left" : `you have ${lives} lives left`;
+            if (lives == 0) {
+                youHave = "";
+            }
+            message = `${reason}... but you get another attempt... ${youHave}`;
+        }
+        play(levelLostSound);
+    }
+    zoomTarget = 0;
+    gameState = newGameState;
+    popupText = svgText(message, 0, 0, "white");
+    svg.appendChild(popupText);
+}
+
+function _endGame() {
+    zoomTarget = 0;
+    gameState = GSGAMEWON;
+    popupText = svgText("you have escaped!", 0, 0, "white");
+    svg.appendChild(popupText);
+}
+
+function updateView(dt) {
+
+    if (gameState == GSMENU) {
+        return;
+    }
+
+    if (gameState == GSGAMEWON && mazeOpacity > 0) {
+        mazeOpacity -= dt * 0.0005;
+        if (mazeOpacity < 0) {
+            mazeOpacity = 0;
+            svg.appendChild(svgText("finally, the night's torment is over", x - 150, y - 100, "white"));
+            svg.appendChild(svgText("no more mazes...", x - 90, y - 40, "white"));
+            svg.appendChild(svgText("no more 13s...", x - 75, y, "white"));
+            svg.appendChild(svgText("AND NO MORE BLACK CATS!", x - 145, y + 60, "white"));
+        }
+        level.game.setAttribute("opacity", `${mazeOpacity}`);
+    }
+
+    if (gameState == GSPLAYING) {
+        if (!targetDir) {
+            let cell = level[c(level.avatar.cellX, level.avatar.cellY)];
+            if (right && !cell.r) {
+                targetDir = { x : 1, y : 0 };
+            }
+            else if (down && !cell.b) {
+                targetDir = { x : 0, y : 1 };
+            }
+            else if (left && !cell.l) {
+                targetDir = { x : -1, y : 0 };
+            }
+            else if (up && !cell.t) {
+                targetDir = { x : 0, y : -1 };
+            }
+        }
+
+        if (targetDir) {
+            if (targetDir.x == 1) {
+                x += dt * 0.5;
+                if (x >= side * (level.avatar.cellX + 1.5)) {
+                    x = side * (level.avatar.cellX + 1.5);
+                    level.avatar.cellX++;
+                    checkCollision();
+                    updateVisibleCells();
+                    targetDir = undefined;
+                }
+            }
+            else if (targetDir.y == 1) {
+                y += dt * 0.5;
+                if (y >= side * (level.avatar.cellY + 1.5)) {
+                    y = side * (level.avatar.cellY + 1.5);
+                    level.avatar.cellY++;
+                    checkCollision();
+                    updateVisibleCells();
+                    targetDir = undefined;
+                }
+            }
+            else if (targetDir.x == -1) {
+                x -= dt * 0.5;
+                if (x <= side * (level.avatar.cellX - 0.5)) {
+                    x = side * (level.avatar.cellX - 0.5);
+                    level.avatar.cellX--;
+                    checkCollision();
+                    updateVisibleCells();
+                    targetDir = undefined;
+                }
+            }
+            else if (targetDir.y == -1) {
+                y -= dt * 0.5;
+                if (y <= side * (level.avatar.cellY - 0.5)) {
+                    y = side * (level.avatar.cellY - 0.5);
+                    level.avatar.cellY--;
+                    checkCollision();
+                    updateVisibleCells();
+                    targetDir = undefined;
+                }
+            }
+        }
+        else {
+            x = side * (level.avatar.cellX + 0.5);
+            y = side * (level.avatar.cellY + 0.5);
+        }
+
+        for (let i = 0; i < level.cats.length; i++) {
+            let opponent = level.cats[i];
+            if (!opponent.dir) {
+                let cell = level[c(opponent.cellX, opponent.cellY)];
+                let rnd = Math.floor(Math.random() * 4);
+                if (rnd == 0 && !cell.r) {
+                    opponent.dir = { x : 1, y : 0 };
+                }
+                else if (rnd == 1 && !cell.b) {
+                    opponent.dir = { x : 0, y : 1 };
+                }
+                else if (rnd == 2 && !cell.l) {
+                    opponent.dir = { x : -1, y : 0 };
+                }
+                else if (rnd == 3 && !cell.t) {
+                    opponent.dir = { x : 0, y : -1 };
+                }
+            }
+
+            if (opponent.dir) {
+                if (opponent.dir.x == 1) {
+                    opponent.displayX += dt * 0.5;
+                    if (opponent.displayX >= side * (opponent.cellX + 1.5)) {
+                        opponent.displayX = side * (opponent.cellX + 1.5);
+                        opponent.cellX++;
+                        if (level[c(opponent.cellX, opponent.cellY)].r) {
+                            opponent.dir = undefined;
+                        }
+                    }
+                }
+                else if (opponent.dir.y == 1) {
+                    opponent.displayY += dt * 0.5;
+                    if (opponent.displayY >= side * (opponent.cellY + 1.5)) {
+                        opponent.displayY = side * (opponent.cellY + 1.5);
+                        opponent.cellY++;
+                        if (level[c(opponent.cellX, opponent.cellY)].b) {
+                            opponent.dir = undefined;
+                        }
+                    }
+                }
+                else if (opponent.dir.x == -1) {
+                    opponent.displayX -= dt * 0.5;
+                    if (opponent.displayX <= side * (opponent.cellX - 0.5)) {
+                        opponent.displayX = side * (opponent.cellX - 0.5);
+                        opponent.cellX--;
+                        if (level[c(opponent.cellX, opponent.cellY)].l) {
+                            opponent.dir = undefined;
+                        }
+                    }
+                }
+                else if (opponent.dir.y == -1) {
+                    opponent.displayY -= dt * 0.5;
+                    if (opponent.displayY <= side * (opponent.cellY - 0.5)) {
+                        opponent.displayY = side * (opponent.cellY - 0.5);
+                        opponent.cellY--;
+                        if (level[c(opponent.cellX, opponent.cellY)].t) {
+                            opponent.dir = undefined;
+                        }
+                    }
+                }
+            }
+            else {
+                opponent.displayX = side * (opponent.cellX + 0.5);
+                opponent.displayY = side * (opponent.cellY + 0.5);
+            }
+        }
+    }
+
+    if (zoom > zoomTarget) {
+        zoom -= dt * 0.1;
+    }
+    if (zoom < zoomTarget) {
+        zoom += dt * 0.1;
+    }
+
+    if (gameState == GSPLAYING) {
+        let visible = noOfVisibleOpponents();
+        if (visible == 0) {
+            zoomTarget -= 5;
+        }
+        else {
+            zoomTarget += visible * 20;
+        }
+    }
+
+    if (zoomTarget < 0) {
+        zoomTarget = 0;
+    }
+    if (zoomTarget > 700) {
+        zoomTarget = 700;
+    }
+
+    level.avatar.head1.setAttribute("transform", `translate(${x} ${y}) scale(1, 1)`);
+    level.avatar.head1.style.display = zoom < 10 && gameState == GSPLAYING ? "" : "none";
+    level.avatar.head2.setAttribute("transform", `translate(${x} ${y}) scale(1.2, 1.2)`);
+    level.avatar.head2.style.display = zoom >= 10 && zoom < 200 && gameState == GSPLAYING ? "" : "none";
+    level.avatar.head3.setAttribute("transform", `translate(${x} ${y}) scale(1.4, 1.4)`);
+    level.avatar.head3.style.display = zoom >= 200 && zoom < 500 && gameState == GSPLAYING ? "" : "none";
+    level.avatar.head4.setAttribute("transform", `translate(${x} ${y}) scale(1.6, 1.6)`);
+    level.avatar.head4.style.display = zoom > 500 && gameState == GSPLAYING ? "" : "none";
+
+    if (level.avatar.head4.style.display == "") { // biggest zoom, increased risk of heart attack
+        heartAttack += dt * 0.03;
+        if (heartAttack > 100) {
+            _endMaze(GSLEVELLOST);
+        }
+        else if (Math.floor(Math.random() * 100) < heartAttack) {
+            let red = svgRect(0, 0, w, h, "red");
+            red.setAttribute("opacity", "0.5");
+            svg.appendChild(red);
+            setTimeout(() => {
+                svg.removeChild(red);
+            }, 50);
+        }
+    } 
+    else { // not biggest zoom, decreased risk of heart attack
+        heartAttack -= dt * 0.2;
+        if (heartAttack < 0) {
+            heartAttack = 0;
+        }
+    }
+
+    level.tower.setAttribute("transform", `translate(${x + 300} ${y - 780}) scale(2.5)`);
+    if (popupText) {
+        popupText.setAttribute("x", x - 100);
+        popupText.setAttribute("y", y - 200);
+    }
+    for (let i = 0; i < level.cats.length; i++) {
+        let cat = level.cats[i];
+        cat.element.setAttribute("transform", `translate(${cat.displayX} ${cat.displayY}) scale(2)`);
+    }
+    svg.setAttribute("viewBox", `${x+zoom-750} ${y+zoom-750} ${w-zoom-zoom} ${h-zoom-zoom}`);
+
+    if (popupText && gameState != GSGAMEWON && (zoom < 10) && !timeOutSet) {
+        timeOutSet = true;
+        setTimeout(() => {
+            svg.removeChild(popupText);
+            svg.removeChild(level.g);
+            popupText = undefined;
+            if (gameState == GSGAMELOST) {
+                gameState = GSMENU;
+                displayMenu();    
+            }
+            else {
+                startLevel(gameState == GSLEVELWON ? level.index + 1 : level.index);
+                gameState = GSPLAYING;
+            }
+            timeOutSet = false;
+        }, 1500);
+    }
+}
+
+let popupText = undefined;
+let timeOutSet = false;
+let mazeOpacity = 1;</script>
+        <script>let side = 80;
+
+let level = undefined;
+
+const GSMENU = 0;
+const GSPLAYING = 1;
+const GSLEVELWON = 2;
+const GSLEVELLOST = 3;
+const GSGAMEWON = 4;
+const GSGAMELOST = 5;
+
+let lives = 0;
+let gameState = GSMENU;
+
+let waitScreen = svgGroup();
+waitScreen.appendChild(svgText("...please wait... preparing the tower...", 250, 200, "red"));
+svg.setAttribute("viewBox", "0 0 800 600");
+svg.appendChild(waitScreen);
+
+var lastTime = Date.now();
+
+let gameLoop = () => {
+    let now = Date.now();
+    let dt = (now - lastTime);
+    updateView(dt);
+    requestAnimationFrame(gameLoop);
+    lastTime = now;
+}
+
+setTimeout(() => {
+    initSound();
+    svg.removeChild(waitScreen);
+    displayMenu();
+    gameLoop();
+}, 100);
+</script>
+    </body>
+</html>

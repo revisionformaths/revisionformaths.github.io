@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <style>* {
+  font-family: monospace;
+  font-size: 30px;
+  color: #fff;
+}
+
+canvas {
+  background: #191970;
+  display: block;
+  margin: 0 auto;
+}
+
+.display {
+  position: relative;
+} 
+
+.display canvas {
+  position: absolute;
+  left: 50%;
+  margin-left: -240px;
+}
+
+.navigate {
+  width: auto;
+  height: auto;
+  font-size: 15px;
+  color: #000;
+}
+
+.display div {
+  position: absolute;
+  left: 50%;
+}
+
+#text_display {
+  width: auto;
+  margin-left: -240px;
+  height: 290px;
+  padding: 15px;
+}
+
+#count {
+  width: 50px;
+  height: 50px;
+  font-size: 40px;
+  margin-top: 220px;
+  margin-left: -127px;
+  text-align: center;
+}
+
+#square-button.blue {
+  background: #21759b;
+}
+
+#navi {
+  left: 50%;
+  margin-left: -240px;
+  margin-top: 310px;
+  position: absolute;
+}
+
+#record {
+  width: auto;
+  height: auto;
+  font-size: 15px;
+  color: #000;
+}</style>
+        <script type="text/javascript">const wordKind = ["#", "$", "%", "&", "?"];
+const space = "　";
+
+let answer;
+let spaceCount;
+let roundCount = 1;
+let questionWordCount;
+let questionWord;
+let questionSentence;
+let slideSpeed = 200;
+let countDown;
+let control = "nextRound";
+let record = 0;
+
+window.onkeydown = (event) => {
+    if (event.keyCode === 32) {
+        if (control === "nextRound") {
+            control = "";
+            spaceCount = 0;
+            countDown = 2
+            document.getElementById("count").textContent = spaceCount;
+            round()
+        } else if (control === "spaceCount") {
+            spaceCount += 1
+            document.getElementById("count").textContent = spaceCount;
+        }
+    }
+}
+
+const round = () => {
+    document.getElementById("word").textContent = "Round " + roundCount;
+
+    countDown -= 1;
+
+    if (countDown == -2) {
+        countDown = "";
+        question();
+    } else {
+        setTimeout("round()", 1000);
+    }
+
+}
+
+const question = () => {
+    questionWordCount = Math.floor(Math.random() * 6) + 4;
+    questionSentence = "" // default word start position
+    answer = 0;
+
+    for (let i = 0; i < questionWordCount; i++) {
+        const charactersNumver = Math.floor(Math.random() * 6) + 1;
+        questionWord = "";
+        for (let n = 0; n < charactersNumver; n++) {
+            questionWord = questionWord + wordKind[Math.floor(Math.random() * 4)];
+        }
+        questionSentence += space + questionWord;
+    }
+
+    answer = questionWordCount - 1;
+    countDown = 3;
+    startTimer();
+}
+
+const startTimer = () => {
+    countDown <= 0 ? (
+        document.getElementById("word").textContent = 'Start!!'
+    ) : (
+        document.getElementById("word").textContent = countDown
+    )
+
+    countDown -= 1;
+
+    if (countDown == -2) {
+        countDown = "";
+        control = "spaceCount";
+        document.getElementById("word").textContent = questionSentence;
+        slide();
+    } else {
+        setTimeout("startTimer()", 1000);
+    }
+}
+
+const slide = () => {
+    const word = document.getElementById('word').textContent;
+    const textdisplay = word.substring(1, word.length);
+
+    document.getElementById("word").textContent = textdisplay;
+
+    if (textdisplay === "") {
+        countDown = 5;
+        timeUpTimer();
+    } else {
+        setTimeout("slide()", slideSpeed);
+    }
+}
+
+const timeUpTimer = () => {
+    countDown <= 0 ? (
+        control = "",
+        document.getElementById("word").textContent = 'Time Up!!'
+    ) : (
+        document.getElementById("word").textContent = countDown
+    )
+
+    countDown -= 1;
+
+    if (countDown === -3) {
+        countDown = 6;
+        correcAtnswer();
+    } else {
+        setTimeout("timeUpTimer()", 1000);
+    }
+}
+
+const correcAtnswer = () => {
+    countDown >= 3 ? (
+        document.getElementById("word").textContent = "Answer is..."
+    ) : (
+        document.getElementById("word").textContent = "Answer is " + answer
+    )
+
+    countDown -= 1;
+
+    if (countDown === -2) {
+        countDown = "";
+        next();
+    } else {
+        setTimeout("correcAtnswer()", 1000);
+    }
+}
+
+const next = () => {
+    if (spaceCount === answer) {
+        roundCount += 1
+        slideSpeed *= 0.8
+        document.getElementById("word").textContent = "Next Round >>";
+    } else {
+        document.getElementById("word").textContent = "Game Over! score: " + (roundCount - 1);
+        if (record < roundCount - 1){
+            record = roundCount - 1;
+            document.getElementById("record").textContent = "record: " + record;
+        }
+        roundCount = 1;
+        slideSpeed = 200;
+    }
+    control = "nextRound";
+}
+</script>
+    </head>
+    
+    <body>
+        <div class="display">
+            <canvas id="canvas_01" width="480" height="320"></canvas>
+            <div id="text_display">
+                <p id="word">game start!!!</p>
+            </div>
+            <div id="space_count">
+                <p id="count">0</p>
+            </div>
+        </div>
+        <div id="navi">
+            <p class="navigate">
+                start/next game start: space<br>
+                count space: space
+            </p>
+            <p id="record">record: 0</p>
+        </div>
+        <script type="text/javascript">var canvas = document.getElementById("canvas_01");
+var ctx = canvas.getContext("2d");
+
+var scale = window.devicePixelRatio;
+
+ctx.beginPath();
+ctx.rect( 100, 200, 75, 75 );
+ctx.strokeStyle = "#fff";
+ctx.lineWidth = 5;
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.fillStyle = "#fff";
+ctx.fillText('   count space', 100, 300);
+ctx.fill();
+ctx.closePath();
+
+// 人
+ctx.beginPath();
+ctx.arc(55, 160, 20, 0, Math.PI*2, false);
+ctx.fillStyle = "#fff";
+ctx.fill();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.arc(50, 160, 30, 0, Math.PI*2, false);
+ctx.lineWidth = 5;
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.arc(50, 180, 30, 0, Math.PI, false);
+ctx.lineWidth = 5
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.moveTo(20,180);
+ctx.lineTo(20,280);
+ctx.lineWidth = 5;
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.moveTo(80,180);
+ctx.lineTo(80,280);
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.moveTo(0,180);
+ctx.lineTo(20,180);
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.moveTo(0,280);
+ctx.lineTo(20,280);
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.rect(20, 280, 48, 10);
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+ctx.rect(70, 280, 25, 10);
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+// 宇宙人
+
+// 頭
+ctx.beginPath();
+ctx.ellipse(370, 160, 60, 30, 0, 0, Math.PI * 2);
+ctx.fillStyle = "#fff";
+ctx.fill();
+ctx.closePath();
+
+// 宇宙服
+ctx.beginPath();
+ctx.ellipse(370, 150, 80, 50, 0, 0, Math.PI * 2);
+ctx.lineWidth = 1;
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();
+
+ctx.beginPath();
+// まっすぐの足右
+ctx.moveTo(350, 160);
+ctx.lineTo(350, 290);
+ctx.lineWidth = 8
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+
+// まっすぐの足真ん中
+ctx.moveTo(370, 160);
+ctx.lineTo(370, 290);
+ctx.stroke();
+
+// まっすぐの足左
+ctx.moveTo(390, 160);
+ctx.lineTo(390, 290);
+ctx.stroke();
+
+// 曲がってる足右
+ctx.moveTo(410, 170);
+ctx.quadraticCurveTo(410, 290, 440, 240);
+ctx.stroke();
+
+// 曲がってる足左
+ctx.moveTo(330, 170);
+ctx.quadraticCurveTo(330, 290, 300, 240);
+ctx.stroke();
+ctx.closePath();
+
+// 四角吹き出し
+ctx.beginPath();
+ctx.rect(10, 10, 460, 100);
+ctx.lineWidth = 5
+ctx.strokeStyle = "#fff";
+ctx.stroke();
+ctx.closePath();</script>
+    </body>
+</html>

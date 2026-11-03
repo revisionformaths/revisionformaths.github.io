@@ -1,0 +1,1929 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset=utf8>
+        <meta name=viewport content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+        <title>You have to get off line</title>
+        <style>html, body {
+    background: #161616;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+
+#container {
+    position: absolute;
+}
+
+#container > *, label {
+    -moz-user-select: none;
+    -moz-user-select: -moz-none;
+    -ms-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#bcanvas, #canvas, #load, #home, #screen {
+    display: block;
+    height: 100%;
+    left: 0;
+    position: absolute;
+    top: 0;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    width: 100%;
+}
+
+#bcanvas {
+    background: #101010;
+}
+
+#load, #home {
+    background: rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
+    color: #fff;
+    cursor: default;
+    font: 300 64px/96px 'Segoe UI', 'Helvetica Neue', sans-serif;
+    height: 1080px;
+    padding: 0 100px;
+    transform-origin: 0 0;
+    width: 1920px;
+}
+
+#load + #home {
+    display: none;
+}
+
+#load > *, #home > * {
+    margin: 40px 0;
+}
+
+h1 {
+    font: 300 96px/1 'Segoe UI', 'Helvetica Neue', sans-serif;
+    margin-top: 80px;
+}
+
+h1, p {
+    text-shadow: 0 0 20px #101010;
+}
+
+#screen {
+    background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAQAAAAziH6sAAAADklEQVR4AWNmMGb+zwAAAusBObK7SDsAAAAASUVORK5CYII=);
+    pointer-events: none;
+    z-index: 10;
+}
+
+#start {
+    -webkit-animation: blink 0.7s steps(2, start) infinite;
+    animation: blink 0.7s steps(2, start) infinite;
+    background: #E1FF5F;
+    border-radius: 2px;
+    color: #202020;
+    cursor: pointer;
+    display: inline-block;
+    font-size: 48px;
+    font-weight: bold;
+    outline: 4px none;
+    outline-offset: 4px;
+    padding: 40px 120px;
+}
+
+#start:hover {
+    background: #fff;
+}
+
+@-webkit-keyframes blink {
+    to {
+        outline: 4px solid #E1FF5F;
+    }
+}
+
+@keyframes blink {
+    to {
+        outline: 4px solid #E1FF5F;
+    }
+}
+
+#menu {
+    position: absolute;
+    right: 0;
+    top: 0;
+    transform: translate3d(0,0,0);
+    width: 550px;
+}
+
+.xopt {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    display: none;
+}
+
+.opt, .opt::after, .opt::before {
+    box-sizing: border-box;
+}
+
+.opt {
+    display: inline-block;
+    height: 48px;
+    margin: 0 10px;
+    outline: 0;
+    position: relative;
+    width: 80px;
+}
+
+.opt::after, .opt::before {
+    border-radius: 100px;
+    content: '';
+    display: inline-block;
+    position: absolute;
+    transition: all 0.2s;
+}
+
+.opt::after {
+    background: #fff;
+    border: 2px solid #607d8b;
+    height: 40px;
+    left: 4px;
+    top: 4px;
+    width: 40px;
+}
+
+.opt::before {
+    background: #b0bec5;
+    height: 48px;
+    width: 80px;
+}
+
+.xopt:checked+label>.opt::after {
+    left: 36px;
+}
+
+.xopt:checked+label>.opt::before {
+    background: #c6ff00;
+}
+
+label {
+    color: #eeff41;
+}
+
+body.mobile #menu > * {
+    display: none;
+}
+</style>
+        
+    </head>
+    <body>
+        <div id=container>
+            <canvas id=bcanvas></canvas>
+            <canvas id=canvas></canvas>
+
+            <div id=load>
+                <h1>Loading</h1>
+            </div>
+            <div id=home>
+                <h1>You have to get off line</h1>
+                <p>
+                    <b>How to play:</b><br>
+                    ⭐️ Press Spacebar to jump<br>
+                    ⭐️ Or tap on the screen<br>
+                    ⭐️ Stay clear of environmental hazards<br>
+                    ⭐️ Get to the end of the story line
+                </p>
+                <div id=start>NEW GAME</div>
+                <div id=menu>
+                    <input type=checkbox class=xopt id=m><label for=m><span class="opt"></span> Music</label><br>
+                    <input type=checkbox class=xopt id=s checked><label for=s><span class="opt"></span> Sound FX</label><br>
+                </div>
+            </div>
+
+            <div id=screen></div>
+        </div>
+
+        <script>~function(){function H(){this.A=function(e){for(var f=0;24>f;f++)this[String.fromCharCode(97+f)]=e[f]||0;0.01>this.c&&(this.c=0.01);e=this.b+this.c+this.e;0.18>e&&(e=0.18/e,this.b*=e,this.c*=e,this.e*=e)}}var U=new function(){this.z=new H;var e,f,d,h,j,w,I,J,K,y,k,L;this.reset=function(){var b=this.z;h=100/(b.f*b.f+0.001);j=100/(b.g*b.g+0.001);w=1-0.01*b.h*b.h*b.h;I=1E-6*-b.i*b.i*b.i;b.a||(k=0.5-b.n/2,L=5E-5*-b.o);J=1+b.l*b.l*(0<b.l?-0.9:10);K=0;y=1==b.m?0:2E4*(1-b.m)*(1-b.m)+32};this.C=function(){this.reset();var b=this.z;e=1E5*b.b*b.b;f=1E5*b.c*b.c;d=1E5*b.e*b.e+12;return 3*((e+f+d)/3|0)};this.B=function(b,M){var a=this.z,N=1!=a.s||a.v,o=0.1*a.v*a.v,O=1+3E-4*a.w,l=0.1*a.s*a.s*a.s,V=1+1E-4*a.t,W=1!=a.s,X=a.x*a.x,Y=a.g,P=a.q||a.r,Z=0.2*a.r*a.r*a.r,B=a.q*a.q*(0>a.q?-1020:1020),Q=a.p?(2E4*(1-a.p)*(1-a.p)|0)+32:0,$=a.d,R=a.j/2,aa=0.01*a.k*a.k,C=a.a,D=e,ba=1/e,ca=1/f,da=1/d,a=5/(1+20*a.u*a.u)*(0.01+l);0.8<a&&(a=0.8);for(var a=1-a,E=!1,S=0,s=0,t=0,z=0,q=0,u,r=0,g,m=0,p,F=0,c,T=0,n,G=0,A=Array(1024),v=Array(32),i=A.length;i--;)A[i]=0;for(i=v.length;i--;)v[i]=2*Math.random()-1;for(i=0;i<M;i++){if(E)return i;Q&&++T>=Q&&(T=0,this.reset());y&&++K>=y&&(y=0,h*=J);w+=I;h*=w;h>j&&(h=j,0<Y&&(E=!0));g=h;0<R&&(G+=aa,g*=1+Math.sin(G)*R);g|=0;8>g&&(g=8);C||(k+=L,0>k?k=0:0.5<k&&(k=0.5));if(++s>D)switch(s=0,++S){case 1:D=f;break;case 2:D=d}switch(S){case 0:t=s*ba;break;case 1:t=1+2*(1-s*ca)*$;break;case 2:t=1-s*da;break;case 3:t=0,E=!0}P&&(B+=Z,p=B|0,0>p?p=-p:1023<p&&(p=1023));N&&O&&(o*=O,1E-5>o?o=1E-5:0.1<o&&(o=0.1));n=0;for(var ea=8;ea--;){m++;if(m>=g&&(m%=g,3==C))for(u=v.length;u--;)v[u]=2*Math.random()-1;switch(C){case 0:c=m/g<k?0.5:-0.5;break;case 1:c=1-2*(m/g);break;case 2:c=m/g;c=6.28318531*(0.5<c?c-1:c);c=1.27323954*c+0.405284735*c*c*(0>c?1:-1);c=0.225*((0>c?-1:1)*c*c-c)+c;break;case 3:c=v[Math.abs(32*m/g|0)]}N&&(u=r,l*=V,0>l?l=0:0.1<l&&(l=0.1),W?(q+=(c-r)*l,q*=a):(r=c,q=0),r+=q,z+=r-u,c=z*=1-o);P&&(A[F%1024]=c,c+=A[(F-p+1024)%1024],F++);n+=c}n*=0.125*t*X;b[i]=1<=n?32767:-1>=n?-32768:32767*n|0}return M}};window.SOUND=function(e){U.z.A(e);var f=U.C(),e=new Uint8Array(4*((f+1)/2|0)+44),f=2*U.B(new Uint16Array(e.buffer,44),f),d=new Uint32Array(e.buffer,0,44);d[0]=1179011410;d[1]=f+36;d[2]=1163280727;d[3]=544501094;d[4]=16;d[5]=65537;d[6]=44100;d[7]=88200;d[8]=1048578;d[9]=1635017060;d[10]=f;for(var f=f+44,d=0,h="data:audio/wav;base64,",x="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";d<f;d+=3)var j=e[d]<<16|e[d+1]<<8|e[d+2],h=h+(x[j>>18]+x[j>>12&63]+x[j>>6&63]+x[j&63]);return h}}()
+</script>
+        <script>//------------------------------------------------------------------------------
+// -*- mode: javascript; tab-width: 4; indent-tabs-mode: nil; -*-
+//------------------------------------------------------------------------------
+// Sonant for JavaScript, v1.0
+//   A sound synth system targeted for tiny demos.
+//
+// This is a port of the Sonant player routine, originally written in C by
+// Jake Taylor (Ferris / Youth Uprising).
+//------------------------------------------------------------------------------
+// Copyright (c) 2008-2009 Jake Taylor
+// Copyright (c) 2011 Marcus Geelnard
+//
+// This software is provided 'as-is', without any express or implied
+// warranty. In no event will the authors be held liable for any damages
+// arising from the use of this software.
+//
+// Permission is granted to anyone to use this software for any purpose,
+// including commercial applications, and to alter it and redistribute it
+// freely, subject to the following restrictions:
+//
+// 1. The origin of this software must not be misrepresented; you must not
+//    claim that you wrote the original software. If you use this software
+//    in a product, an acknowledgment in the product documentation would be
+//    appreciated but is not required.
+//
+// 2. Altered source versions must be plainly marked as such, and must not be
+//    misrepresented as being the original software.
+//
+// 3. This notice may not be removed or altered from any source
+//    distribution.
+//------------------------------------------------------------------------------
+//
+// Example usage:
+//
+//   var songGen = new sonant();
+//   for (var t = 0; t < 8; t++)
+//       songGen.generate(t);
+//   var audio = songGen.createAudio();
+//   audio.loop = true;
+//   audio.play();
+//
+//------------------------------------------------------------------------------
+
+var sonant = function()
+{
+    //--------------------------------------------------------------------------
+    // Private members
+    //--------------------------------------------------------------------------
+
+    //**************************************************************************
+    // Music
+    //**************************************************************************
+
+    // *** INSERT MUSIC HERE ***
+    // var song = ???;
+
+    //**************************************************************************
+    // End of Music
+    //**************************************************************************
+
+    // Wave data configuration
+    var WAVE_SPS = 44100;                    // Samples per second
+    var WAVE_CHAN = 2;                       // Channels
+    var WAVE_SIZE = WAVE_SPS * song.songLen; // Total song size (in samples)
+ 
+    // Work buffers
+    var chnBufWork, mixBufWork;
+
+
+    //--------------------------------------------------------------------------
+    // Private methods
+    //--------------------------------------------------------------------------
+
+    // Initialize buffers etc. (constructor)
+    (function ()
+    {
+        // Note 1: We use a CanvasPixelArray instead of a traditional ECMAScript
+        // array of numbers, since that gives us a typed byte array (much more
+        // compact, and quite fast).
+        //
+        // Note 2: We would LIKE to create an (N x 1) bitmap buffer, but some
+        // browsers (hrrr-o-mme...) have an upper bitmap size limit of
+        // 32767 x 32767, so we create a square bitmap buffer (with some
+        // trailing bytes that we don't care too much about)
+        var size = Math.ceil(Math.sqrt(WAVE_SIZE * WAVE_CHAN / 2));
+
+        var ctx = document.createElement('canvas').getContext('2d');
+
+        // Create the channel work buffer
+        chnBufWork = ctx.createImageData(size, size).data;
+
+        // Create & clear the channel mix buffer
+        var b, mixBuf = ctx.createImageData(size, size).data;
+        for(b = size * size * 4 - 2; b >= 0 ; b -= 2)
+        {
+            mixBuf[b] = 0;
+            mixBuf[b + 1] = 128;
+        }
+        mixBufWork = mixBuf;
+    })();
+
+    // Oscillators
+    function osc_sin(value)
+    {
+        return Math.sin(value * 6.283184);
+    }
+
+    function osc_square(value)
+    {
+        if(osc_sin(value) < 0) return -1;
+        return 1;
+    }
+
+    function osc_saw(value)
+    {
+        return (value % 1) - 0.5;
+    }
+
+    function osc_tri(value)
+    {
+        var v2 = (value % 1) * 4;
+        if(v2 < 2) return v2 - 1;
+        return 3 - v2;
+    }
+
+    function getnotefreq(n)
+    {
+        return 0.00390625 * Math.pow(1.059463094, n - 128);
+    }
+
+
+    //--------------------------------------------------------------------------
+    // Public members
+    //--------------------------------------------------------------------------
+
+    // Number of lines per second (song speed)
+    this.lps = WAVE_SPS / song.rowLen;
+
+
+    //--------------------------------------------------------------------------
+    // Public methods
+    //--------------------------------------------------------------------------
+
+    // Generate audio data for a single track
+    this.generate = function (track)
+    {
+        // Array of oscillator functions
+        var oscillators =
+        [
+            osc_sin,
+            osc_square,
+            osc_saw,
+            osc_tri
+        ];
+
+        // Local variables
+        var i, j, k, b, p, row, n, currentpos, cp,
+            c1, c2, q, low, band, high, t, lfor, e, x,
+            rsample, f, da, o1t, o2t;
+
+        // Preload/precalc some properties/expressions (for improved performance)
+        var chnBuf = chnBufWork,
+            mixBuf = mixBufWork,
+            waveSamples = WAVE_SIZE,
+            waveBytes = WAVE_SIZE * WAVE_CHAN * 2,
+            instr = song.songData[track],
+            rowLen = song.rowLen,
+            osc_lfo = oscillators[instr.lfo_waveform],
+            osc1 = oscillators[instr.osc1_waveform],
+            osc2 = oscillators[instr.osc2_waveform],
+            attack = instr.env_attack,
+            sustain = instr.env_sustain,
+            release = instr.env_release,
+            panFreq = Math.pow(2, instr.fx_pan_freq - 8) / rowLen,
+            lfoFreq = Math.pow(2, instr.lfo_freq - 8) / rowLen;
+
+        // Clear buffer
+        for(b = 0; b < waveBytes; b += 2)
+        {
+            chnBuf[b] = 0;
+            chnBuf[b+1] = 128;
+        }
+
+        currentpos = 0;
+        for(p = 0; p < song.endPattern - 1; ++p) // Patterns
+        {
+            cp = instr.p[p];
+            for(row = 0;row < 32; ++row) // Rows
+            {
+                if(cp)
+                {
+                    n = instr.c[cp - 1].n[row];
+                    if(n)
+                    {
+                        c1 = c2 = 0;
+
+                        // Precalculate frequencues
+                        o1t = getnotefreq(n + (instr.osc1_oct - 8) * 12 + instr.osc1_det) * (1 + 0.0008 * instr.osc1_detune);
+                        o2t = getnotefreq(n + (instr.osc2_oct - 8) * 12 + instr.osc2_det) * (1 + 0.0008 * instr.osc2_detune);
+
+                        // State variable init
+                        q = instr.fx_resonance / 255;
+                        low = band = 0;
+                        for (j = attack + sustain + release - 1; j >= 0; --j)
+                        {
+                            k = j + currentpos;
+
+                            // LFO
+                            lfor = osc_lfo(k * lfoFreq) * instr.lfo_amt / 512 + 0.5;
+
+                            // Envelope
+                            e = 1;
+                            if(j < attack)
+                                e = j / attack;
+                            else if(j >= attack + sustain)
+                                e -= (j - attack - sustain) / release;
+
+                            // Oscillator 1
+                            t = o1t;
+                            if(instr.lfo_osc1_freq) t += lfor;
+                            if(instr.osc1_xenv) t *= e * e;
+                            c1 += t;
+                            rsample = osc1(c1) * instr.osc1_vol;
+
+                            // Oscillator 2
+                            t = o2t;
+                            if(instr.osc2_xenv) t *= e * e;
+                            c2 += t;
+                            rsample += osc2(c2) * instr.osc2_vol;
+
+                            // Noise oscillator
+                            if(instr.noise_fader) rsample += (2*Math.random()-1) * instr.noise_fader * e;
+
+                            rsample *= e / 255;
+
+                            // State variable filter
+                            f = instr.fx_freq;
+                            if(instr.lfo_fx_freq) f *= lfor;
+                            f = 1.5 * Math.sin(f * 3.141592 / WAVE_SPS);
+                            low += f * band;
+                            high = q * (rsample - band) - low;
+                            band += f * high;
+                            switch(instr.fx_filter)
+                            {
+                                case 1: // Hipass
+                                    rsample = high;
+                                    break;
+                                case 2: // Lopass
+                                    rsample = low;
+                                    break;
+                                case 3: // Bandpass
+                                    rsample = band;
+                                    break;
+                                case 4: // Notch
+                                    rsample = low + high;
+                                default:
+                            }
+
+                            // Panning & master volume
+                            t = osc_sin(k * panFreq) * instr.fx_pan_amt / 512 + 0.5;
+                            rsample *= 39 * instr.env_master;
+
+                            // Add to 16-bit channel buffer
+                            k <<= 2;
+                            x = chnBuf[k] + (chnBuf[k+1] << 8) + rsample * (1 - t);
+                            chnBuf[k] = x & 255;
+                            chnBuf[k+1] = (x >> 8) & 255;
+                            x = chnBuf[k+2] + (chnBuf[k+3] << 8) + rsample * t;
+                            chnBuf[k+2] = x & 255;
+                            chnBuf[k+3] = (x >> 8) & 255;
+                        }
+                    }
+                }
+                currentpos += rowLen;
+            }
+        }
+
+        // Delay
+        p = (instr.fx_delay_time * rowLen) >> 1;
+        t = instr.fx_delay_amt / 255;
+
+        for(n = 0; n < waveSamples - p; ++n)
+        {
+            b = 4 * n;
+            k = 4 * (n + p);
+
+            // Left channel = left + right[-p] * t
+            x = chnBuf[k] + (chnBuf[k+1] << 8) +
+                (chnBuf[b+2] + (chnBuf[b+3] << 8) - 32768) * t;
+            chnBuf[k] = x & 255;
+            chnBuf[k+1] = (x >> 8) & 255;
+
+            // Right channel = right + left[-p] * t
+            x = chnBuf[k+2] + (chnBuf[k+3] << 8) +
+                (chnBuf[b] + (chnBuf[b+1] << 8) - 32768) * t;
+            chnBuf[k+2] = x & 255;
+            chnBuf[k+3] = (x >> 8) & 255;
+        }
+
+        // Add to mix buffer
+        for(b = 0; b < waveBytes; b += 2)
+        {
+            x = mixBuf[b] + (mixBuf[b+1] << 8) + chnBuf[b] + (chnBuf[b+1] << 8) - 32768;
+            mixBuf[b] = x & 255;
+            mixBuf[b+1] = (x >> 8) & 255;
+        }
+    };
+
+    // Create an HTML audio element from the generated audio data
+    this.createAudio = function()
+    {
+        // Local variables
+        var b, k, x, wave, l1, l2, s, y;
+
+        // Turn critical object properties into local variables (performance)
+        var mixBuf = mixBufWork,
+            waveBytes = WAVE_SIZE * WAVE_CHAN * 2;
+
+        // We no longer need the channel working buffer
+        chnBufWork = null;
+
+        // Convert to a WAVE file (in a binary string)
+        l1 = waveBytes - 8;
+        l2 = l1 - 36;
+        wave = String.fromCharCode(82,73,70,70,
+                                   l1 & 255,(l1 >> 8) & 255,(l1 >> 16) & 255,(l1 >> 24) & 255,
+                                   87,65,86,69,102,109,116,32,16,0,0,0,1,0,2,0,
+                                   68,172,0,0,16,177,2,0,4,0,16,0,100,97,116,97,
+                                   l2 & 255,(l2 >> 8) & 255,(l2 >> 16) & 255,(l2 >> 24) & 255);
+        for (b = 0; b < waveBytes;)
+        {
+            // This is a GC & speed trick: don't add one char at a time - batch up
+            // larger partial strings
+            x = "";
+            for (k = 0; k < 256 && b < waveBytes; ++k, b += 2)
+            {
+                // Note: We amplify and clamp here
+                y = 4 * (mixBuf[b] + (mixBuf[b+1] << 8) - 32768);
+                y = y < -32768 ? -32768 : (y > 32767 ? 32767 : y);
+                x += String.fromCharCode(y & 255, (y >> 8) & 255);
+            }
+            wave += x;
+        }
+
+        // Convert the string buffer to a base64 data uri
+        s = "data:audio/wav;base64," + btoa(wave);
+        wave = null;
+
+        // Return the music as an audio element
+        return new Audio(s);
+    };
+
+    // Get n samples of wave data at time t [s]. Wave data in range [0,1].
+    this.getData = function(t, n)
+    {
+        for (var i = Math.floor(t * WAVE_SPS), j = 0, d = [], b = mixBufWork; j < 2*n; j += 2)
+        {
+            var k = 4 * (i + j) + 1;
+            d.push(t > 0 && k < b.length ? (b[k] + b[k-1]/256) / 256 : 0.5);
+        }
+        return d;
+    };
+};
+</script>
+        <script>    // Song data
+    var song = {
+      // Song length in seconds (how much data to generate)
+      songLen: 37,  // Tune this to fit your needs!
+
+      songData: [
+        { // Instrument 0
+          // Oscillator 1
+          osc1_oct: 7,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 192,
+          osc1_waveform: 3,
+          // Oscillator 2
+          osc2_oct: 7,
+          osc2_det: 0,
+          osc2_detune: 7,
+          osc2_xenv: 0,
+          osc2_vol: 201,
+          osc2_waveform: 3,
+          // Noise oscillator
+          noise_fader: 0,
+          // Envelope
+          env_attack: 789,
+          env_sustain: 1234,
+          env_release: 13636,
+          env_master: 191,
+          // Effects
+          fx_filter: 2,
+          fx_freq: 5839,
+          fx_resonance: 254,
+          fx_delay_time: 6,
+          fx_delay_amt: 121,
+          fx_pan_freq: 6,
+          fx_pan_amt: 147,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 1,
+          lfo_freq: 6,
+          lfo_amt: 195,
+          lfo_waveform: 0,
+          // Patterns
+          p: [1,2,0,0,1,2,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [154,0,154,0,152,0,147,0,0,0,0,0,0,0,0,0,154,0,154,0,152,0,157,0,0,0,156,0,0,0,0,0]},
+            {n: [154,0,154,0,152,0,147,0,0,0,0,0,0,0,0,0,154,0,154,0,152,0,157,0,0,0,159,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 1
+          // Oscillator 1
+          osc1_oct: 7,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 255,
+          osc1_waveform: 2,
+          // Oscillator 2
+          osc2_oct: 8,
+          osc2_det: 0,
+          osc2_detune: 18,
+          osc2_xenv: 1,
+          osc2_vol: 191,
+          osc2_waveform: 2,
+          // Noise oscillator
+          noise_fader: 0,
+          // Envelope
+          env_attack: 3997,
+          env_sustain: 56363,
+          env_release: 100000,
+          env_master: 255,
+          // Effects
+          fx_filter: 2,
+          fx_freq: 392,
+          fx_resonance: 255,
+          fx_delay_time: 8,
+          fx_delay_amt: 69,
+          fx_pan_freq: 5,
+          fx_pan_amt: 67,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 1,
+          lfo_freq: 4,
+          lfo_amt: 57,
+          lfo_waveform: 3,
+          // Patterns
+          p: [1,2,1,2,1,2,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [130,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [123,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 2
+          // Oscillator 1
+          osc1_oct: 8,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 0,
+          osc1_waveform: 0,
+          // Oscillator 2
+          osc2_oct: 8,
+          osc2_det: 0,
+          osc2_detune: 0,
+          osc2_xenv: 0,
+          osc2_vol: 0,
+          osc2_waveform: 0,
+          // Noise oscillator
+          noise_fader: 60,
+          // Envelope
+          env_attack: 50,
+          env_sustain: 419,
+          env_release: 4607,
+          env_master: 130,
+          // Effects
+          fx_filter: 1,
+          fx_freq: 10332,
+          fx_resonance: 120,
+          fx_delay_time: 4,
+          fx_delay_amt: 16,
+          fx_pan_freq: 5,
+          fx_pan_amt: 108,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 0,
+          lfo_freq: 5,
+          lfo_amt: 187,
+          lfo_waveform: 0,
+          // Patterns
+          p: [0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [0,0,147,0,0,0,147,147,0,0,147,0,0,147,0,147,0,0,147,0,0,0,147,147,0,0,147,0,0,147,0,147]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 3
+          // Oscillator 1
+          osc1_oct: 7,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 1,
+          osc1_vol: 255,
+          osc1_waveform: 0,
+          // Oscillator 2
+          osc2_oct: 7,
+          osc2_det: 0,
+          osc2_detune: 0,
+          osc2_xenv: 1,
+          osc2_vol: 255,
+          osc2_waveform: 0,
+          // Noise oscillator
+          noise_fader: 0,
+          // Envelope
+          env_attack: 50,
+          env_sustain: 150,
+          env_release: 4800,
+          env_master: 200,
+          // Effects
+          fx_filter: 2,
+          fx_freq: 600,
+          fx_resonance: 254,
+          fx_delay_time: 0,
+          fx_delay_amt: 0,
+          fx_pan_freq: 0,
+          fx_pan_amt: 0,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 0,
+          lfo_freq: 0,
+          lfo_amt: 0,
+          lfo_waveform: 0,
+          // Patterns
+          p: [1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [147,0,0,0,0,0,0,0,147,0,0,0,0,0,0,0,147,0,0,0,0,0,0,0,147,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 4
+          // Oscillator 1
+          osc1_oct: 7,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 255,
+          osc1_waveform: 2,
+          // Oscillator 2
+          osc2_oct: 7,
+          osc2_det: 0,
+          osc2_detune: 9,
+          osc2_xenv: 0,
+          osc2_vol: 154,
+          osc2_waveform: 2,
+          // Noise oscillator
+          noise_fader: 0,
+          // Envelope
+          env_attack: 2418,
+          env_sustain: 1075,
+          env_release: 10614,
+          env_master: 240,
+          // Effects
+          fx_filter: 3,
+          fx_freq: 2962,
+          fx_resonance: 255,
+          fx_delay_time: 6,
+          fx_delay_amt: 117,
+          fx_pan_freq: 3,
+          fx_pan_amt: 73,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 1,
+          lfo_freq: 5,
+          lfo_amt: 124,
+          lfo_waveform: 0,
+          // Patterns
+          p: [0,0,0,0,1,2,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [154,0,154,0,152,0,147,0,0,0,0,0,0,0,0,0,154,0,154,0,152,0,157,0,0,0,156,0,0,0,0,0]},
+            {n: [154,0,154,0,152,0,147,0,0,0,0,0,0,0,0,0,154,0,147,0,152,0,157,0,0,0,159,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 5
+          // Oscillator 1
+          osc1_oct: 7,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 192,
+          osc1_waveform: 1,
+          // Oscillator 2
+          osc2_oct: 6,
+          osc2_det: 0,
+          osc2_detune: 9,
+          osc2_xenv: 0,
+          osc2_vol: 192,
+          osc2_waveform: 1,
+          // Noise oscillator
+          noise_fader: 0,
+          // Envelope
+          env_attack: 137,
+          env_sustain: 2000,
+          env_release: 4611,
+          env_master: 192,
+          // Effects
+          fx_filter: 1,
+          fx_freq: 982,
+          fx_resonance: 89,
+          fx_delay_time: 6,
+          fx_delay_amt: 25,
+          fx_pan_freq: 6,
+          fx_pan_amt: 77,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 1,
+          lfo_freq: 3,
+          lfo_amt: 69,
+          lfo_waveform: 0,
+          // Patterns
+          p: [1,2,1,3,1,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [130,0,130,0,142,0,130,130,0,142,130,0,142,0,130,0,130,0,130,0,142,0,130,130,0,142,130,0,142,0,130,0]},
+            {n: [123,0,123,0,135,0,123,123,0,135,123,0,135,0,123,0,123,0,123,0,135,0,123,123,0,135,123,0,135,0,123,0]},
+            {n: [135,0,135,0,147,0,135,135,0,147,135,0,147,0,135,0,135,0,135,0,147,0,135,135,0,147,135,0,147,0,135,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 6
+          // Oscillator 1
+          osc1_oct: 7,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 255,
+          osc1_waveform: 3,
+          // Oscillator 2
+          osc2_oct: 8,
+          osc2_det: 0,
+          osc2_detune: 0,
+          osc2_xenv: 0,
+          osc2_vol: 255,
+          osc2_waveform: 0,
+          // Noise oscillator
+          noise_fader: 127,
+          // Envelope
+          env_attack: 22,
+          env_sustain: 88,
+          env_release: 3997,
+          env_master: 255,
+          // Effects
+          fx_filter: 3,
+          fx_freq: 4067,
+          fx_resonance: 234,
+          fx_delay_time: 4,
+          fx_delay_amt: 33,
+          fx_pan_freq: 2,
+          fx_pan_amt: 84,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 1,
+          lfo_freq: 3,
+          lfo_amt: 28,
+          lfo_waveform: 0,
+          // Patterns
+          p: [0,0,1,2,1,2,1,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [0,0,142,0,154,0,0,0,142,0,0,0,154,0,0,0,0,0,142,0,154,0,0,0,142,0,0,0,154,0,0,0]},
+            {n: [0,0,147,0,154,0,0,0,147,0,0,0,154,0,0,0,0,0,147,0,154,0,147,0,0,0,154,0,0,0,154,0]},
+            {n: [0,0,147,0,154,0,0,0,147,0,0,0,154,0,0,0,0,0,147,0,154,0,0,0,147,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        },
+        { // Instrument 7
+          // Oscillator 1
+          osc1_oct: 8,
+          osc1_det: 0,
+          osc1_detune: 0,
+          osc1_xenv: 0,
+          osc1_vol: 0,
+          osc1_waveform: 0,
+          // Oscillator 2
+          osc2_oct: 8,
+          osc2_det: 0,
+          osc2_detune: 0,
+          osc2_xenv: 0,
+          osc2_vol: 0,
+          osc2_waveform: 0,
+          // Noise oscillator
+          noise_fader: 255,
+          // Envelope
+          env_attack: 140347,
+          env_sustain: 9216,
+          env_release: 133417,
+          env_master: 208,
+          // Effects
+          fx_filter: 2,
+          fx_freq: 2500,
+          fx_resonance: 16,
+          fx_delay_time: 2,
+          fx_delay_amt: 157,
+          fx_pan_freq: 8,
+          fx_pan_amt: 207,
+          // LFO
+          lfo_osc1_freq: 0,
+          lfo_fx_freq: 1,
+          lfo_freq: 2,
+          lfo_amt: 51,
+          lfo_waveform: 0,
+          // Patterns
+          p: [0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+          // Columns
+          c: [
+            {n: [147,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+            {n: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+          ]
+        }
+      ],
+      rowLen: 5513,   // In sample lengths
+      endPattern: 9  // End pattern
+    };
+</script>
+
+        <script>"use strict";
+/// <reference path="you_have_to.d.ts" />
+var AAudio = /** @class */ (function () {
+    function AAudio() {
+        this.on = true;
+        this.sounds = {};
+    }
+    AAudio.prototype.add = function (name, count, settings) {
+        this.sounds[name] = {
+            tick: 0,
+            count: count,
+            pool: [],
+        };
+        for (var i = 0; i < count; ++i) {
+            var audio = new Audio;
+            audio.src = window.SOUND(settings);
+            this.sounds[name].pool.push(audio);
+        }
+    };
+    AAudio.prototype.play = function (name) {
+        if (!this.on)
+            return;
+        var sound = this.sounds[name];
+        sound.pool[sound.tick].play();
+        if (++sound.tick >= sound.count) {
+            sound.tick = 0;
+        }
+    };
+    return AAudio;
+}());
+var aa = new AAudio;
+var isMobile = navigator.userAgent.match(/Android|iPhone|iPad/i) != null;
+if (isMobile) {
+    aa.on = false;
+}
+else {
+    aa.add('bip', 3, [1, , 0.1241, , 0.1855, 0.5336, , , , , , , , , , , , , 1, , , 0.1, , 0.64]);
+    aa.add('jmp', 4, [0, , 0.2086, , 0.2238, 0.3305, , 0.236, , , , , , 0.0687, , , , , 0.5894, , , 0.0532, , 0.5]);
+    aa.add('las', 5, [0, , 0.2949, 0.2527, 0.3167, 0.6796, 0.2, -0.2246, , , , , , 0.8584, -0.586, , , , 1, , , 0.2201, , 0.5]);
+    aa.add('hit', 1, [1, , 0.2548, , 0.1007, 0.7539, 0.0996, -0.5302, , , , , , 0.7769, -0.4436, , , , 1, , , , , 0.5]);
+    aa.add('end', 1, [0, , 0.0108, 0.3989, 0.4412, 0.444, , , , , , 0.5147, 0.6024, , , , , , 1, , , , , 0.5]);
+}
+</script>
+        <script>"use strict";
+/* Utility functions */
+function lerp(a, b, t) {
+    return a * (1 - t) + b * t;
+}
+function clamp(x, a, b) {
+    return (x < a) ? a : (x > b) ? b : x;
+}
+</script>
+        <script>"use strict";
+var KEYCODES = {
+    // Arrows (player 2)
+    37: {
+        player: 2,
+        action: 0 /* LEFT */,
+    },
+    39: {
+        player: 2,
+        action: 1 /* RIGHT */,
+    },
+    38: {
+        player: 2,
+        action: 2 /* UP */,
+    },
+    40: {
+        player: 2,
+        action: 3 /* DOWN */,
+    },
+    // WASD (player 1)
+    65: {
+        player: 1,
+        action: 0 /* LEFT */,
+    },
+    68: {
+        player: 1,
+        action: 1 /* RIGHT */,
+    },
+    87: {
+        player: 1,
+        action: 2 /* UP */,
+    },
+    83: {
+        player: 1,
+        action: 3 /* DOWN */,
+    },
+    // Space bar (player 1)
+    32: {
+        player: 1,
+        action: 2 /* UP */,
+    }
+};
+var controls = [
+    [],
+    [false, false, false, false],
+    [false, false, false, false],
+];
+function updateControls(event, keyDown) {
+    if (keyDown && (event.altKey || event.ctrlKey || event.metaKey || event.repeat)) {
+        return;
+    }
+    var a;
+    if (a = KEYCODES[event.keyCode]) {
+        controls[a.player][a.action] = keyDown;
+    }
+}
+document.body.addEventListener('keydown', function (event) { return updateControls(event, true); });
+document.body.addEventListener('keyup', function (event) { return updateControls(event, false); });
+/* Hack to respond to clicks and touches */
+document.body.addEventListener('mousedown', function (event) {
+    if (event.button)
+        return;
+    event.preventDefault();
+    controls[1][2 /* UP */] = true;
+});
+</script>
+        <script>"use strict";
+var startMainloop = (function () {
+    var update = function (t) { return undefined; };
+    var render = function (t) { return undefined; };
+    var T = 0.02;
+    var then = -1;
+    var t = 0;
+    function mainloop(now) {
+        requestAnimationFrame(mainloop);
+        if (then == -1) {
+            then = now;
+        }
+        t += (now - then) * 0.001;
+        then = now;
+        while (t > 0) {
+            t -= T;
+            update(T);
+        }
+        render(t / T + 1);
+    }
+    function startMainloop(updateFun, renderFun) {
+        update = updateFun;
+        render = renderFun;
+        requestAnimationFrame(mainloop);
+    }
+    return startMainloop;
+})();
+</script>
+        <script>"use strict";
+var Vec2 = /** @class */ (function () {
+    function Vec2(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    Vec2.prototype.set = function (x, y) {
+        this.x = x;
+        this.y = y;
+    };
+    Vec2.prototype.setTo = function (other) {
+        this.x = other.x;
+        this.y = other.y;
+    };
+    Vec2.prototype.copy = function () {
+        return new Vec2(this.x, this.y);
+    };
+    Vec2.prototype.add = function (other) {
+        this.x += other.x;
+        this.y += other.y;
+    };
+    return Vec2;
+}());
+</script>
+        <script>"use strict";
+var cwidth = 960;
+var cheight = 540;
+var aspect = 16 / 9;
+var cscale = 1;
+var container = document.getElementById('container');
+var bcanvas = document.getElementById('bcanvas');
+var canvas = document.getElementById('canvas');
+var bcontext = bcanvas.getContext('2d');
+var context = canvas.getContext('2d');
+var transformProperty = 'transform';
+if (!(transformProperty in container.style)) {
+    transformProperty = 'webkitTransform';
+}
+bcanvas.width = canvas.width = cwidth;
+bcanvas.height = canvas.height = cheight;
+function setSize(x, prop, value) {
+    x.style[prop] = value + "px";
+}
+function handleResize() {
+    var w = innerWidth;
+    var h = innerHeight;
+    if (w / h > aspect)
+        w = h * aspect;
+    else
+        h = w / aspect;
+    cscale = cwidth / w;
+    setSize(container, 'width', w);
+    setSize(container, 'height', h);
+    setSize(container, 'left', 0.5 * (innerWidth - w));
+    setSize(container, 'top', 0.5 * (innerHeight - h));
+    var scale = 0.5 * w / cwidth;
+    var scale3d = "scale3d(" + scale + "," + scale + ",1)";
+    startScreen.style[transformProperty] = scale3d;
+}
+addEventListener('resize', handleResize);
+addEventListener('orientationchange', handleResize);
+canvas.addEventListener('contextmenu', function (event) {
+    event.preventDefault();
+});
+canvas.addEventListener('touchstart', function (event) {
+    event.preventDefault();
+    controls[2][2 /* UP */] = true;
+});
+/* Text helpers */
+bcontext.textAlign = context.textAlign = 'center';
+function setFontSize(c, n) {
+    c.font = n + "px 'Segoe UI','Helvetica Neue',sans-serif";
+}
+function paintTextBlob(canvas, text, baseline) {
+    var cap = 16;
+    var top = baseline - 25;
+    var middle = top + cap;
+    var bottom = middle + cap;
+    var len = canvas.measureText(text).width;
+    var pad = 0.5 * (cwidth - len);
+    canvas.beginPath();
+    canvas.moveTo(pad, top);
+    canvas.lineTo(cwidth - pad, top);
+    canvas.quadraticCurveTo(cwidth - pad + cap, top, cwidth - pad + cap, middle);
+    canvas.quadraticCurveTo(cwidth - pad + cap, bottom, cwidth - pad, bottom);
+    canvas.lineTo(pad, bottom);
+    canvas.quadraticCurveTo(pad - cap, bottom, pad - cap, middle);
+    canvas.quadraticCurveTo(pad - cap, top, pad, top);
+    canvas.fillStyle = 'rgba(0,0,0,0.5)';
+    canvas.fill();
+    canvas.fillStyle = '#fff';
+    canvas.fillText(text, 0.5 * cwidth, baseline, 900);
+}
+</script>
+        <script>"use strict";
+function renderBackground(c, title, ez) {
+    c.clearRect(0, 0, cwidth, cheight);
+    var f = 310;
+    var points = [];
+    var a = (Math.random() * 0.03 - Math.random() * 0.03) * Math.PI;
+    for (var x = -250; x <= 250; x += 10) {
+        for (var z = -250; z <= 250; z += 10) {
+            var d = Math.sqrt(x * x + z * z);
+            points.push({
+                x: x * Math.cos(a) - z * Math.sin(a),
+                y: Math.random() * 3 + 60,
+                z: x * Math.sin(a) + z * Math.cos(a),
+            });
+        }
+    }
+    c.fillStyle = c.strokeStyle = ez ? '#32fa05' : '#18ffff';
+    function lineToPoint(p) {
+        var k = f / (f + p.z);
+        var x = p.x * k + 0.5 * cwidth;
+        var y = p.y * k + 0.5 * (cheight - stageFloor);
+        if (x < 0 || x > cwidth || y < 0 || y > cheight)
+            return;
+        c.lineTo(x, y);
+    }
+    for (var v = 0; v < 51; ++v) {
+        c.beginPath();
+        for (var u = 0; u < 51; ++u) {
+            lineToPoint(points[51 * v + u]);
+        }
+        c.stroke();
+    }
+    for (var u = 0; u < 51; ++u) {
+        c.beginPath();
+        for (var v = 0; v < 51; ++v) {
+            lineToPoint(points[51 * v + u]);
+        }
+        c.stroke();
+    }
+    /* Stars */
+    for (var n = 0; n < 200; ++n) {
+        var x = Math.random() * cwidth;
+        var y = Math.random() * 80;
+        c.fillStyle = 'rgba(' +
+            Math.round(Math.random() * 100) + 155 + ',' +
+            Math.round(Math.random() * 100) + 155 + ',' +
+            Math.round(Math.random() * 100) + 155 + ',' +
+            Math.random() + ')';
+        c.beginPath();
+        c.arc(x, y, Math.random() + 0.5, 0, Math.PI * 2);
+        c.fill();
+    }
+    if (title) {
+        setFontSize(c, 25);
+        paintTextBlob(c, '"' + title + '"', 48);
+    }
+}
+</script>
+        <script>"use strict";
+function makeSprite(width, height, callback) {
+    var hcanvas = document.createElement('canvas');
+    hcanvas.width = width;
+    hcanvas.height = height;
+    var canvas = hcanvas.getContext('2d');
+    callback(canvas);
+    /* Used for debugging * /
+    hcanvas.style.width = width + 'px'
+    hcanvas.style.height = height + 'px'
+    hcanvas.style.backgroundColor = '#FF0080'
+    hcanvas.style.border = '20px solid #FF0080'
+    document.body.appendChild(hcanvas)
+    /* End debugging */
+    return hcanvas;
+}
+</script>
+        <script>"use strict";
+/// <reference path="you_have_to.d.ts" />
+var gravity = 48;
+var jumpAccel = -900;
+var walkSpeed = 7;
+var playerSize = 40;
+var playerStart = new Vec2(60, 160);
+var Player = /** @class */ (function () {
+    function Player() {
+        this.dead = false;
+        this.doubleJump = false;
+        this.nDeaths = 0;
+        this.onGround = false;
+        this.pos = playerStart.copy();
+        this.prevPos = playerStart.copy();
+        this.r = 0.5 * playerSize;
+        this.velocity = new Vec2(0, 0);
+    }
+    Player.prototype.restart = function () {
+        this.dead = false;
+        this.doubleJump = false;
+        this.onGround = false;
+        this.pos = playerStart.copy();
+        this.prevPos = playerStart.copy();
+        this.velocity.set(0, 0);
+    };
+    Player.prototype.standOn = function (floor) {
+        this.doubleJump = true;
+        this.onGround = true;
+        this.pos.y = floor - this.r;
+        this.velocity.x = walkSpeed;
+        this.velocity.y = 0;
+    };
+    Player.prototype.kill = function () {
+        this.dead = true;
+        this.velocity.x *= 0.5;
+        if (this.velocity.y < 0)
+            this.velocity.y * 0.5;
+    };
+    Player.prototype.update = function (t, stage) {
+        var jumping = controls[1][2 /* UP */] || controls[2][2 /* UP */];
+        if (jumping && !this.dead) {
+            if (this.onGround) {
+                this.onGround = false;
+                this.velocity.y = t * jumpAccel;
+                aa.play('jmp');
+            }
+            else if (this.doubleJump) {
+                this.doubleJump = false;
+                this.velocity.y = t * jumpAccel;
+                aa.play('jmp');
+            }
+            controls[1][2 /* UP */] = controls[2][2 /* UP */] = false;
+        }
+        this.prevPos.setTo(this.pos);
+        this.velocity.y += t * gravity;
+        this.pos.add(this.velocity);
+        if (this.pos.x > stageEnd - this.r && !this.dead) {
+            // stage.reset()
+            // this.restart()
+            return true;
+        }
+        if (!this.dead) {
+            var _a = stage.getFloor(this.pos.x - this.r, this.pos.x + this.r), floor = _a[0], floor2 = _a[1];
+            if (this.pos.y >= floor - this.r && this.prevPos.y <= floor - this.r) {
+                this.standOn(floor);
+            }
+            else if (this.pos.y >= floor2 - this.r && this.prevPos.y <= floor2 - this.r) {
+                this.standOn(floor2);
+            }
+            else {
+                this.onGround = false;
+            }
+        }
+        if (this.pos.y > cheight + this.r) {
+            ++this.nDeaths;
+            stage.reset();
+            this.restart();
+            aa.play('bip');
+            return;
+        }
+        if (this.dead)
+            return;
+        var wall = stage.getWall(this.pos.x + this.r, this.pos.y + this.r);
+        if (this.pos.x > wall - this.r) {
+            this.pos.x = wall - this.r;
+        }
+    };
+    Player.prototype.render = function (c, t) {
+        var x = lerp(this.prevPos.x, this.pos.x, t);
+        var y = lerp(this.prevPos.y, this.pos.y, t);
+        c.fillStyle = this.dead ? '#90a4ae' : '#fff';
+        c.fillRect(x - this.r, y - this.r, playerSize, playerSize);
+        c.fillStyle = this.dead ? '#607d8b' : '#bdbdbd';
+        c.fillRect(x, y - 10, 4, 10);
+        c.fillRect(x + 10, y - 10, 4, 10);
+    };
+    return Player;
+}());
+</script>
+        <script>"use strict";
+/// <reference path="you_have_to.d.ts" />
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    }
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+var laserActive = 0.82;
+var laserFadeOut = 0.24;
+var laserPrefire = 0.4;
+var laserSize = 120;
+var prefireColor = '#ff1507';
+var laserPalette = ['#ffdc26', '#fdec4a', '#fff699', '#fffee6'];
+var Laser = /** @class */ (function () {
+    function Laser(activation, y) {
+        this.activation = activation;
+        this.end = activation + laserPrefire + laserActive;
+        this.killing = false;
+        this.paletteIndex = 0;
+        this.r = 0.5 * laserSize;
+        this.rPrev = this.r;
+        this.t = 0;
+        this.y = y;
+        this.a = 1 / laserFadeOut;
+        this.b = this.end / laserFadeOut;
+        this.sound = true;
+    }
+    Laser.prototype.reset = function () {
+        this.killing = false;
+        this.paletteIndex = 0;
+        this.r = 0.5 * laserSize;
+        this.rPrev = this.r;
+        this.t = 0;
+        this.sound = true;
+    };
+    Laser.prototype.kills = function (p) {
+        return this.killing && !p.dead && Math.abs(this.y - p.pos.y) < this.r + p.r;
+    };
+    Laser.prototype.update = function (t) {
+        this.t += t;
+        this.killing = this.t > this.activation + laserPrefire && this.t < this.end;
+        this.rPrev = this.r;
+        this.r = 0.5 * laserSize * clamp(-this.a * this.t + this.b, 0, 1);
+    };
+    Laser.prototype.render = function (c, t) {
+        this.paletteIndex = (this.paletteIndex + 1) % 4;
+        if (this.t < this.activation || this.t > this.end)
+            return;
+        if (this.t < this.activation + laserPrefire) {
+            if (this.paletteIndex & 2)
+                return;
+            c.fillStyle = prefireColor;
+            this._paintPrefire(c);
+        }
+        else {
+            var r = lerp(this.rPrev, this.r, t);
+            c.fillStyle = laserPalette[this.paletteIndex];
+            this._paint(c, r);
+            if (this.sound) {
+                this.sound = false;
+                aa.play('las');
+            }
+        }
+    };
+    Laser.prototype._paint = function (c, r) {
+        c.fillRect(0, this.y - r, cwidth, 2 * r);
+    };
+    Laser.prototype._paintPrefire = function (c) {
+        c.fillRect(0, this.y - 1, cwidth, 3);
+    };
+    return Laser;
+}());
+var LaserV = /** @class */ (function (_super) {
+    __extends(LaserV, _super);
+    function LaserV() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    LaserV.prototype.kills = function (p) {
+        return this.killing && !p.dead && Math.abs(this.y - p.pos.x) < this.r + p.r;
+    };
+    LaserV.prototype._paint = function (c, r) {
+        c.fillRect(this.y - r, 0, 2 * r, cheight);
+    };
+    LaserV.prototype._paintPrefire = function (c) {
+        c.fillRect(this.y - 1, 0, 3, cheight);
+    };
+    return LaserV;
+}(Laser));
+</script>
+        <script>"use strict";
+var HOLE = -255;
+/* Copy paste:
+    {
+        title: '',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [],
+    },
+*/
+var LEVELS = [
+    {
+        title: 'You Are Now Entering',
+        cols: [60, 60, 60, 60, 60, 60, 60, 60, 60, 40, 40, 20, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [],
+        ez: true,
+    },
+    {
+        title: 'Jump Around',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [],
+        ez: true,
+    },
+    {
+        title: 'Double Jump',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 310, 310, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [],
+        ez: true,
+    },
+    {
+        title: 'Beware Laser Beam',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 140, 140, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [
+            {
+                act: 1.05,
+                pos: 60,
+            },
+        ],
+        ez: true,
+    },
+    {
+        title: 'You Are Now Leaving',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 20, 40, 40, 60, 60, 60, 60, 60, 60, 60, 60, 60],
+        lasers: [
+            {
+                act: 2.9,
+                pos: 60,
+            },
+        ],
+        ez: true,
+    },
+    // Intro sequence ended
+    {
+        title: 'Chill',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [
+            {
+                act: 1.20,
+                pos: 440,
+                v: true,
+            },
+        ],
+    },
+    {
+        title: 'Obstacle Race',
+        cols: [0, 0, 0, 0, HOLE, HOLE, 150, 0, 0, 0, 0, HOLE, HOLE, 200, 0, 0, 0, 0, HOLE, HOLE, 300, 0],
+        lasers: [],
+    },
+    {
+        title: 'Bunny Hop',
+        cols: [0, 0, 0, 0, 0, 140, 0, 0, 0, 0, 0, 0, 140, 0, 0, 0, 0, 0, 0, 140, 0, 0],
+        lasers: [
+            {
+                act: 2.9,
+                pos: 60,
+            },
+            {
+                act: 2.65,
+                pos: 260,
+            },
+            {
+                act: 1.85,
+                pos: 260,
+            },
+            {
+                act: 1.05,
+                pos: 260,
+            },
+        ],
+    },
+    {
+        title: 'Mind the Gap',
+        cols: [0, 0, 0, 0, 0, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, 0, 0, 0, 0, 0],
+        lasers: [
+            {
+                act: 1.05,
+                pos: 260,
+            },
+        ],
+    },
+    {
+        title: 'Boost',
+        cols: [0, 0, 0, 0, 0, 0, 20, 20, 20, 20, 0, 0, 0, 0, 330, 330, 0, 0, 0, 0, 0, 0],
+        lasers: [
+            {
+                act: 3.6,
+                pos: 60,
+            },
+            {
+                act: 2.9,
+                pos: 60,
+            },
+            {
+                act: 1.70,
+                pos: 500,
+                v: true,
+            },
+        ],
+    },
+    {
+        title: 'Unchill',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0],
+        lasers: [
+            {
+                act: 2.9,
+                pos: 60,
+            },
+            {
+                act: 1.10,
+                pos: 400,
+                v: true,
+            },
+        ],
+    },
+    {
+        title: 'Jump Start',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, HOLE, HOLE, HOLE, HOLE, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [
+            {
+                act: 0.4,
+                pos: 60,
+            },
+        ],
+    },
+    {
+        title: 'You Are Now Ascending',
+        cols: [0, 0, 20, 20, 40, 40, 60, 60, 80, 80, 100, 100, 120, 120, 140, 140, 160, 160, 180, 180, 200, 200],
+        lasers: [
+            {
+                act: 1.8,
+                pos: 120,
+            },
+            {
+                act: 1.1,
+                pos: 80,
+            },
+        ],
+    },
+    {
+        title: 'Back Up',
+        cols: [200, 200, 200, 200, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, HOLE, 120, 120, 140, 140, 160, 160, 180, 180, 200, 200],
+        lasers: [
+            {
+                act: 1.28,
+                pos: 640,
+                v: true,
+            },
+            {
+                act: 0.88,
+                pos: 380,
+            },
+            {
+                act: 0.48,
+                pos: 260,
+            },
+        ],
+    },
+    {
+        title: 'Never Changes',
+        cols: [80, 80, 80, 80, 80, 80, 80, 80, 80, 0, 0, 0, 0, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        lasers: [
+            {
+                act: 3.6,
+                pos: 140,
+            },
+            {
+                act: 2,
+                pos: 140,
+            },
+            {
+                act: 1.2,
+                pos: 140,
+            },
+        ],
+        ez: true,
+    },
+    {
+        title: 'Written for js13kGames–2018',
+        cols: [200, 200, 180, 180, 160, 160, 140, 140, 120, 120, 100, 100, 80, 80, 60, 60, 40, 40, 20, 20, 0, 0],
+        lasers: [
+            {
+                act: 1.20,
+                pos: 60,
+            },
+        ],
+        ez: true,
+    },
+    {
+        title: 'EOL (End of Line)',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500],
+        lasers: [],
+        ez: true,
+        render: function (c) {
+            c.clearRect(stagePadding + 80, 0, cwidth, cheight);
+            c.fillStyle = '#fff';
+            c.beginPath();
+            c.arc(stagePadding + 80, stageFloor + 2, 5, 0, Math.PI * 2);
+            c.fill();
+        },
+        renderBackground: function (c) {
+            setFontSize(c, 25);
+            paintTextBlob(c, 'Congratulations!', stageFloor - 15);
+            setFontSize(c, 18);
+            paintTextBlob(c, '(Reload the page to start a new game)', stageFloor + 22);
+        },
+    },
+    // Title screen
+    {
+        title: '',
+        cols: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        lasers: [],
+        ez: true,
+    },
+];
+</script>
+        <script>"use strict";
+/// <reference path="you_have_to.d.ts" />
+var stageFloor = 440;
+var stageSize = 880;
+var stagePadding = 0.5 * (cwidth - stageSize);
+var stageEnd = stagePadding + stageSize;
+var colSize = 40;
+var colCount = stageSize / colSize;
+var Stage = /** @class */ (function () {
+    function Stage(lvl) {
+        this.columns = lvl.cols;
+        this.lasers = lvl.lasers.map(function (a) {
+            return new (a.v ? LaserV : Laser)(a.act, a.v ? stagePadding + a.pos : stageFloor - a.pos);
+        });
+        this.staticImage = makeSprite(cwidth, cheight, this.renderOnce.bind(this));
+        if (lvl.render)
+            lvl.render(this.staticImage.getContext('2d'));
+        renderBackground(bcontext, lvl.title, lvl.ez);
+        if (lvl.renderBackground)
+            lvl.renderBackground(bcontext);
+    }
+    Stage.prototype.getFloor = function (x, x2) {
+        var a = stageFloor - this.columns[Math.floor((x - stagePadding) / colSize)];
+        var b = stageFloor - this.columns[Math.floor((x2 - stagePadding) / colSize)];
+        return a < b ? [a, b] : [b, a];
+    };
+    Stage.prototype.getWall = function (x, y) {
+        var n = Math.floor((x - stagePadding) / colSize);
+        if (y > stageFloor - this.columns[n]) {
+            return stagePadding + n * colSize;
+        }
+        return x;
+    };
+    Stage.prototype.reset = function () {
+        for (var n = 0; n < this.lasers.length; ++n) {
+            this.lasers[n].reset();
+        }
+    };
+    Stage.prototype.kills = function (p) {
+        for (var n = 0; n < this.lasers.length; ++n) {
+            if (this.lasers[n].kills(p))
+                return true;
+        }
+        return false;
+    };
+    Stage.prototype.update = function (t) {
+        for (var n = 0; n < this.lasers.length; ++n) {
+            this.lasers[n].update(t);
+        }
+    };
+    Stage.prototype.render = function (c, t) {
+        c.drawImage(this.staticImage, 0, 0);
+        for (var n = 0; n < this.lasers.length; ++n) {
+            this.lasers[n].render(c, t);
+        }
+    };
+    Stage.prototype.renderOnce = function (c) {
+        for (var n = 0; n < colCount; ++n) {
+            var left = stagePadding + n * colSize;
+            if (this.columns[n] == HOLE) {
+                c.fillStyle = '#fff';
+                if (n != 0 && this.columns[n - 1] != HOLE) {
+                    // c.fillRect(left - 2, stageFloor + 4, 2, 96)
+                    c.fillRect(left - 2, stageFloor + 4, 2, 36);
+                    c.fillRect(left - 2, stageFloor + 55, 2, 20);
+                    c.fillRect(left - 2, stageFloor + 90, 2, 10);
+                }
+                if (n != colCount - 1 && this.columns[n + 1] != HOLE) {
+                    // c.fillRect(left + colSize, stageFloor + 4, 2, 96)
+                    c.fillRect(left + colSize, stageFloor + 4, 2, 36);
+                    c.fillRect(left + colSize, stageFloor + 55, 2, 20);
+                    c.fillRect(left + colSize, stageFloor + 90, 2, 10);
+                }
+            }
+            else {
+                var top_1 = stageFloor - this.columns[n];
+                c.fillStyle = '#fff';
+                c.fillRect(left, stageFloor, colSize, 4);
+                c.fillStyle = '#f1f1f1';
+                c.fillRect(left, top_1, colSize, this.columns[n]);
+            }
+        }
+    };
+    return Stage;
+}());
+</script>
+        <script>"use strict";
+/// <reference path="you_have_to.d.ts" />
+var player = new Player;
+var nowPlaying = 17; // Title screen
+var stage = new Stage(LEVELS[nowPlaying]);
+var parallax = 0.09;
+var parallay = 0.04;
+function update(t) {
+    var nextLevel = player.update(t, stage);
+    if (nextLevel) {
+        if (nowPlaying != LEVELS.length - 1)
+            ++nowPlaying;
+        stage = new Stage(LEVELS[nowPlaying]);
+        player.restart();
+        aa.play('end');
+        return;
+    }
+    stage.update(t);
+    if (stage.kills(player)) {
+        player.kill();
+        aa.play('hit');
+    }
+}
+function render(t) {
+    context.clearRect(0, 0, cwidth, cheight);
+    context.save();
+    var x = lerp(player.prevPos.x, player.pos.x, t);
+    var y = lerp(player.prevPos.y, player.pos.y, t);
+    context.translate((0.5 * cwidth - x) * parallax, (0.5 * cheight - y) * parallay);
+    stage.render(context, t);
+    player.render(context, t);
+    context.restore();
+    if (player.nDeaths) {
+        setFontSize(context, 20);
+        paintTextBlob(context, 'Deaths: ' + player.nDeaths, 500);
+    }
+}
+// Music
+var music = null;
+function initMusic() {
+    var synth = new sonant;
+    for (var i = 0; i < 8; ++i) {
+        synth.generate(i);
+    }
+    music = synth.createAudio();
+    music.loop = true;
+    music.volume = 0.7;
+}
+if (!isMobile) {
+    try {
+        initMusic();
+    }
+    catch (err) {
+    }
+}
+// Title screen
+var loadingScreen = document.getElementById('load');
+var startScreen = document.getElementById('home');
+var startButton = document.getElementById('start');
+function initMenu() {
+    if (isMobile)
+        document.body.className = 'mobile';
+    var musicToggle = document.getElementById('m');
+    var soundToggle = document.getElementById('s');
+    musicToggle.checked = !(soundToggle.checked = true);
+    musicToggle.addEventListener('change', function (event) {
+        if (!music)
+            return;
+        if (musicToggle.checked) {
+            music.currentTime = 0;
+            music.play();
+        }
+        else
+            music.pause();
+    });
+    soundToggle.addEventListener('change', function (event) {
+        if (aa.on = soundToggle.checked) {
+            aa.play('bip');
+        }
+    });
+    container.removeChild(loadingScreen);
+    // if (music) music.play()
+}
+function start() {
+    container.removeChild(startScreen);
+    nowPlaying = 0;
+    stage = new Stage(LEVELS[nowPlaying]);
+    if ((isMobile || cscale > 1) && document.body.requestFullscreen) {
+        document.body.requestFullscreen();
+    }
+    startMainloop(update, render);
+    aa.play('bip');
+}
+startButton.addEventListener('mousedown', start);
+startButton.addEventListener('touchstart', start);
+handleResize();
+initMenu();
+</script>
+    </body>
+</html>

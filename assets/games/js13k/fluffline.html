@@ -1,0 +1,2362 @@
+﻿<html><head><meta charset="UTF-8"><script>
+const UP=1, LEFT=8, RIGHT=2, DOWN=4, KEY_A=65, KEY_W=87, KEY_D=68, KEY_U=85, KEY_C=67, KEY_S=83, KEY_M=77, KEY_P=80, KEY_J=74, KEY_R=82;
+const ACT_UPGR=0, ACT_SHOOT=1, ACT_REMDIN=2, ACT_REMSPIN=3, ACT_UPGRWIFI=4;
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		GLOBALS, Current game object
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+	var svgCollection = [], 
+		svgFox, 
+		svgTail, 
+		svgFeet, 
+		svgCloud, 
+		svgTree, 		
+		svgDino, 
+		svgDinoLeg, 
+		svgWifi, 
+		svgCactus,
+		
+		hut, 
+		firewall,
+		cactus,
+		wifi,
+		cloud1,
+		cloud2,		
+		dino,				
+		hero,
+		sonya,
+		spinner,
+		powerUps;
+		
+	var spr;							// Global sprite manager instance
+	var wPlayed, wIntro, wR0;			// Scenes
+	
+	var tempMap=[], map;				// Map creation		
+	var dirMap=[[0, -1],[1, 0], [0, 1], [-1, 0]];
+	var dirBits=[UP,RIGHT,DOWN,LEFT];	
+	
+	var rnd = {				
+		seed : 1,
+		r : function(max, min) {			
+			// Sin 'random' adapted from https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript 
+			let x = Math.sin(rnd.seed++) * 10000;
+			max = max || 1;
+			min = min || 0;
+			return (x - Math.floor(x))*(max-min)+min;
+		}
+	}
+	
+	var fRnd;
+	if (!fRnd) {
+		fRnd=Object.assign({}, rnd); 
+	}
+	
+	var bCol, bSat;					//  Room colors - I know, it should be in an object
+	
+	var game = {					//  Game parameters
+		mapseed : 70, 				//  Map random seed
+		recurse: 4,					//  Map recursion - side rooms
+		
+		baud: 1024,					//  Starting bps
+		bitsNeeded: 13*1024,		//  13k needed to win
+		
+		upgrFloat: 0,				//  Floating/double jump upgrades
+		upgrQuality: 0,				//  Bit multiplier
+								
+		mapW:4,						//  Map width
+		mapH:3,						//  Map height
+		pixW: 32,					//  Room width
+		pixH: 17,					//  Room height
+		
+		currX: -1, 					//  Current room x pos
+		currY: 1, 	 				//  Current room y pos
+		room: 0, 	 				//  Current room (calculated from x and y, not always used)
+		fireX: 1,					//  Finish room x
+		fireY: 1,					//  Finish room y
+		heroX: 100,					//  Hero position x for game save
+		heroY: 200,					//  Hero position y for game save
+										
+		mapArray: [],				//  Array for mapdata
+		wifiUpgrades: [],			//  Array for wifi upgrade info
+		dinoLife: [],				//  Array for dino sleep
+		powerUps: [],				//  Array for powerups
+		visited: [],				//  Array for visited rooms
+		mapLife: 0,					//  Map will be shown for that much
+		showMap: false,				//  Or not at all
+		
+		spinners: 8,				//  Number of spinning wheels
+		
+		upgr: 0,					//  Next upgrade
+		cacti: 0,					//  'Cacti' collected
+		blocks: 0,					//  Blocks collected
+		
+		action: 0,					//  Action for J key
+		world: 0,					//  Current scene
+		fxon: false,
+		
+		baudDowns: 0,				//  Starting bps decrease 
+		
+		lastStamp: 0,				//  Time calculation
+		timeStamp: 0,				//  Time calculation
+		progress: 0,				//  Time calculation		
+		paused: false,				//  Is it paused?
+		
+		menu: false,				//  Menu screen
+		gameWon: false,				//  Game won				
+	},
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Upgrades and Actions
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+	
+	confirm ={},					//  This can be confirmed when buying
+	
+	upgrades = [					//  Upgrade list and actions
+			{	name: '<Analog Data Quality> (Double Signal Value)', cost: 500, act: function () {game.upgrQuality++;game.upgr++}},			
+			{	name: '<Double Jump>', cost: 500, act: function () {game.upgrFloat++;game.upgr++}},									
+			{	name: '<Digital Data Quality> (Double Signal Value)', cost: 1000, act: function () {game.upgrQuality++;game.upgr++}},
+			{	name: '<Floating>', cost: 1000, act: function () {game.upgrFloat++;game.upgr++}},						
+			{	name: '<Extreme Data Quality> (Double Signal Value)', cost: 3000, act: function () {game.upgrQuality++;game.upgr++}},
+			{	name: '- FULLY UPGRADED', cost: 1e13, act: function () {}}			
+		],
+		
+	actions= [
+			{},
+			{	name: 'Throw Cactus', cost: 0, act: function() {			
+								if (cactus.life>0) return;
+								game.cacti--;						
+								cactus.visible=true;
+								cactus.x=hero.x;
+								cactus.y=hero.y+30;
+								cactus.w=50;
+								cactus.h=50;
+								cactus.dx=Math.sign(hero.scaleX)*2;
+								cactus.life=80;								
+								}
+							},
+			{	name: 'Hybernate Dino', cost: 500, act: function() {																						
+								dino.timer=game.dinoLife[game.room]=1800;
+							}
+			
+			},
+			{	name: 'Remove 1 Spinner', cost: 200, act: function() {
+								game.spinners--;								
+							}
+			},
+			{	name: 'Upgrade Wi-Fi', cost: 300, act: function() {
+								game.wifiUpgrades[game.room]++;
+							}
+			}			
+	],
+	getActionNo= function() {
+			if (game.cacti>0 && dino.visible && dino.timer==0) {
+				return ACT_SHOOT;
+			}
+			
+			if (dino.visible && dino.timer>0) {
+				return ACT_REMDIN;
+			}
+			
+			if (game.cacti>0 && dino.visible && dino.timer>0) {
+				return ACT_UPGRWIFI;
+			}
+			
+			if (spinner.visible) {
+				return ACT_REMSPIN;
+			}
+												
+			return ACT_UPGR;
+			
+	},
+		
+	getAction= function() {
+			return actions[getActionNo()];
+	},
+		
+		
+	getUpgrade= function() {
+			return upgrades[game.upgr];
+	},
+		
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Info updater
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////		
+
+	info = {
+		texts: [],			// Text array
+		textY: 100,			// Y coordinate to show
+		
+		// Get next info
+		getCurrentInfo: function() {
+			if (info.texts.length==0) return ['',0] ;
+			
+			let retText='', maxLife=0, alpha=255;
+			
+			for (let i=0, l=info.texts.length; i<l; i++) {
+				let t=info.texts[i];
+				if ((i==0 || t.parallel) && t.life>0) {					// Parallel not implemented
+					t.life-=game.progress;
+					if (maxLife<t.life) maxLife=t.life;
+					retText+=t.text+'\n';
+				}
+			}
+			
+			if (maxLife<500) alpha=maxLife/500*255;
+			if (info.texts[0].start-info.texts[0].life<500) alpha=(info.texts[0].start-info.texts[0].life)/500*255;
+			let font=info.texts[0].font;
+			let color=info.texts[0].color;
+			
+			if (info.texts[0].life<0) {
+				info.texts.shift();	
+			}				
+			return [retText, ~~alpha, font, color];
+		},
+		
+		// Put info text in the queue
+		putInfo: function(t,l,p,c,f) {
+			if (info.texts.length>0) 
+				if (t==info.texts[0].t) return;
+				
+			info.texts.push({text: t, life: l, start: l, parallel: p || false, color: c || "#DDDDFF", font: f || "20px Arial Bold"});
+		},
+		
+		// Put info text at first position
+		putFirstInfo: function(t,l,p,c,f) {
+			if (info.texts.length>0) 
+				if (t==info.texts[0].t) return;
+				
+			info.texts.unshift({text: t, life: l, start: l, parallel: p || false, color: c || "#DDDDFF", font: f || "20px Arial Bold"});
+		},
+		
+		// Empty info text
+		clearInfo: function() {
+			info.texts=[];
+		},
+		
+		// Repaint info text
+		repaint: function() {
+			let t=info.getCurrentInfo(); 
+			let alpha=('0'+t[1].toString(16)).slice(-2);
+			ct.imageSmoothingEnabled = false;  //??? Not useful?
+			ct.font=t[2];
+			ct.lineWidth=2.5;
+			ct.strokeStyle="#000000"+alpha;
+			ct.fillStyle=t[3]+alpha;						
+			ct.strokeText(t[0], (640-ct.measureText(t[0]).width)/2, info.textY);
+			ct.fillText(t[0], (640-ct.measureText(t[0]).width)/2, info.textY);
+			ct.lineWidth=.5;			
+		}
+	},
+	
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Show stats and timer
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////		
+		
+	showStats= function() {
+			
+		//ct.fillStyle="#D88";
+		//ct.fillRect(280,370,300,20);			
+		ct.fillStyle="#FFF";
+		ct.font="10px Arial";
+		let baudDowns=0;
+		
+		if (game.currX>=0) {
+			baudDowns=~~(game.baudDowns*100)/100;
+			ct.fillText('SPACE: add/remove blocks', 250, 355);
+		
+			let act=getActionNo();			
+			game.action=getActionNo();
+			let txt='';
+			
+			if (act) {
+				let e=getAction();
+				txt= "J: Action -  "+ e.name+' - COST: '+e.cost;			
+				ct.fillText(txt, 250, 370);
+			} 
+			
+			txt='';							
+			let e=getUpgrade();
+			txt= "U: Upgrade "+ e.name+' - COST: '+e.cost;			
+			ct.fillText(txt, 250, 385);
+		} else if (game.currX==-1) {
+			txt= "J: Action - Throw Cactus"
+			ct.fillText(txt, 250, 370);
+		}
+		
+		if (game.cacti>0) {
+			txt=(game.cacti<9)?'🌵'.repeat(game.cacti):'🌵 x '+game.cacti;
+			ct.fillText(txt, 40, 379);
+		}
+		
+		if (game.blocks>0) {
+			txt=(game.blocks<5)?'⬜'.repeat(game.blocks):'⬜ x 5 (MAX)';
+			ct.fillText(txt, 40, 367);
+		}
+		
+		if (game.mapLife>0) {
+			ct.fillText('🗺️ '+convertTime(game.mapLife/1000)+"   M: Switch on/off",40,391);
+		} else {game.showMap=false};
+		 		
+		let baudUps=wifi.getUps();
+		let totalChange = ~~((baudUps - baudDowns)*100)/100;
+					
+		txt="   "+~~(game.baud)+ " bps   "+totalChange+"     ⮝ "+baudUps+"   ⮟ "+baudDowns;		
+		game.baud+=totalChange*game.progress/1000;
+		game.baudDowns+=game.progress/50000;
+		
+		ct.fillText(txt, 50, 355);
+		
+		ct.drawImage(svgWifi, 40, 344, 25, 25);
+	};
+	
+	function convertTime(t){
+		return ~~(t/60)+':'+('0'+~~(t%60)).slice(-2);
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Menu
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////		
+	
+	var menu = {
+		menuItems: [{item: 'New Game'},{item: 'Custom Map'},{item: 'Load Saved'}],
+		selected: 0,
+		init: function() {
+					//menu.saveHandler=inputHandler.callback;
+					inputHandler.callback=menu.selector;
+					// inputHandler.init(menu.saveHandler);
+				},
+		selector: function(e,b) {
+			//alert(m);
+			let m=inputHandler.keyMap;
+			if (m[KEYS.UP] && b) 							   
+				if (menu.selected>0) menu.selected--;					
+				
+			if (m[KEYS.DOWN] && b) 
+				if (menu.selected<menu.menuItems.length-1) menu.selected++;							
+
+			if ((m[32] || m[13])) {
+				switch (menu.selected) {
+				case 2: 
+					let g=JSON.parse(localStorage.getItem('gameObject'));
+					if (!g) return;
+					game=g;
+					game.world=wPlayed;
+					game.lastStamp=null;
+					info.clearInfo();
+					hero.x=game.heroX;
+					hero.y=game.heroY;
+					break;
+				case 0:
+					mapGenerator();
+					break;
+				case 1:
+					let df=~~fRnd.r(9999,1)+", "+~~fRnd.r(9,3)+", "+~~fRnd.r(9,2);					
+					let d=window.prompt("Enter values: <mapseed: 0-9999>, <width: 3-9>, <height: 2-9>",df);
+					game.timeStamp=performance.now();
+					m[13]=m[32]=0;
+					if (!d || !(/[0-9]{1,4} *, *[3-9] *, *[2-9] */g.test(d))) return;
+					
+					d=d.split(',');
+					game.mapseed=d[0];
+					game.mapW=d[1];
+					game.mapH=d[2];
+					mapGenerator();
+					break;
+				}
+				
+				inputHandler.callback=hero.controls;
+				game.menu=false;
+								
+				ttCt.text="";
+				ttCt.clearRect(0,0,640,400);
+				hero.visible=true;
+				//bgCt.repaint();
+				
+			}
+			
+			/* if (m[27]) {
+				inputHandler.callback=menu.saveHandler;
+				game.menu=false;
+				
+				ttCt.text="";
+				ttCt.clearRect(0,0,640,400);
+				//bgCt.repaint();
+			} */
+			
+		},
+		repaint: function(){
+					
+					let l=menu.menuItems.length, y=150, x=350;
+					for (let i=0; i<l; i++) {
+						let n=Math.sin(game.fr*6*Math.PI/180);
+						ttCt.fillStyle=(menu.selected==i)? "hsl(56,40%,"+(50+n*10)+"%)" : "#DDE";
+						ttCt.fillRect(x,y+i*40,170,30);
+						ttCt.fillStyle=(menu.selected==i)? "hsl(56,40%,"+(70+n*10)+"%)" : "#EEF";						
+						ttCt.fillRect(x+5,y+i*40+5,160,20);
+						let t=menu.menuItems[i].item;
+						ttCt.font="20px Arial";
+						ttCt.fillStyle=(menu.selected==i)? "#446" : "#446";												
+						ttCt.fillText(t,x+5+(160-ttCt.measureText(t).width)/2,y+i*40+20);
+						
+					}
+				}
+		
+	}
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		SVG Decoder
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+	
+	function svg (p, coded) {
+		
+		l=23;
+		p=p.split`#`;
+		let a=coded.split``.map(_=>_.charCodeAt(0)-32);
+		ret='';
+		for (i=0; i<a.length;) {		
+			c=a[i++];			
+			f=_=>`"#${p[_]}"`;
+			if (!c) { ret+=`"/> <path stroke=${f(a[i++]-l)} fill=${f(a[i++]-l)} d="`; continue}
+			if (c<l) ret+='_CcSsQqTtAaZMmLlHhVvZz-'[c]
+			else {
+				//if (c>=92) ret+=(Math.max(c-92,0)*96+a[i++]-l)
+				//else 
+				ret+=(c-l)+' ';
+			}
+		}		
+		el = document.createElement('img'); 
+		el.setAttribute("width", "100px");
+		el.setAttribute("height", "100px");
+ 		el.setAttribute("src", 'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink= "http://www.w3.org/1999/xlink" viewBox="0 0 100 100" width="100px" height="100px"><g>'+ret.slice(4)+'"/></g></svg>'));
+		el.palette=p;		
+		spcont.appendChild(el);
+		svgCollection.push(el);
+		return el;
+	}
+	
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Preloader
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+	function preloadCheck() {
+			if (!svgCollection.every(_=>_.complete && _.naturalHeight!==0)) {
+				setTimeout(preloadCheck, 100);
+			} else {
+				initMain();				
+			}
+	}
+	
+	function preload() {	
+		// Compressed using my own SVG compressor: https://github.com/zoli8000/SVGCompr
+		
+		svgFox=svg('#F90#FFF#000',' 78,kU.aS.SN.RK.H<.EE.8?.@Q.L^.[]+,KG*CC78787 79,MN*;;78787,XL*;;78787,Q].^].LW+ 7:,iR*9978787,OQ*9978787,YO*9978787');							
+		svgTail=svg('#F90#FEC',' 78,c7!aAZFRJ!EN9N7H!7E8A<>%BAP>+ 79,?B.CD.=D.@G.<G.>J%9N7H!7E8A;=%BAEA.?B+');
+		svgFeet=svg('#F90',' 78,=A!@D@C@F!<F:F8D!8B8?=A+');
+		
+		svgCloud=svg('#BBF#FFF',' 78,ZK*==78787,dK*==78787,lK*==78787,tK*==78787 79,RH*==78787,UF*==78787,[F*==78787,dB*==78787,iD*==78787,dG*==78787,lH*==78787,sF*==78787,yF*==78787');
+		svgTree=svg('##8AA#8AA',' 89,UU1>3J16>+ 8:,XF/CM16O+ 8:,XC/BI16M+ 8:,X@/@E16I+');
+		
+		svgWifi = svg('#000',' 78,:C.7=!769a69a=.^C!^;:;:C+,@O.=I!=A[A[I.XO!XG@G@O+,FZ.CU!COUOUU.RZ!RUFUF[+,K^*;;78787');				
+		svgDino = svg('#000#FFF',' 78,_?.R?.PA.PK.IP.DP.<K.<U.F_.P_.XR.[R.[P.XP.XK.^K.^I.[I.[G.aG.aA+ 79,VA*8878787');
+		svgDinoLeg = svg('#000',' 78,G_.Gd.Kd.Kb.Ib.I_+');
+		
+		svgCactus = svg('#000',' 78,I?.KA.K].I_.G_.E].EA.G?,?H.?O.CR.ER.EO.CO.CH,QF.QO.OR.KR.KP.MP.MO.MF');
+								
+		setTimeout(preloadCheck, 100);
+		
+	};	
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Main init
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////		
+
+	function initMain () {
+		ct = a.getContext`2d`;
+		bgCt = bg.getContext`2d`;
+		mpCt=mp.getContext`2d`;
+		tlCt=tl.getContext`2d`;
+		fxCt=fx.getContext`2d`;		
+		ttCt=tt.getContext`2d`;		
+		
+		spr = new Spr();
+		
+		grad=[];
+
+		wifi = new Sp0 (ct, svgWifi, false, 200, 270, 0, 0, 40, 40);					
+		cloud1 = new Sp0 (ct, svgCloud, false, 0, 70, 0.4, 0, 200,100);
+		cloud2 = new Sp0 (ct, svgCloud, false, 50, 50, 0.6, 0);
+		
+		dino = new Sp0 (ct, svgDino, false, 300, 250, 0, 0, 100, 100);
+		
+		hut = new Sp0 (ct, null, false, 200, 200, 0, 0, 100, 100);
+		hut.visible=false;
+		
+		firewall = new Sp0 (ct, null, false, 200, 200, 0, 0, 100, 100);
+		
+		hero = new Sp0 (ct, svgFox, true, 100, 250, 0, 0);		
+		
+		sonya = new Sp0 (ct, svgFox, true, 100, 250, 0, 0);		
+		sonya.sonya=true;
+		sonya.visible=false;
+		
+		changeWorld(wIntro,'intro');		
+		
+		main();
+	}
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Scene handler and scenes
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+	
+	function World () {
+		
+	}	
+		
+	World.prototype.init=function() {};
+	World.prototype.draw=function() {};	
+		
+	wPlayed = new World();
+			
+	function changeWorld (w,name) {
+		game.world=w;
+		game.world.name=name;
+		game.world.init();
+	}
+			
+	wPlayed.init=function()
+	{
+		//spr.collideMap=[];			
+		sonya.visible=false;
+		game.currX=1;
+		game.baudDowns=2;
+		game.currY=1;
+		game.blocks=2;
+		hut.visible=false;
+		firewall.visible=false;
+		
+		for (let i of [
+			'It must not be that far away.'			
+		]) {			
+			info.putInfo(i, 5000);		
+		}		
+	}	
+	
+	wPlayed.draw=function()
+	{
+		game.mapLife-=game.progress;
+		if (game.mapLife<0) {
+			game.mapLife=0;
+		} 
+		drawMap();
+		
+		showStats();
+	}			
+	
+	wIntro = new World();
+	wIntro.init=function()
+	{		
+		game.currX=-2;
+		game.grav=0;
+		//hut.visible=true;
+		hero.visible=false;
+		firewall.visible=false;
+		for (let i of [			
+			['FLUFFLINE','#000',3000,"100px Arial bold"],
+			['<R> to skip intro, <SPACE> for quick readers.','#AAAACC'], 
+			['Just a few clicks, and Sonya\'s birthday gifts are on the way.'],
+			['My daughter is counting down the hours till tomorrow!'],
+
+			//['⛸️',,1000,"70px Arial"],['🐻',,1000,"70px Arial"],['🐰',,1000,"70px Arial"], ['🎻',,1000,"70px Arial"],['🎁',,1000,"70px Arial"], // 15-20			
+			['⛸️',,1000],['🐻',,1000],['🐰',,1000], ['🎻',,1000],['🎁',,1000], // 15-20
+			['Sending order. Spinning... Spinning...'],
+			['It takes forever.'],
+			['What? No Internet?!'],		
+			['Sonya: I sleep one more, and I can play with my beautiful new toys!','#DD5566'],  //35-45
+			[' '],
+			['It must be that Firewall again.'],			// 45-50
+			['I have to repair the Net before it\'s too late!']			// 50-55
+		]) {			
+			info.putInfo(i[0], i[2]||5000, false, i[1],i[3]);		
+		}
+		wIntro.time=0;			
+		game.menu=true;
+		menu.init();
+	}	
+	wIntro.draw=function(){
+		
+		if (game.menu) return;
+		wIntro.time+=game.progress/1000;
+		if (wIntro.time>25) {		
+			hero.visible=true;
+		}
+		
+		if (wIntro.time>38 && wIntro.time<43) {						
+			sonya.visible=true;
+			sonya.x=100;
+			sonya.dx=.3;
+			if ((wIntro.time*3)%1<0.2) sonya.dy=-.2;
+		}
+		
+		if (wIntro.time>43 && wIntro.time<48) {
+			sonya.scaleX=-1;
+			sonya.dx=-.3;
+			if ((wIntro.time*3)%1<0.2) sonya.dy=-.2;
+		}
+		
+		if (wIntro.time>48 && wIntro.time<49) {			
+			hero.visible=true;
+			//hero.dx=0;
+			//hero.scaleX=1;
+			sonya.visible=false;
+		}
+		
+		if (wIntro.time<54) {
+			if (hero.x<70) hero.x=70;
+			if (hero.x>300) hero.x=300;
+		}
+		
+		if (wIntro.time>55) {
+			firewall.visible=true;
+			info.putInfo('The firewall must be close! Let\'s go!',2000);
+		}
+			
+		if (game.currX==-3) {
+			info.putFirstInfo('I think I should go east!', 5000);
+			hero.x=100;
+			game.currX=-2;
+		}
+		if (hero.x>500) {
+			
+			// game.currX=-1;			
+			hero.x=650;
+			changeWorld(wR0,'zeroroom');				
+		}
+		
+	}
+	
+	wR0 = new World();
+	wR0.init=function() {
+		sonya.visible=false;
+		info.clearInfo();		
+		hut.visible=false;		
+		firewall.visible=false;
+		for (let i of [
+			['The Firewall is not here yet.'],
+			['The time is ticking...'],
+			['I see a huge Stallosaurus! That\'s why my Net is not working!'],
+			['Luckily a Cactus is here - the silver bullet of the Stallosaurus!'],			
+			
+		]) {			
+			info.putInfo(i[0], 2000, false, i[1]);		
+		}
+		// game.currX=-1;
+		//hero.setCollide();
+		//bg.repaint();			
+		game.powerUps[1000]=[];
+		game.powerUps[1000].push({x: 15, y: 15, type: 2});		
+		hero.dx=0;
+	} 
+	
+	wR0.draw=function(){		
+		if (hero.x<20) {
+			hero.x=20;			
+			info.putFirstInfo('I haven\'t repaired the firewall yet.',2000);
+		}
+				
+		if (game.currX==0) {
+			game.currX=1;
+			changeWorld(wPlayed,'gameon');	
+		}
+		showStats();
+	}
+		
+	
+	wEnd = new World();
+	wEnd.init=function() {
+		info.textY=200;
+		info.putInfo('Press Enter to restart',3000);
+		if (game.baud<=0) {
+			ttCt.text="GAME OVER";
+			hero.visible=false;
+		} else 
+		{
+			ttCt.text="THE END";
+		}
+	}
+	
+	wEnd.draw=function() {
+		if (hero.x<70) hero.x=70;
+		if (hero.x>300) hero.x=300;
+		if (hero.y<200) hero.y=200;
+		if (sonya.x<70) sonya.x=70;
+		
+	}
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Generate mapArray
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+	function getRoom(x,y){return (x==-1)?1000:x+y*game.mapW}
+	
+	// Main block generator 
+	function generateBigBlocks() {	
+		rnd.seed=game.mapseed;
+		let totalX=game.mapW*game.pixW, totalY=game.mapH*game.pixH,  baseLine=[];
+		
+		for (let i=0; i<game.mapW*game.mapH; i++) {
+			tempMap[i]={roomType:0, onBasePath: false}; 
+		
+			// Roomtypes:    1
+			//				###
+			//			   8#0#2
+			//				###
+			//               4
+		}
+		
+		let prevX=1, prevY=1, curY=1, curX=2, a, s='Seed: '+rnd.seed;
+		
+		// Connect to next room
+		function drawConnect (prevX, prevY, curX, curY, basep) {
+			let cCell=getRoom(curX,curY);
+			let pCell=getRoom(prevX,prevY);
+			
+			tempMap[cCell].onBasePath=tempMap[cCell].onBasePath || basep;			
+			let n = tempMap[cCell].roomType, prevN = tempMap[pCell].roomType;
+			
+			if (prevX<curX) {
+				n = n | LEFT;
+				prevN = prevN | RIGHT;
+			}
+			
+			if (prevX>curX) {
+				n = n | RIGHT;
+				prevN = prevN | LEFT;
+			}
+			
+			if (prevY<curY) {
+				n = n | UP;
+				prevN = prevN | DOWN;
+			}
+			
+			if (prevY>curY) {
+				n = n | DOWN;
+				prevN = prevN | UP;
+			}
+						
+			tempMap[cCell].roomType= n;
+			tempMap[pCell].roomType= prevN;
+		}
+		
+		targetY = game.mapseed%game.mapH;
+		game.fireY=targetY;
+		game.fireX=game.mapW-1;
+				
+		
+		do {						
+			drawConnect(prevX, prevY, curX, curY, true);
+			
+			a=~~rnd.r(3);			
+			
+			switch (a) {
+				case 0: if (curX<game.mapW-1) {
+							prevY=curY;
+							prevX=curX;
+							curX++;	// right
+							baseLine.push(curX, curY);
+						}
+						break;
+				case 1: if (curY>0 && (curX<game.mapW-1 || curY>targetY)) {
+							prevY=curY;
+							prevX=curX;
+							curY--;	// up
+							baseLine.push(curX, curY);
+						}
+						break;
+				case 2: if (curY<game.mapH-1 && (curX<game.mapW-1 || curY<targetY)) {
+							prevY=curY;
+							prevX=curX;
+							curY++;	// down
+							baseLine.push(curX, curY);
+						}
+						break;
+			}
+			
+		}
+		 while (curX!=game.mapW-1 || curY!=targetY) 
+		drawConnect(prevX, prevY, curX, curY, true);			
+		
+		// Decorate with siderooms
+		function recurseMap (prevX, prevY, c) {
+			if (c==0) return;
+			for (let j=0; j<4; j++) {				
+				let curX=prevX+dirMap[(j+game.mapseed)%4][0];
+				let curY=prevY+dirMap[(j+game.mapseed)%4][1];
+				
+				if (curX<0 || curY<0 || curX>=game.mapW || curY>=game.mapH) continue;
+				
+				
+				if (tempMap[getRoom(curX, curY)].roomType!=0) continue;
+					drawConnect (prevX, prevY, curX, curY, false);
+					recurseMap (curX, curY, c-1);
+			}
+		}
+		
+		for (let i=0; i<baseLine.length; i+=2) {
+			prevX=baseLine[i]; prevY=baseLine[i+1];
+			recurseMap(prevX, prevY, game.recurse);
+		}
+		
+		drawConnect(0, 1, 1, 1, true);				
+	}
+	
+	// Draw a rectangle with a pattern on the map
+	function drawBox (ch,x0,y0,w,h) {
+			//st=~~x0+(~~y0)*game.mapW;
+			for (let i=~~y0; i<~~y0+h; i++) {
+				for (let j=~~x0; j<~~x0+w; j++) {
+					game.mapArray[j+i*game.mapW*game.pixW]=ch;
+				}
+			}
+		}
+	
+	// Draw a rectangle with a pattern on the current room
+	function drawBoxInRoom (ch,x,y,x0,y0,w,h) {			
+			drawBox (ch,x0+x*game.pixW, y0+y*game.pixH,w,h)
+		}
+
+	// Powerup drops to the bottom
+	function dropPowerUp (x,y,x_,p) {
+		let room=getRoom(x,y);
+		for (let j=~~fRnd.r(game.pixH-5,8); j<game.pixH; j++) {
+			//if ((game.mapArray[x_+x*game.pixW+(y*game.pixH+j)*game.mapW*game.pixW]=='#') &&
+			//(game.mapArray[x_+x*game.pixW+(y*game.pixH+j-1)*game.mapW*game.pixW]==' '))
+			
+			if (getTileCh(x,y,x_,j)=='#' && getTileCh(x,y,x_,j-1)==' ') 
+					{						
+						game.powerUps[room].push({x: x_, y: j-1, type: p});
+						break;
+					}; 
+					
+		}
+	}
+	
+	// Powerup drops when one is collected
+	function dropPowerUp2 (p) {
+		let x,y;
+		do {
+			x=~~rnd.r(game.mapW);
+			y=~~rnd.r(game.mapH);
+		}
+		 while (x==game.currX && y==game.currY) 		
+		
+		dropPowerUp(x,y,~~rnd.r(25,10),p);				
+	}
+	
+	// Get map info at given position
+	function getTileCh (x,y,x0,y0) {
+		return (game.mapArray[x0+x*game.pixW+(y*game.pixH+y0)*game.mapW*game.pixW]);
+	}
+	
+	function generateMap (x, y, diff) {				
+		
+		drawBox(' ',x*game.pixW+1,y*game.pixH+1,(game.pixW-2),(game.pixH-2));
+		
+		type = tempMap[getRoom(x,y)].roomType;
+		
+		for (let i=0; i<4; i++) {
+			if (dirBits[i] & type) {				
+				drawBoxInRoom(' ',x,y,(dirMap[i][0]+1)/2*game.pixW-3,[0,1.6,2,1.6][i]/2*game.pixH-3,6,6);
+			}		
+		}
+		
+		// Decorate		
+		for (let i=0, j=rnd.r(10,3); i<j; i++) {
+			let x0=rnd.r(game.pixW-9,5);
+			let y0=rnd.r(game.pixH-1,4);			
+			drawBox('#', x*game.pixW+x0, y*game.pixH+y0, rnd.r(10,4), (rnd.r(10)>8)?2:1);
+		}
+		
+		
+		for (let y0=2; y0<game.pixH-2; y0++) {
+			for (let x0=2; x0<game.pixW-2; x0++) {
+				let n=0;
+				for (let ny=-1; ny<2; ny++) {					
+					for (let nx=-1; nx<2; nx++) {					
+						if (game.mapArray[x0+nx+x*game.pixW+(y*game.pixH+y0+ny)*game.mapW*game.pixW]=="#") n++;
+					}	
+				}
+				if (n>6) {
+					drawBox(' ', x*game.pixW+x0, y*game.pixH+y0, rnd.r(3,2), rnd.r(2,1));
+				}
+				
+			}
+		} 
+		
+		if (rnd.r(3)<2) {// 66% chance for a WIFI
+			let x0=rnd.r(game.pixW*0.7,game.pixW*0.3);
+			let y0=rnd.r(game.pixH*0.7,game.pixH*0.3);
+			drawBox('W', x*game.pixW+x0, y*game.pixH+y0, 1, 1);
+			drawBox(' ', x*game.pixW+x0+1, y*game.pixH+y0, 3, 1);
+			drawBox('d', x*game.pixW+x0+2, y*game.pixH+y0, 1, 1);
+			drawBox('#', x*game.pixW+x0-2, y*game.pixH+y0+1, rnd.r(8,4), rnd.r(4,1)/2);
+			if (!(type & DOWN)) {
+				drawBox('#', x*game.pixW+x0-2-rnd.r(6), y*game.pixH+y0+2, rnd.r(8,4), rnd.r(3,2));
+			} else {
+				let stX=x0-2;				
+				drawBox('#', x*game.pixW+8, y*game.pixH+y0+2, stX-8, 1);
+				drawBox('#', x*game.pixW+8, y*game.pixH+y0+2, 1, game.pixH-y0-2-4);
+				drawBox('#', x*game.pixW+6, y*game.pixH+game.pixH-4, 4, 1);
+			}
+		} else {
+			let x0=rnd.r(game.pixW*0.7,game.pixW*0.3);
+			let y0=rnd.r(game.pixH*0.7,game.pixH*0.3);			
+			drawBox(rnd.r(2)?'S':'s', x*game.pixW+x0, y*game.pixH+y0, 1, 1);
+			drawBox('#', x*game.pixW+x0-2, y*game.pixH+y0+1, rnd.r(6,4), rnd.r(4,2)/2);
+			
+			drawBox(rnd.r(2)?'G':'D', x*game.pixW+x0-5, y*game.pixH+y0-4, 1, 1);
+			drawBox('#', x*game.pixW+x0-8, y*game.pixH+y0-4, rnd.r(6,4), 1);
+			
+		}
+	
+		// Decorate
+
+	
+		let room=getRoom(x,y);
+		game.powerUps[room]=[];
+		
+		for (let i=0, m=~~fRnd.r(14,6); i<m; i++) {
+			let x_=~~fRnd.r(game.pixW*0.7,game.pixW*0.3);
+			dropPowerUp(x,y,x_,0);				
+		}
+		
+		let dr=~~fRnd.r(4,1);
+		for (let i=0; i<2; i++) {
+			let x_=~~fRnd.r(game.pixW*0.7,game.pixW*0.3);
+			dropPowerUp(x,y,x_,dr);
+			dr=(dr%3)+1;
+		}
+		
+		if (x==game.fireX && y==game.fireY) {
+			drawBox('F', x*game.pixW+game.pixW-4, y*game.pixH+5, 1, 1);
+		}
+						
+	};
+	
+	function getMap (x,y) {
+		let valid=true;
+		if (x<0 || y<0) valid=false;
+		
+		let map=[];
+		for (let i=0; i<game.pixH; i++) {
+			for (let j=0; j<game.pixW; j++) {
+				map[i*game.pixW+j]=(valid) ? game.mapArray[x*game.pixW+j+(i+y*game.pixH)*game.pixW*game.mapW] : ' ';
+			}
+		}
+		
+		if (x==-1) {						
+			map[15*game.pixW+24]='d';
+			for (let i=0; i<32; i++)
+				map[16*game.pixW+i]='#';				
+		}
+		return map;
+	}
+	
+	function drawMap (t) {		
+		mpCt.clearRect(0,0,640,400);
+		if (!game.showMap || game.mapLife<=0) return;
+		mpCt.globalAlpha=0.7;
+		let cx=~~((640-game.pixW*game.mapW*2)/2), 
+			cy=~~((400-game.pixH*game.mapH*2)/2);
+
+		for (let i=0; i<game.pixH*game.mapH; i++) {
+			for (let j=0; j<game.pixW*game.mapW; j++) {
+				if (!game.visited[~~(j/game.pixW)+~~(i/game.pixH)*game.mapW] && !t) continue;
+				c=game.mapArray[j+i*game.pixW*game.mapW];
+				if (c=="#") {
+					mpCt.fillStyle="#FFF";
+					mpCt.fillRect(cx+j*2,cy+i*2,2,2);
+					mpCt.fill();
+					mpCt.fillStyle="#AAA";
+					mpCt.fillRect(cx+j*2+1,cy+i*2+1,2,2);
+					mpCt.fill();
+				}
+				
+				if (c=="F" ) {
+				mpCt.fillStyle="yellow";
+					mpCt.fillRect(cx+j*2-4,cy+i*2-4,8,8);
+					mpCt.fill();
+				}
+				
+			}
+		}
+		mpCt.fillStyle="#3D3";
+		mpCt.fillRect(cx+(game.currX*game.pixW+hero.x/640*game.pixW)*2,cy+(game.currY*game.pixH+hero.y/400*game.pixH)*2,6,6);
+		mpCt.fill();		
+		//mpCt.fillText("Seed: " + game.mapseed,300,300);
+		
+		//mpCt.fill
+	}
+	
+	function mapGenerator (seed) {
+		if (seed) game.mapseed=seed;
+		
+		generateBigBlocks();
+		drawBox('#',0,0,game.pixW*game.mapW,game.pixH*game.mapH);
+	
+		for (let i=0; i<game.mapH; i++) {
+			for (let j=0; j<game.mapW; j++) {
+				generateMap(j,i,2);
+			}
+		}	
+	}
+
+	// Put tile on the current map
+	function putTile (x,y,b) {
+		if (b) {
+			let bDark=[0,10,20,10][y%4];						
+			tlCt.fillStyle="hsl("+bCol+", "+bSat+"%, "+(20+bDark)+"%)" //"#454"
+			tlCt.beginPath();
+			tlCt.moveTo(x*20,y*20);
+			tlCt.lineTo(x*20+20,y*20+20);
+			tlCt.lineTo(x*20,y*20+20);
+			tlCt.fill();
+			
+			tlCt.fillStyle="hsl("+bCol+", "+bSat+"%, "+~~rnd.r(60+bDark,50+bDark)+"%)"//"#9a9"
+			tlCt.beginPath();
+			tlCt.moveTo(x*20,y*20);
+			tlCt.lineTo(x*20+20,y*20);
+			tlCt.lineTo(x*20+20,y*20+20);
+			tlCt.fill();
+			tlCt.closePath();
+			
+			tlCt.fillStyle="hsl("+bCol+", "+bSat+"%, "+~~rnd.r(40+bDark,35+bDark)+"%)" //"#676"
+			for (let i=0, j=~~rnd.r(5,3); i<j; i++) {							
+				tlCt.beginPath();
+				tlCt.arc(x*20+[0,6,10,10,0][i]+rnd.r(4,2),y*20+[0,6,10,0,10][i]+rnd.r(4,2),rnd.r(3.5,1.5),0,Math.PI*2);
+				tlCt.fill();
+			}
+			
+			tlCt.strokeRect(x*20, y*20, 20, 20);	
+			drawBoxInRoom('#',game.currX,game.currY,x,y,1,1);
+			spr.collideMap.push({id: 1000+x+y*game.pixW, hit: 'bl',  d: [20*x,20*y,20*x+20,20*y+20]});						
+		} else 
+		{
+			tlCt.clearRect(x*20-1, y*20-1, 22, 22);	
+			drawBoxInRoom(' ',game.currX,game.currY,x,y,1,1);
+			spr.removeCollideEventByID(1000+x+y*game.pixW);
+		}
+	}
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Spr - Sp0 Manager
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+	Spr = function() {
+		this.spriteList=[];
+		this.collideMap=[];
+		this.spriteCount=0;
+		
+		this.add  = function (e) {
+			this.spriteList.push(e);
+			this.spriteCount++;
+		}
+		
+		this.update  = function () {			
+			for (i=0; i<this.spriteCount; i++) {
+				if (this.spriteList[i].visible) this.spriteList[i].update();
+			}
+		}
+		
+		this.repaint  = function () {			
+			for (i=0; i<this.spriteCount; i++) {
+				this.spriteList[i].ctx.save();
+				if (this.spriteList[i].visible) this.spriteList[i].animate();
+				if (this.spriteList[i].visible) this.spriteList[i].repaint();
+				this.spriteList[i].ctx.restore();
+			}
+		}
+		
+		this.removeCollideEventByID=function(targetID) {
+
+			let cm=spr.collideMap;
+			for (let i=cm.length-1; i>=0; i--) {
+				if (!cm[i]) cm[i]=0;
+				if (cm[i].id==targetID) cm[i]=0;
+			}
+		}
+		return this;
+	};
+			
+	
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Sp0 Prototype
+//	
+//////////////////////////////////////////////////////////////////////////////////////////////
+	
+	Sp0 = function (ctx,image,grav,x,y,dx,dy,w,h) {
+		this.ctx=ctx; this.x=x||0; this.y=y||0; this.dx=dx||0; this.dy=dy||0;		
+		this.image=image;
+		this.grav=grav?0.05:0;		
+		if (!w && image) w=image.width;
+		if (!h && image) h=image.height;
+		this.w=w;
+		this.h=h;
+		this.r=0;
+		this.scaleX=1;
+		this.scaleY=1;
+		this.centerX = w/2;
+		this.centerY = h/2;		
+		this.frictionX = 1;
+		this.frictionY = 1;
+		this.visible = true;
+		this.causeHurt = 0;
+		this.collShift = [0,0,0,0];
+		//this.collArea={hit: 'bl',  d: [x,y,x+w,y+h]};
+		this.id=spr.spriteCount;
+		this.sp=1;
+		spr.add(this);
+	}
+		
+	Sp0.prototype.update = function () {
+		this.x+=this.dx; this.y+=this.dy;
+		this.dy+=this.grav;
+	}
+	
+	// Collision
+	// Id: 0-900: Spr
+	// 990-999: Specials
+	// 1000- Tiles
+	// 3000- Powerups
+	// 4000- Spinner
+	// 5000- Misc
+	// 
+	
+	
+	Sp0.prototype.clearCollide = function() {
+		spr.removeCollideEventByID(this.id);				
+		this.lastCollID= spr.collideMap.push({id: this.id, hit: 'bl',  d: []})-1;
+	}
+	
+	Sp0.prototype.putCollide = function(d_, h_ ) {
+		spr.removeCollideEventByID(this.id);				
+		spr.collideMap.push({id: this.id, hit: h_ || 'bl',  d: d_ || []});
+	}
+	
+	Sp0.prototype.setCollide = function(h_) {		
+		spr.collideMap[this.lastCollID]={id: this.id, hit: h_ || 'bl', d: [this.x+this.collShift[0], this.y+this.collShift[1], this.x+this.collShift[2], this.y+this.collShift[3]]};
+	}
+	
+	Sp0.prototype.repaint = function () {
+		this.ctx.save();
+		this.ctx.translate(this.x + this.centerX, this.y + this.centerY);
+		this.ctx.rotate(this.r*Math.PI/180);
+		this.ctx.scale(this.scaleX,this.scaleY);
+		this.ctx.drawImage(this.image, -this.centerX, -this.centerY, this.w, this.h);
+		this.ctx.restore();
+	}
+	
+	Sp0.prototype.animate = function (f) {					
+	}
+	
+	Sp0.prototype.getCollide = function () {
+		return spr.collideMap.filter(_=>_.id==this.id);
+	}
+	
+	Sp0.prototype.isCollidingWithArea = function (ar) {
+		let c0=this.getCollide();
+		if (c0==0) return false;
+		let c0c=c0[0].d;
+		
+		return (c0c[0]<ar[2] && c0c[2]>ar[0] &&
+					c0c[1]<ar[3] && c0c[3]>ar[1] );
+	}
+	
+	Sp0.prototype.collidedArea = function (ar) {
+		// returns [left, top, right, bottom, width, height, isIntersect];
+		let c0c = this.getCollide()[0].d;
+		let a0 = Math.max(c0c[0],ar[0]), a1= Math.max(c0c[1],ar[1]), a2=Math.min(c0c[2],ar[2]), a3=Math.min(c0c[3],ar[3]);
+		return [a0, a1, a2, a3, a2-a0, a3-a1, (a2-a0>0 && a3-a1>0)];
+	}
+	
+	
+	Sp0.prototype.getCollision = function () {
+		// 0: no collision, 1: block, 2: death;
+		let cu_id,cd_id,cl_id,cr_id;
+		let c0=this.getCollide();
+		if 	(c0==0) return ['','','',''];
+		//if (!showmpug) mpCt.clearRect(0,0,640,400);
+		let cu,cd,cl,cr;
+		//for (let j=0;j<c0.length; j++)
+		{ // Not needed!
+			let c0c = c0[0].d;
+			for (let i=0; i<spr.collideMap.length; i++) {
+				let c1=spr.collideMap[i];
+				if (!c1) continue;
+				if (c1.id==this.id) continue;
+				// c0c: this collision area
+				// c1.d: other object collision area
+				
+				let coll=this.collidedArea(c1.d);
+				if (coll[6]) 				
+					{
+					
+							let c1w=c1.d[2]-c1.d[0];
+							let c1h=c1.d[3]-c1.d[1];
+							
+							let diffX = coll[4]/c1w;  // diffx>diffy-> top or bottom
+							let diffY = coll[5]/c1h;
+														
+							if (diffX<diffY) { 
+								if (c0c[0]==coll[0]) {
+									cl=c1.hit;
+									cl_id=c1.id;
+									this.x+=c1.d[2]-c0c[0];
+									this.setCollide();
+								} else if (c1.d[0]==coll[0])
+								{
+									cr_id=c1.id;
+									cr=c1.hit;
+									this.x-=c0c[2]-c1.d[0];
+									this.setCollide();
+								}
+								this.dx=-this.dx*.5;								
+
+							} else {
+								if (c0c[1]==coll[1]) {
+									cu_id=c1.id;
+									cu=c1.hit;
+									this.y+=c1.d[3]-c0c[1];									
+									this.setCollide();
+								} else if (c1.d[1]==coll[1])
+								{
+									cd_id=c1.id;
+									cd=c1.hit;
+									this.y-=c0c[3]-c1.d[1];																		
+									//this.grav=0;
+									this.setCollide();
+								}
+								this.dy=0; 
+							}							
+					}
+				
+			}
+		}
+		return [cu,cd,cl,cr,cu_id,cd_id,cl_id,cr_id];
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//  INPUT HANDLER	
+//
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+	var KEYS = {LEFT: 37, RIGHT:39, UP:38, DOWN: 40, SPACE: 32};
+	var inputHandler = {
+		callback: function() {},
+		keyMap: [],
+		init: function() {
+					document.addEventListener('keyup', function(e) { return inputHandler.onkey(e, false);  }, false);
+					document.addEventListener('keydown', function(e) { return inputHandler.onkey(e, true);  }, false);					
+				},
+		onkey: function(e, b) {
+					if (e) e.preventDefault();
+					inputHandler.keyMap[e.keyCode]=b;
+					inputHandler.callback(e,1);
+				}
+		
+	};
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//  Main block - it is a mess, but not time to clean it.
+//
+//  Context repaints, sprite item repaint and update methods
+//
+//////////////////////////////////////////////////////////////////////////////////////////////
+	
+	function main () {				
+		fxCt.repaint = function() {			
+			let t='🦊  🎁  '.repeat(100);			
+			fxCt.fillStyle="#fd7";
+			fxCt.fillRect(0,0,640,400);
+			
+			fxCt.font="20px Arial";
+			fxCt.fillStyle="#000";
+			
+			for (let i=0; i<400/20; i++)
+				fxCt.fillText(t, (i%2)*14, 20*i);
+		}
+		
+		fxCt.repaint();
+		ttCt.x=0;
+		ttCt.pat=ttCt.createPattern(fx,'');
+		
+		ttCt.repaint = function() {				
+				
+				//fxCt.repaint();
+				ttCt.clearRect(0,0,640,400);
+				this.font="normal normal 900 80px sans-serif";				
+				//ttCt.m=fxCt.getImageData(ttCt.x,ttCt.x, 50, 30);				
+				let x=(ttCt.x+game.progress/200)%80;
+				ttCt.x=x;
+				//ttCt.pat.setTransform(matrix.translate(x,x)) 
+				this.fillStyle=ttCt.pat;
+				this.strokeStyle="#da5";
+				this.lineWidth=2;
+				this.save();
+				this.scale(1,1.5);
+				this.translate(-x,-x);
+				let t=ttCt.text;
+				if (game.paused) t='PAUSED';
+				this.fillText(t,(640-ttCt.measureText(t).width)/2+x,80+x);
+				this.strokeText(t,(640-ttCt.measureText(t).width)/2+x,80+x);
+				this.restore();
+		}
+				
+		
+		ttCt.text="FLUFFLINE";
+		ttCt.repaint();
+		
+		grad[0]=bgCt.createLinearGradient(0,340,0,400);
+		grad[0].addColorStop(0,"#320");
+		grad[0].addColorStop(1,"#642");
+		
+		grad[1]=bgCt.createLinearGradient(0,320,0,340);
+		grad[1].addColorStop(0,"#495");
+		grad[1].addColorStop(1,"#030");
+		
+		grad[2]=bgCt.createLinearGradient(0,0,0,320);
+		grad[2].addColorStop(0,"#68d");
+		grad[2].addColorStop(1,"#bde");
+		
+		hut.repaint = function() {
+			let storeSeed=rnd.seed;
+			rnd.seed=30;
+			
+			for (let i=-42; i<42; i+=.3) {
+				bgCt.beginPath();
+				bgCt.moveTo(100+i,280)
+				bgCt.strokeStyle="hsl(24,"+~~rnd.r(85,70)+"%,"+~~rnd.r(60,30)+"%)";
+				bgCt.lineTo(100+i,~~rnd.r(325,322))
+				bgCt.stroke();
+			}			
+			
+			for (let i=-50; i<50; i+=.5) {
+				bgCt.beginPath();
+				bgCt.moveTo(~~rnd.r(102,98),~~rnd.r(232,228))
+				bgCt.strokeStyle="hsl(39,"+~~rnd.r(85,70)+"%,"+~~rnd.r(80,40)+"%)";
+				bgCt.lineTo(rnd.r(101,99)+i,~~rnd.r(285,282))
+				bgCt.stroke();
+			}
+			
+			for (let i=-20; i<20; i+=.3) {
+				bgCt.beginPath();
+				bgCt.moveTo(100+i,rnd.r(288,292))
+				bgCt.strokeStyle="hsl(39,"+~~rnd.r(85,70)+"%,"+~~rnd.r(20)+"%)";
+				bgCt.lineTo(rnd.r(101,99)+i,~~rnd.r(325,322))
+				bgCt.stroke();
+			}
+			rnd.seed=storeSeed;
+		}
+		
+		firewall.repaint= function() {
+			let storeSeed=rnd.seed;
+												
+			rnd.seed=30;
+			for (let i=0; i<2; i++) {
+				for (let j=0; j<16; j++) {
+					ct.fillStyle="hsl(0,"+~~rnd.r(75,72)+"%,"+~~(rnd.r(50,27)+fRnd.r(20))+"%)";
+					ct.fillRect(550+i*30+(j%2)*15, 67+j*16, 29, 15)
+				}
+			}
+			
+			rnd.seed=storeSeed;
+			
+			ct.fillStyle="#000";
+			ct.lineWidth=0.5;
+			//for (let i=0; i<7; i++) {
+			for (let j=5; j>0; j--) {
+				for (let i=0, iMax=10-j; i<iMax+1; i++) {
+					ct.save();				
+					ct.translate(585+fRnd.r(2), 320+fRnd.r(2));
+					ct.rotate(-i*(180/iMax)*Math.PI/180);
+					//ct.fillRect(0,-5,20,10);
+					ct.beginPath();
+					ct.fillStyle="hsl("+(60-j*10)+","+~~fRnd.r(62,57)+"%,"+~~fRnd.r(100-j*10,96-j*10)+"%)";					
+					ct.moveTo(0,0);
+					
+					if (i) {
+						ct.quadraticCurveTo(8*j,5*j,16*j,0)
+					} else {
+						ct.moveTo(16*j,0)
+					}
+					if (i!=iMax) { ct.quadraticCurveTo(8*j,-5*j,0,0) }
+						
+					ct.closePath();
+					ct.fill();
+					ct.restore();
+				}
+			}
+		}
+		
+		dino.repaint=function() {
+			let c=this.ctx;
+			if (dino.timer>0) {
+				c.save();
+				c.translate(this.x + this.centerX, this.y + this.centerY+10);
+				c.rotate(270*Math.PI/180);
+				c.drawImage(svgDino, -this.centerX, -this.centerY);
+				c.drawImage(svgDinoLeg, -this.centerX, -this.centerY+2-4);
+				c.drawImage(svgDinoLeg, -this.centerX+5, -this.center-4);
+				this.setCollide('bl');
+				c.restore();
+				
+				c.fillText(convertTime(this.timer),this.x+8,this.y);
+				//this.ctx.fillText(~~(this.timer/60)+':'+~~(this.timer%60),this.x+8,this.y);
+				
+			} else {
+				dino.timer=0;
+				c.translate(this.x + this.centerX, this.y + this.centerY);
+				c.rotate(this.r*Math.PI/180);
+				c.scale(this.scaleX,this.scaleY);			
+				c.drawImage(svgDino, -this.centerX, -this.centerY);
+				c.drawImage(svgDinoLeg, -this.centerX, -this.centerY+(this.dummyr/10+8)%5-4);
+				c.drawImage(svgDinoLeg, -this.centerX+5, -this.centerY+(this.dummyr/10)%5-4);
+				this.setCollide('dn');
+			}
+		}
+		dino.causeHurt=200;
+		spinner = new Sp0 (ct, null, false, 200, 200, 0, 0, 100, 100);
+		
+		powerUps = new Sp0 (ct, null, false, 200, 200, 0, 0, 100, 100);
+		
+		powerUps.createCollide = function () {
+			if (game.currX<-1) return;			
+			let r = getRoom(game.currX, game.currY);
+			this.clearCollide();
+			for (let i=0, l=game.powerUps[r].length; i<l; i++) {
+				let pu=game.powerUps[r][i];
+				spr.collideMap.push({id: 3000+i, hit: ['signal','map','ca','ds'][pu.type],  d: [pu.x*20+3,pu.y*20+3,pu.x*20+3+14,pu.y*20+3+14]});
+				// this.putCollide([pu.x*20+3,pu.y*20+3,pu.x*20+3+14,pu.y*20+3+14],['signal','map','ca','fast'][pu.type]);
+			}
+		}
+		
+		powerUps.repaint = function() {
+			if (game.currX<-1) return;
+			let r = getRoom(game.currX, game.currY);
+			
+			for (let i=0, l=game.powerUps[r].length; i<l; i++) {
+				let pu=game.powerUps[r][i];				
+				this.ctx.fillStyle="#000";
+				this.ctx.font = 'bold 12pt Calibri';
+				this.ctx.fillText(['💠','🗺️','🌵','💾'][pu.type],pu.x*20+3,pu.y*20+18);
+			}
+		}
+	
+		spinner.spins=6;
+		spinner.maxSpins=game.spinners;
+		spinner.sp=.4;
+		spinner.rad=100;
+		
+		spinner.repaint = function () {						
+			if (!this.lastCollID) {
+				let l=spr.collideMap.length;
+				this.lastCollID=spr.collideMap.length;
+				for (let i=0; i<game.spinners; i++) {
+					spr.collideMap.push({id: 4000+i, hit: 'sp',  d: []});
+				}
+				
+			}
+			this.maxSpins=8;
+			
+			let l=this.lastCollID, outerRad, innerRad;
+			this.ctx.strokeStyle="none";
+			for (let i=0; i<game.spinners; i++) {							
+				
+				let smrad = Math.sin(this.r/180*Math.PI)*3+7,
+					x = this.x+this.rad*Math.cos((360/this.maxSpins*i+this.r)*Math.PI/180),
+					y = this.y+this.rad*Math.sin((360/this.maxSpins*i+this.r)*Math.PI/180),
+					spikes = (14+Math.sin(this.r*Math.PI/180)*10),
+					step = Math.PI/spikes,
+					rot=Math.PI/2*3;
+				
+				this.ctx.fillStyle="hsl("+~~(360/this.maxSpins*i)+", 99%, 50%)";
+				this.causeHurt=50;
+				if (this.spiked) {
+					this.causeHurt=200;
+					outerRad=smrad+2;
+					innerRad=smrad-2;					
+					
+					this.ctx.moveTo(x,y-outerRad);
+					this.ctx.beginPath();
+									
+					 for(let i=0;i<spikes;i++){					 
+						x1=x+Math.cos(rot)*outerRad;
+						y1=y+Math.sin(rot)*outerRad;
+						this.ctx.lineTo(x1,y1)
+						rot+=step;
+
+						x1=x+Math.cos(rot)*innerRad;
+						y1=y+Math.sin(rot)*innerRad;
+						this.ctx.lineTo(x1,y1)
+						rot+=step;
+					  }
+					  this.ctx.lineTo(x,y-outerRad);				  
+					  this.ctx.closePath();
+				} else {
+					this.ctx.beginPath();
+					this.ctx.ellipse(x, y, smrad, smrad, 0, 2*Math.PI, 0);
+				}
+				
+				this.ctx.fill();
+				this.ctx.stroke();
+								
+				spr.collideMap[l+i]={id: 4000+i, hit: 'sp',  d: [x-smrad*.7,y-smrad*.7,x+smrad*.7,y+smrad*.7]};
+			}						
+		}
+		
+		
+		spinner.animate = 
+		wifi.animate = function () {
+			this.r=(this.r+this.sp)%360;			
+		}
+		
+		wifi.centerX=10;
+		wifi.centerY=10;
+		
+		dino.centerX=20;
+		dino.centerY=20;
+
+		cloud2.animate =
+		cloud1.animate = function() {
+			if (this.x>640) this.x=-100			
+		}		
+		
+		wifi.repaint = function() {
+			Sp0.prototype.repaint.call(this);
+			this.ctx.restore();
+			ct.font = "10px Arial";
+			let room=getRoom(game.currX,game.currY);
+			let n=game.wifiUpgrades[room];
+			this.image=svgWifi;
+			if (n<=0 || !n) {										
+				ct.fillStyle ="#444";
+				ct.fillText('offline ' +((!n) ? "" : 2**(Math.abs(n)+game.upgrQuality)+" bps"),this.x-10,this.y-15);
+			} else {				
+				ct.fillStyle ="#272";
+				ct.fillText((2**(n+game.upgrQuality))+' bps',this.x-10,this.y-15);
+			}
+			
+		}
+		
+		wifi.getUps = function() {
+			let l=game.wifiUpgrades.length, c=0;
+			for (let i=0; i<l; i++) {			
+				let n=game.wifiUpgrades[i];
+				if (!n) continue;
+				if (game.dinoLife[i]>0) {
+					c+=2**(n+game.upgrQuality)
+				} else {
+					game.wifiUpgrades[i]=-Math.abs(n);
+				}
+			}
+			return c;
+		}
+		
+		
+		bgCt.repaint = function() {
+			bgCt.paintedX=game.currX;
+			bgCt.paintedY=game.currY;
+			
+			game.room = getRoom(game.currX, game.currY);
+			rnd.seed=game.room+20;
+			spr.collideMap=[];
+			//let level=game.currX+game.currY*game.mapW;
+			map=getMap (game.currX, game.currY);						
+			
+			if (!game.visited[game.room] && game.world==wPlayed) game.visited[game.room]=true;
+			
+			this.fillStyle=grad[2];			
+			this.fillRect(0,0,640,320); 			
+			this.fill();
+			
+			tlCt.clearRect(0,0,640,400);
+			
+			firewall.visible = dino.visible = wifi.visible = 
+			//disk.visible = gear.visible = 
+			spinner.visible = false;
+						
+			let y;
+			//this.peaks=[];
+			
+			for (let j=0; j<2; j++) {
+				let y=200+50*j;
+				//this.peaks[j]=[];
+				this.fillStyle=["#CCE","#AAD"][j]; //this.color;
+				this.moveTo(0,y);
+				this.beginPath();
+				for (let i=0; i<50; i++) {
+					y0=y;
+					y+=rnd.r(15,-15);
+					//this.lineTo(i*13,y);
+					this.arcTo(i*13,y, (i+1)*13, y0, 15);					
+					this.lineTo(800,400);
+					this.lineTo(0,400);
+					this.fill();	
+				}
+			}	
+			
+			for (let i=0; i<50; i++) {				
+				this.drawImage(svgTree, -70+20*i, 220+rnd.r(20), 130, 130);
+				this.drawImage(svgTree, -70+20*i, 222+rnd.r(20), 200, 200);
+			}
+			
+			this.strokeStyle="#000";
+			this.beginPath();
+			this.fillStyle=grad[0];			
+			this.fillRect(0,340,640,60); 			
+			this.fill();
+			this.strokeRect(0,340,640,60); 
+						
+			this.fillStyle=grad[1];
+			this.fillRect(0,320,640,20); 
+			this.fill();
+			this.strokeRect(0,320,640,20); 
+
+			//spr.collideMap.filter(_=>(_.id>900))
+			rnd.seed=game.room+20;
+			bCol=~~rnd.r(360);
+			bSat=~~rnd.r(40);
+						
+			let i = spr.collideMap.length;
+			while (i--) {
+				if (spr.collideMap[i].id>900) spr.collideMap.splice(i, 1);
+			}
+    
+			if (game.currX<0) {
+				spr.collideMap.push({id: 5000, hit: 'bl',  d: [0,320,640,400]});
+			}
+			
+			for (let i=0; i<map.length; i++) {
+				if (map[i]!=" ") {
+					let y=~~(i/game.pixW);
+					let x=i%game.pixW;
+					this.lineWidth=0.5;
+					switch (map[i])  {
+					case "#":
+						putTile(x,y,1);
+						break;
+					case "W":
+						spr.collideMap.push({id: wifi.id, hit: 'wf',  d: [20*x,20*y,20*x+20,20*y+20]});
+						wifi.x=20*x; wifi.y=20*y;						
+						wifi.visible=true;						
+						break;			
+					case "s":
+					case "S":
+						spinner.x=20*x;
+						spinner.y=20*y;
+						spinner.spiked=(map[i]=="S");						
+						spinner.visible=true;						
+						break;
+					case "d":
+						dino.x=20*x-10;
+						dino.y=20*y-24;		
+						dino.dx=0.4;
+						dino.scaleX=1;		
+						dino.visible=true;
+						let room=getRoom(game.currX, game.currY); 
+						let w=game.dinoLife[room]||0;						
+						dino.timer=w;
+						break;					
+					
+					case "F":
+						firewall.x=20*x-10;
+						firewall.y=20*y-24;								
+						firewall.visible=true;
+						spr.collideMap.push({id: 997, hit: 'firewall',  d: [20*x,20*y,20*x+50,20*y+230]});
+						break;
+					}
+				}
+			}
+
+			powerUps.createCollide();
+			
+			if (game.currX==-2) {		
+				hut.repaint();
+				this.font="20px Arial";				
+				this.fillText('🐖',20,322);				
+				
+				this.font="13px Arial";
+				this.fillText('🌹🌹🌹🌹🌹',200,322);
+				this.fillText('🌻🌻🌻🌻🌻🌻🌻',300,322);				
+				this.fillText('📫',160,325);
+				this.fillText('⚽',50,336);
+				if (game.gameWon) {
+					this.fillText('🎁🎁🎁',150,330);
+					this.fillText('🎁🎁',155,335);
+				}
+				this.fillStyle="#EEE";
+				this.fillText('(c) 2018 Zoltan Szoke',70,380);
+				
+		
+				
+			}
+		}
+		
+		//bgCt.repaint();
+
+		dino.dummyr=0;				
+		dino.collShift=[5,8,40,45];
+		dino.clearCollide();
+		dino.putCollide();
+				
+		hero.centerX=0;
+		hero.centerY=50;
+		hero.dummyr=0;
+		hero.collShift=[-20,40,20,65];
+		hero.clearCollide();
+		hero.putCollide();
+		
+		cactus = new Sp0 (ct, svgCactus, false, 100, 250, 0, 0);
+		cactus.life=0;
+		
+		cactus.update=function() {
+			if (this.life<=0) {
+				this.visible=false;
+				return;
+			}
+			cactus.w=50*(80-this.life)/50;
+			cactus.h=50*(80-this.life)/50;
+			this.life--;
+			this.visible=true;
+			this.x+=this.dx;			
+		}
+		
+		sonya.repaint=
+		hero.repaint=function() {
+			let c=this.ctx;
+			c.save();
+			c.font="20px Arial Bold";
+			c.translate(this.x + this.centerX, this.y + this.centerY);
+			let legSync=30;
+			if (this.sonya)
+			{
+				c.translate(0, 20);
+				c.fillStyle="#000";				
+				c.fillText('Sonya Fox',-30,-30);
+				//this.ctx.fill();				
+				c.scale(this.scaleX*0.3,this.scaleY*0.3);
+				 legSync=10;
+			} else 
+
+			{
+				if (game.currX==-2) {					
+					c.fillStyle="#000";				
+					c.fillText('Fluffy \'Daddy\' Fox',-70,-30);
+					//this.ctx.fill();		
+				}
+								
+				c.scale(this.scaleX*0.7,this.scaleY*0.7);
+			}
+			
+			c.rotate(this.r*Math.PI/180);
+			let perc=(game.upgrFloat==2)?4:hero.jumps/(game.upgrFloat+1)*4;
+			
+			for (let i=4; i--;) {				
+				let l=i*12;
+				c.beginPath();
+				c.fillStyle=(perc<=i)?"grey":"#"+["DD4","44D","4D4","D44"][i];
+				c.ellipse(-this.centerX+22-l, -this.centerY+50, 12, 15, 0, 2*Math.PI,0);			
+				c.fill();
+				c.beginPath();
+				c.fillStyle=(perc<=i)?"#BBB":"#"+["FF7","77F","7F7","F77"][i];
+				c.ellipse(-this.centerX+25-l, -this.centerY+50-3, 8, 11, 0, 2*Math.PI,0);			
+				c.fill();
+			}			
+			
+			c.drawImage(this.image, -this.centerX, -this.centerY, this.w, this.h);
+			
+			c.drawImage(svgFeet, -this.centerX-30, -this.centerY+60+(this.x%legSync)/6, this.w, this.h);
+			c.drawImage(svgFeet, -this.centerX-20, -this.centerY+60+((this.x-15)%legSync)/6, this.w, this.h);
+			c.drawImage(svgFeet, -this.centerX, -this.centerY+60+(this.x%legSync)/6, this.w, this.h);
+			c.drawImage(svgFeet, -this.centerX+10, -this.centerY+60+((this.x-15)%legSync)/6, this.w, this.h);
+			
+			
+			c.rotate(this.dy*10*Math.PI/180);
+			c.drawImage(svgTail, -this.centerX-77, -this.centerY+45, this.w, this.h);			
+			
+			this.setCollide();
+			
+			c.restore();
+			
+			if (game.world==wPlayed) { // Cursor
+				ct.fillStyle="#FFFFFF80";				
+				let dir=Math.sign(hero.scaleX)*30;
+				hero.eyeX=~~((hero.x+2+dir)/20);
+				hero.eyeY=~~((hero.y+50)/20)+(hero.eyeDown*1);
+				
+				ct.fillRect(hero.eyeX*20, hero.eyeY*20,20,20);
+				ct.fillStyle="#D22";				
+				ct.fillText('+',hero.eyeX*20+10,hero.eyeY*20+14);
+			}
+		}
+		
+		
+		dino.timer=0;
+		
+		dino.update = function () {
+		
+			for (let i=0, l=game.dinoLife.length; i<l; i++) {
+				if (!game.dinoLife[i]) continue;
+				
+				game.dinoLife[i]-=game.progress/1000;
+				
+				if (game.dinoLife[i]<0) {
+					game.dinoLife[i]=0;					
+					continue;
+				}
+								
+			}
+		
+			let room=getRoom(game.currX, game.currY); 
+			if (cactus.life>0 && this.isCollidingWithArea([cactus.x-15, cactus.y-15, cactus.x+15, cactus.y+15])) {
+				cactus.life=0;
+				//dino.timer=300;				
+				info.clearInfo();
+				info.putInfo('This little dino went to bed...',2500);
+								
+				let w=game.dinoLife[room];
+				if (!w) {						
+						dino.timer=game.dinoLife[room]=120;						
+				}
+			}
+							
+			if (dino.timer>0) {
+				dino.timer -=game.progress/1000;
+				
+			} else {
+			
+				this.x+=this.dx;
+				let n=wifi.getCollide()[0]
+				if (n) {									
+					if (this.isCollidingWithArea(n.d)) {
+						game.wifiUpgrades[room]=-Math.abs(game.wifiUpgrades[room]);
+					}
+				}
+				
+				if ((map[~~(this.x/20)+1+(~~(this.y/20)+3)*32]==' ') ||
+				   (map[~~(this.x/20)+1+this.scaleX+(~~(this.y/20)+2)*32]=='#'))
+				{							
+					this.scaleX=-this.scaleX;
+					this.dx=-this.dx;
+				}
+			}			
+		}
+		
+		sonya.animate=
+		dino.animate =
+		hero.animate = function () {
+			this.dummyr=(this.dummyr+1)%360;
+			this.r=Math.sin(this.dummyr*Math.PI/180)*5;
+			
+		}
+		hero.jumps=game.upgrFloat<2?(game.upgrFloat+1):9999;
+		hero.touchedGround=false;
+		hero.eyeDown=false;
+		
+		sonya.update=
+		hero.update = function () {
+			//Sp0.prototype.update.call(this);			
+									
+			if (sonya.y>250) {
+				sonya.y=250;
+				sonya.dy=0;
+			}
+			
+			if (game.upgrFloat==2) {
+				this.x+=this.dx; this.y+=this.dy;
+				this.dy*=this.frictionY;
+				this.dx*=this.frictionX;
+			}	else {
+				this.x+=this.dx; 
+				this.y+=this.dy;
+				this.dy+=this.grav;
+				// this.dy*=this.frictionY;
+				this.dx*=this.frictionX;
+			}
+			
+			
+			let n=this.getCollision();
+			
+			for (let i=0; i<4; i++) {
+				if (n[i]=='sp' || n[i]=='dn') {
+					let hurt=(n[i]==spinner) ? spinner.causeHurt : dino.causeHurt;// spr.spriteList[n[i+4]].causeHurt;
+					game.baud-=hurt*game.progress/1000;
+					
+					info.clearInfo();
+					if (n[i]=='sp') info.putInfo('Yikes, that hurts!', 2500, "#DAA");
+					if (n[i]=='dn') info.putInfo('That Stallosaur just BIT me! I hope it\'s not rabid...', 2500);
+				}
+				
+				if (n[i]=='wf') {
+					let w=game.wifiUpgrades[game.room];
+					if (!w || w<0) {						
+						info.putInfo('Wifi turned on... Sending signals...', 2500);
+						game.wifiUpgrades[game.room]=Math.max(Math.abs(game.wifiUpgrades[game.room]) || 0,1);												
+					}
+				}
+				
+				if (n[i]=='signal') {					
+					let b=16*(2**game.upgrQuality)
+					info.putInfo('+'+b+' bits', 1500);
+					game.powerUps[game.room][n[i+4]-3000]={};
+					spr.removeCollideEventByID(n[i+4]);
+					game.baud+=b;
+					dropPowerUp2(0);
+					
+				}
+				
+				if (n[i]=='map') {
+					if (game.mapLife==0) {
+						info.clearInfo();
+						info.putInfo('A map of the rooms I have visited!',3000);
+						info.putInfo('I will remember this for 30 seconds.', 2500);
+					}
+					game.mapLife=30000;
+					game.powerUps[game.room][n[i+4]-3000]={};
+					spr.removeCollideEventByID(n[i+4]);
+					game.showMap=true;
+					dropPowerUp2(1);
+					//drawMap();
+					
+					
+				}
+				
+				if (n[i]=='firewall') {					
+					if (game.baud<game.bitsNeeded) {
+						info.putFirstInfo('You need at least '+game.bitsNeeded+' bps to repair the firewall!',3000);						
+					}
+					else {
+						info.clearInfo();
+						game.gameWon=true;
+						ttCt.text="THE END";
+						//info.putFirstInfo('GAME WON',3000);
+						changeWorld(wEnd,'GAME WON');
+						game.currX=-2;
+						game.curry=1;
+						info.textY=200;
+						info.putInfo('You returned home, and finished the order.',3000);
+						info.putInfo('Sonya received her toys, and was really-really happy.',3000);
+						info.putInfo('You are a good father.',3000);
+						info.putInfo('The End.',3000);
+						sonya.visible=true;
+						sonya.x=100;
+						//game.mapLife=30000;
+						//drawMap(true);
+					}
+				}
+				
+				
+				if (n[i]=='ca') {
+					
+					info.putInfo(['Botanist\'s log: Three deadly cacti ordered.','+3 cactus','How did the Stallosaurus become extinct?'][~~fRnd.r(3)],3000);
+					game.powerUps[game.room][n[i+4]-3000]={};
+					spr.removeCollideEventByID(n[i+4]);
+					game.cacti+=3;	
+					dropPowerUp2(2);
+				
+				}
+				
+				if (n[i]=='ds') {										
+					
+					// hero.speed=2;
+					game.powerUps[game.room][n[i+4]-3000]={};
+					spr.removeCollideEventByID(n[i+4]);					
+					dropPowerUp2(3);
+					game.heroX=hero.x;
+					game.heroY=hero.y;
+					localStorage.setItem('gameObject', JSON.stringify(game));
+					info.putFirstInfo('Game saved.', 2500);					
+				}
+
+			}
+			
+			if  (n[1]=='bl' || n[1]=='wf' || n[1]=='sp') {				
+				this.jumps=game.upgrFloat<2?(game.upgrFloat+1):9e8;
+				this.touchedGround=true;
+			} 
+						
+			if (this.x<0 || this.x>640|| this.y<-50 || this.y>282) {
+				//alert(this.x+' '+this.y);
+				if (this.x<0) {
+					if (game.currX>0 || game.world!=wPlayed) {
+						game.currX--;
+						this.x=600
+					} else {this.x=0}
+				} else if (this.x>640) {
+					if (game.currX<game.mapW || game.world!=wPlayed) {
+						game.currX++;
+						this.x=40;
+					} else {this.x=640}
+				}
+				if (this.y<-50) {
+					if (game.currY>0 || game.world!=wPlayed) {					
+						game.currY--;
+						this.y=282;
+					} else {this.y=-50}
+				} else if (this.y>282) {
+					if (game.currY<game.mapH  || game.world!=wPlayed) {
+						game.currY++;
+						this.y=-50;
+					} else {this.y=282}
+				}
+				this.setCollide();
+				//bgCt.repaint();
+				
+			}
+		}
+				
+		
+		////////////////////////////
+		//  HERO Controls
+		////////////////////////////
+		
+		hero.controls = function(e,b) {
+			let m=inputHandler.keyMap;
+			game.showb=b;
+			
+			if (m[KEYS.LEFT] || m[KEY_A]) {										
+							 if (hero.scaleX<0) hero.dx=-1;
+							 hero.scaleX=-1;
+							 hero.frictionX=0.7;
+							 //hero.friction=0.7;
+							 if (game.upgrFloat<3) {
+								 if (hero.touchedGround) {
+										hero.dy=-.4;
+										hero.frictionX=0.7;
+										hero.touchedGround=false;
+								 }
+							 }
+						}							 
+			if (m[KEYS.RIGHT] || m[KEY_D]) {		
+							game.pressed++;
+							 //hero.dx=(hero.dx>0)?0:hero.dx+1;
+							 //this.grav=0.03;
+							if (hero.scaleX>0) hero.dx=1;
+							hero.scaleX=1;
+							//hero.friction=0.7;
+							hero.frictionX=0.7;
+							if (game.upgrFloat<3) {
+								 if (hero.touchedGround) {
+										hero.dy=-.4;
+										hero.frictionX=0.7;
+										hero.touchedGround=false;
+								 }
+							 }
+						}
+			if ((m[KEYS.UP] || m[KEY_W])&& b) 	{						   
+						   /* newSource = audioCtx.createBufferSource(); 
+						   newSource.buffer = fx.sourceJump.buffer;
+						   newSource.start(); */
+							if (game.upgrFloat==2) {
+								hero.dy=-1;
+								hero.frictionY=0.9;
+							} else							
+							if (hero.jumps>0 && hero.dy>=-0.5) {
+								hero.dy=-2.5;
+								//hero.friction=0.9;		
+								hero.frictionX=1;
+								hero.jumps--;
+								hero.eyeDown=false;
+								//hero.grav=0.03;
+								//hero.dy=-1;
+							}
+						}
+				
+			if ((m[KEYS.DOWN] || m[KEY_S]) && b) {
+						if (game.upgrFloat==2) {
+								hero.dy=1;
+								hero.frictionY=0.9;
+							} else										
+							hero.dy=1;
+							if (hero.touchedGround) {
+								hero.eyeDown=!hero.eyeDown;
+							}
+							//hero.friction=0.9;
+							
+							/*if (hero.jumps>0) {
+								hero.jumps--;
+								hero.grav=0.03;
+								hero.dy=-1;
+							}*/
+						   }
+
+			if (m[KEY_R]&& b) {			
+					if (game.world!=wIntro) return;
+					info.clearInfo();
+					game.cacti=3;					
+					hero.visible=true;
+					hero.x=50;
+					hero.y=250;
+					//
+					changeWorld(wPlayed);
+					//game.currX=1;
+					bgCt.repaint();
+				}
+			
+			if (m[KEY_M]&& b) {
+						game.showMap=!game.showMap;
+						if (!game.showMap) {
+							mpCt.clearRect(0,0,640,400);
+							} 						
+						}
+			
+			if (m[KEY_P]&& b) {
+								game.paused=!game.paused;								
+								ttCt.repaint();
+								if (!game.paused) {
+									game.timeStamp=performance.now();									
+									window.requestAnimationFrame(repaint);
+								};
+								
+							}
+							
+			if ((m[KEY_J] || m[KEY_U] || m[KEY_C]) && b) {	
+				let e;
+				if (m[KEY_C]) {	
+					if (!confirm) return;
+					e=confirm;					
+				} else {				
+					e=(m[KEY_J]) ? getAction() : getUpgrade();
+				}
+				
+				if (e.cost==undefined) return;
+				
+				if (e.cost>game.baud) {
+					info.putFirstInfo('Not enough Signals!',3000)
+				} else if (e.cost>game.baud*.3 && !m['C'.charCodeAt(0)] ) 
+				{
+					info.putFirstInfo('May be too expensive! Press C to confirm!',3000)
+					confirm=e;
+				} else 
+				{
+					e.act();
+					info.putFirstInfo('Sold.',3000);
+					game.baud-=e.cost;
+				}
+			}
+			
+			if (m[13] && b) 
+				if (game.world==wEnd) {
+					location.reload();
+				}
+				
+			if (m[32] && b) {								
+				
+				if (game.currX<0) {
+					if (info.texts.length) {
+						let te=info.texts[0], tt=te.life/1000;						
+						wIntro.time+=tt;
+						info.texts.shift();
+					}
+					
+					return;
+				}
+				
+				
+				let d=(getTileCh(game.currX,game.currY,hero.eyeX,hero.eyeY)==" ");
+				
+				if (d && game.blocks>0) {
+					game.blocks--;
+					putTile(hero.eyeX,hero.eyeY,1);
+				}
+				if (!d && game.blocks<5) {
+					game.blocks++;	
+					putTile(hero.eyeX,hero.eyeY,0);
+				}
+				
+			}
+			
+		}
+					
+		inputHandler.init ();
+			
+		t1=0; game.fr=0;
+		
+//////////////////////////////////////////////////////////////////////////////////////////////
+// 
+// Main repaint (requestAnimationFrame)
+// 
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+		function repaint (timeStamp) {			
+			game.lastStamp = (!game.lastStamp) ? timeStamp : game.timeStamp;
+			game.timeStamp=timeStamp;
+			game.progress = timeStamp - game.lastStamp;		
+			
+			game.fr%=60;						
+			
+			if (game.baud<0) {
+				changeWorld(wEnd,'gameover');
+			}
+			
+			if (game.fr%10==0) {
+				t0 = t1;
+				t1 = performance.now();							
+			}
+						
+			if (game.fr%3==0) {
+				if (inputHandler.keyMap.some((_)=>_)) inputHandler.callback(0, 0);
+			}
+			
+			ct.clearRect(0, 0, 640, 400);
+						
+			
+			if (bgCt.paintedX!=game.currX || bgCt.paintedY!=game.currY) {
+				bgCt.repaint();				
+			}
+			 
+			spr.update();
+			spr.repaint();			
+			
+			
+			if (!game.paused && !game.menu) {				
+				game.world.draw();
+				info.repaint();			
+				
+			}
+			
+			
+			if (ttCt.text!="") ttCt.repaint();								
+			if (game.menu) menu.repaint();
+			
+			if (!game.paused) window.requestAnimationFrame(repaint);			
+						
+			game.fr++;
+	}
+		frm=0;
+		
+
+	
+		window.requestAnimationFrame(repaint);
+		
+}
+
+window.onload = preload;
+
+	/* ToDo:		
+		
+		Before send:
+		- Check closure compiler warnings
+		- Before send: check firefox, chrome and edge
+		- Check console						
+		- Check sprite prototype - needed property or not
+		
+		Not needed / not fitted in 13k / no time:
+		- World.draw->World.update
+		- Upgrade Wifi
+		- Test on Linux
+		- HP only heart needed!!!!
+		- Group tiles for collision - not needed
+		- Character selector?		
+		- Multiple wifi per page!!!!
+		- Multiple dinos
+		- ZOrder		
+		- floor 0: ground , 1: forrest, 2: mountains, 3: clouds
+		- fall: reduce HP by speed
+		- Room creation: random room size - 1,1: x*y, others: (x+-5, y+-5)		
+		- Ladder
+		- Timer for wifi respawn
+		- Floating desk
+		- Fox position!!!! -50 pixels down
+		- Music: pam  pam  pam-pam  paaam    pam pam pam-pam  paaam...
+		- Reduce fox size		
+		- Colorful Dinos
+		
+		Done:
+		- Correct timer of paused	
+		- Test: turn gravity & collision off		
+		- Correct font color & style settings	
+		- Map does not hide when time is up		
+		- Two blocks starting	
+		- Random  powerups when collected!!!!		
+		- wifi signals produce bits/sec (3 bits/sec), upgradable				
+		- J: Action, U: upgrade fluffy		
+		- Cactus count: dino number/2, taken: add to somewhere else
+		- map count: rooms / 6 -> taken: add to somewhere else 
+		- speed: rooms/6		
+		- Upgrades: compression (fox size 100%,75%,50%,33%), floating points (1 additional, 2 additional, 4 additional, float), package quality, 		
+		- Nonrandom seed - done, https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript
+		- Random seed wrong using Closure compiler	
+		- Bits/sec (Money), Quality (HP), reduces Bits/sec increase and movement speed	
+		- 7*4 levels
+		- Remove tileadder from Sonya and Intro
+		- FireWall - open: x BPS
+		- Final room
+		- Open left-right start
+		- Change terrain: space
+		- Profiling!!!! 22 fps???!!! spr.collidemap is full with zeros!!! Spinner 
+		- Tileset - 30%
+		- Background -80%
+		- Spinner - 80%
+		- Stallosaur can be hit with a cactus - 80%
+		- Collision detector - 90%	
+		- Colored tiles 2 - 2 - 2 -2 - 2 rows 30%
+		- Map icon -> Minimap/Radar 3x3 60%	- where map taken, for 30 secs
+		- Better key handling: 70%		
+		- Hero & Sonya!!!		
+		- Finale to be added		
+		- Powerup sometimes does not fall
+		- Menu handling
+		- Changing color blocks on scene		
+		- Movements, actions, time passing take bits/sec
+		- Level zero: problems with adding and removing tiles.
+		- Level Zero: ground ending needed.
+		- Effects						
+		- Draw bricks, firewall
+		- Correct collideMap duplicates, undefined etc.
+		- (c) 2018...
+		- Imminent danger - decreasing timer
+		- Offline becomes -1 and .5 bps!!! Correction needed				
+		- Story: why is the timer decreasing?		
+		- Tile adder not shown, map stays too long								
+		- Save / Reload 80%
+		- Spinner colors					
+		- 2276 e.act error
+*/
+
+
+// game.currX=game.fireX; game.currY=game.fireY; game.baud=99998;
+
+
+</script></head><body style="width:98%">	
+<div style="width:154vh;height:96vh;display:block;margin: 0 auto; padding:0; top: 0px;image-rendering:-o-crisp-edges;image-rendering:pixelated;image-rendering:-moz-crisp-edges;-ms-interpolation-mode:nearest-neighbor;cursor:none">
+<canvas id=fx width="640px" height="400px" style="width:154vh;height:96vh;margin: 0 auto;position: absolute; top:0px"></canvas>
+<canvas id=bg width="640px" height="400px" style="width:154vh;height:96vh;margin: 0 auto;position: absolute; top:0px"></canvas>
+<canvas id=tl width="640px" height="400px" style="width:154vh;height:96vh;margin: 0 auto;position: absolute; top:0px"></canvas>
+<canvas id=a  width="640px" height="400px" style="width:154vh;height:96vh;margin: 0 auto;position: absolute; top:0px"></canvas>
+<canvas id=mp width="640px" height="400px" style="width:154vh;height:96vh;margin: 0 auto;position: absolute; top:0px"></canvas>
+<canvas id=tt width="640px" height="400px" style="width:154vh;height:96vh;margin: 0 auto;position: absolute; top:0px"></canvas>	
+</div><div id=spcont style="display:none"/></body></html>
+
+
+

@@ -1,0 +1,2744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>bloomfront</title>
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05060a;
+  font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  color: #dbe2ee;
+  user-select: none;
+  -webkit-user-select: none;
+}
+canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+#hud {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  pointer-events: none;
+  text-shadow: 0 1px 3px #000;
+}
+#res { white-space: pre; }
+#bar {
+  display: flex;
+  width: 300px;
+  height: 9px;
+  margin-top: 7px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #1a2130;
+  box-shadow: 0 1px 3px #0009;
+}
+#bar div { height: 100%; transition: width .3s; }
+#obj { margin-top: 9px; opacity: .7; max-width: 340px; }
+
+#build { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 8px; }
+#hud, #build { transition: opacity .25s; }
+.b {
+  width: 158px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #141b28e0;
+  border: 1px solid #2a3648;
+  cursor: pointer;
+  transition: .12s;
+}
+.b:hover { border-color: #4a6183; background: #1a2434e0; }
+.b.on { border-color: #8fd9a0; background: #1d2e28e0; }
+.b.no { opacity: .4; }
+.b b { display: block; }
+.b u { text-decoration: none; opacity: .85; }
+.b i { display: block; font-style: normal; opacity: .58; font-size: 11px; margin-top: 3px; }
+
+#veil {
+  position: fixed;
+  inset: 0;
+  background: #05060ad8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The lobby sits beside the map instead of over it, so changing anything
+   redraws the world you're about to play. */
+#veil.lobby {
+  background: linear-gradient(90deg, #05060af2 0%, #05060ae0 46%, #05060a30 72%, #05060a10 100%);
+  justify-content: flex-start;
+  padding-left: 5vw;
+}
+#card {
+  width: 540px;
+  max-width: 86vw;
+  padding: 26px 30px;
+  border-radius: 12px;
+  background: #101825f2;
+  border: 1px solid #2c3a50;
+  box-shadow: 0 18px 60px #000a;
+}
+#card h1 { margin: 0; font-size: 34px; letter-spacing: .18em; font-weight: 400; }
+#card h2 { margin: 0; font-size: 22px; font-weight: 400; }
+#card p { margin: 11px 0; opacity: .84; }
+#card em { font-style: normal; color: #fff; }
+#card .keys { opacity: .6; font-size: 12px; }
+/* Pinned, or the panel hops about when the victory blurb changes length. */
+#card .rules { min-height: 4.4em; }
+button {
+  font: inherit;
+  margin: 16px 8px 0 0;
+  padding: 9px 20px;
+  border-radius: 7px;
+  cursor: pointer;
+  background: #2a5f8f;
+  color: #eef4ff;
+  border: 1px solid #3d7cb4;
+}
+button:hover { background: #35719f; }
+button.ghost { background: #1a2434; border-color: #35455c; }
+kbd { background: #222c3c; border: 1px solid #3a4759; border-radius: 4px; padding: 0 5px; }
+#card .row { display: flex; align-items: center; gap: 7px; }
+#card .row b { width: 92px; opacity: .7; font-weight: 400; }
+#card .row i { font-style: normal; opacity: .55; margin-right: 6px; }
+button.pick { margin: 0; padding: 4px 13px; background: #1a2434; border-color: #35455c; }
+button.pick.sel { background: #2a5f8f; border-color: #4f92cc; }
+.sw {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #0006;
+}
+.seed { margin-left: 12px; opacity: .38; font-size: 11px; }
+/* Needs to beat the #veil rule above. An id selector wins against a bare
+   .hide, and the menu never closes. */
+#veil.hide { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><div id="res"></div><div id="bar"></div><div id="obj"></div></div>
+<div id="build"></div>
+<div id="veil"><div id="card"></div></div>
+<script type="module">
+
+// bloomfront. An isometric RTS for js13kGames 2026.
+//
+// Everything starts grey and dead. Walk a herd across it and it comes back in
+// that herd's colour. Living ground is your income and the only ground you can
+// build on, so the map is the economy and there's nothing else to click.
+//
+// This file is the game. It stays readable on purpose. build/pack.mjs is what
+// squeezes it down, and it works on a copy.
+
+// --- constants -----------------------------------------------------------------
+
+const MAP = 96;            // tiles per side
+const TW = 64, TH = 32;    // tile diamond, width and height in pixels
+const EH = 16;             // vertical pixels per elevation step
+const OVER = 20;           // overhang above a tile sprite, for tufts and flowers
+const LEVELS = 6;          // elevation steps, 0 is sea floor
+const VITS = 4;            // blight to full bloom, inclusive
+const VARIANTS = 3;        // per tile art variations, to break up the grid
+const OCEAN = 60;          // tiles of open sea drawn past the edge of the map
+
+const WATER = 0, SAND = 1, GRASS = 2, ROCK = 3;
+
+// You're herd 0. The world gets painted in these, so they need to stay far
+// apart on the wheel and still be tellable apart at one tile across.
+const HERDS = [
+  { name: "rose",   rgb: [232,  74, 138] },
+  { name: "azure",  rgb: [ 64, 176, 232] },
+  { name: "amber",  rgb: [242, 176,  56] },
+  { name: "violet", rgb: [163, 118, 240] },
+];
+
+// Herds in play, you included. Set in the lobby. Art gets generated for every
+// colour at startup regardless; this just decides how many turn up.
+let herdCount = 3;
+
+// Dead and alive per terrain. Vitality lerps between them, then the owner's hue
+// gets mixed on top by tint.
+const TERRAIN = [
+  { dead: [ 40,  50,  56], live: [ 44, 116, 152], tint: 0.14 },  // water
+  { dead: [ 62,  59,  52], live: [198, 173, 118], tint: 0.20 },  // sand
+  { dead: [ 52,  56,  46], live: [ 78, 146,  62], tint: 0.26 },  // grass
+  { dead: [ 58,  55,  50], live: [126, 118, 105], tint: 0.06 },  // rock
+];
+
+// --- deterministic noise -------------------------------------------------------
+
+// One integer hash, doing both the heightmap and the per-tile art. Everything is
+// a function of the seed, so a whole map is one number and no art is stored.
+function hash2(x, y, seed) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function smooth(t) { return t * t * (3 - 2 * t); }
+
+function valueNoise(x, y, seed) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = smooth(x - xi), yf = smooth(y - yi);
+  const a = hash2(xi, yi, seed), b = hash2(xi + 1, yi, seed);
+  const c = hash2(xi, yi + 1, seed), d = hash2(xi + 1, yi + 1, seed);
+  const top = a + (b - a) * xf;
+  const bot = c + (d - c) * xf;
+  return top + (bot - top) * yf;
+}
+
+function fbm(x, y, seed, octaves) {
+  let v = 0, amp = 0.5, f = 1, norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    v += valueNoise(x * f, y * f, seed + i * 1013) * amp;
+    norm += amp;
+    amp *= 0.5;
+    f *= 2;
+  }
+  return v / norm;
+}
+
+// A running stream, for the art generator, where asking for the next number is
+// easier than addressing by coordinate.
+function stream(seed) {
+  let s = (seed | 0) + 0x9e3779b9;
+  return () => {
+    s = Math.imul(s ^ (s >>> 16), 0x21f0aaad);
+    s = Math.imul(s ^ (s >>> 15), 0x735a2d97);
+    return ((s ^= s >>> 15) >>> 0) / 4294967296;
+  };
+}
+
+// --- colour --------------------------------------------------------------------
+
+function mix(a, b, t) {
+  return [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
+}
+
+function shade(c, k) {
+  return "rgb(" + (c[0] * k | 0) + "," + (c[1] * k | 0) + "," + (c[2] * k | 0) + ")";
+}
+
+function css(c, a) {
+  return "rgba(" + (c[0] | 0) + "," + (c[1] | 0) + "," + (c[2] | 0) + "," + a + ")";
+}
+
+// --- the world -----------------------------------------------------------------
+
+// One copy of the world. Renderer, movement and economy all read these same
+// arrays, so there's nothing to fall out of sync.
+const elev = new Uint8Array(MAP * MAP);   // 0..LEVELS-1
+const kind = new Uint8Array(MAP * MAP);   // WATER..ROCK
+const vari = new Uint8Array(MAP * MAP);   // which art variant this tile uses
+const vit  = new Float32Array(MAP * MAP); // 0..1, how alive the tile is
+const own  = new Uint8Array(MAP * MAP);   // which herd bloomed it
+const ao   = new Float32Array(MAP * MAP); // ambient occlusion from taller neighbours
+
+const at = (x, y) => y * MAP + x;
+const inMap = (x, y) => x >= 0 && y >= 0 && x < MAP && y < MAP;
+
+const SEA = 0.44;
+
+// Share of the continent needed to win, scaled to how many are playing, and
+// measured against dry land so it doesn't drift with how much of a seed is sea.
+//
+// Picked from watching games rather than chosen as a round number. The herds
+// carve up nearly all the land within a few minutes, so a flat 50% can't be
+// reached four ways and is trivial heads up. An even split plus a margin always
+// can be, since somebody has to be above average, and it means more opponents
+// makes for a longer game.
+const goalShare = () => 1 / herdCount + 0.04;
+let landTiles = 0;
+
+// Lays down one candidate continent. Returns how much connected land it got.
+function layout(seed) {
+  for (let y = 0; y < MAP; y++) {
+    for (let x = 0; x < MAP; x++) {
+      // Broad continent field, a little ridge detail on top. Big scale on
+      // purpose: elevation gets cut into terraces, and a terrace only looks
+      // like a hill if the band is several tiles wide.
+      const broad = fbm(x / 34, y / 34, seed, 4);
+      const detail = fbm(x / 11, y / 11, seed + 7717, 3);
+      let h = broad * 0.82 + detail * 0.18;
+
+      // Stretch away from the middle. Left alone, fbm hugs 0.5 and the whole
+      // map ends up in one or two bands.
+      h = (h - 0.5) * 1.9 + 0.5;
+
+      // Jitter the contours. Terracing a smooth field puts every step on a
+      // smooth line and you get a wedding cake. A bit of high frequency noise
+      // before quantising lets each boundary wander a tile or two. Amplitude is
+      // about a third of a band: enough to break the line, not enough to
+      // shatter it.
+      h += (fbm(x / 3.4, y / 3.4, seed + 313, 2) - 0.5) * 0.052;
+
+      // Falloff, so it's a continent with a coast and not a square that stops.
+      const dx = (x - MAP / 2) / (MAP / 2);
+      const dy = (y - MAP / 2) / (MAP / 2);
+      const r = Math.sqrt(dx * dx + dy * dy);
+      h -= smooth(Math.min(1, Math.max(0, (r - 0.58) / 0.44))) * 0.70;
+
+      const i = at(x, y);
+      let t, e;
+      if (h < SEA) {
+        t = WATER;
+        e = 0;
+      } else {
+        // Height above sea, normalised, cut into terraces. Since it follows a
+        // contour of the same smooth field you get broad plateaus with a cliff
+        // at each line.
+        const a = Math.min(1, (h - SEA) / (1 - SEA));
+        e = Math.min(LEVELS - 1, 1 + (a * (LEVELS - 1) * 1.55 | 0));
+        t = a < 0.05 ? SAND : e >= LEVELS - 2 ? ROCK : GRASS;
+      }
+
+      kind[i] = t;
+      elev[i] = e;
+      vari[i] = (hash2(x, y, seed + 991) * VARIANTS) | 0;
+    }
+  }
+
+  // Connectivity.
+  //
+  // A map that comes out as two islands isn't playable. The herds can't reach
+  // each other, whoever's on the small piece has nowhere to go, and no route to
+  // victory involving anyone else exists. Cliffs make this worse than plain
+  // land and sea would, since a plateau ringed by two-terrace drops is land
+  // nothing can walk onto.
+  //
+  // So flood fill using the rules units actually walk by, keep the biggest
+  // region, drown the rest. Using steppable rather than a land test is the
+  // whole point: what matters isn't whether ground exists, it's whether a
+  // unicorn can get there.
+  const comp = new Int32Array(MAP * MAP).fill(-1);
+  const queue = new Int32Array(MAP * MAP);
+  let bestComp = -1, bestSize = 0, nComp = 0;
+  for (let start = 0; start < MAP * MAP; start++) {
+    if (kind[start] === WATER || comp[start] >= 0) continue;
+    const id = nComp++;
+    let head = 0, tail = 0, size = 0;
+    comp[start] = id;
+    queue[tail++] = start;
+    while (head < tail) {
+      const ci = queue[head++];
+      size++;
+      const cx = ci % MAP, cy = (ci / MAP) | 0;
+      for (let d = 0; d < 8; d++) {
+        const nx = cx + DIRX[d], ny = cy + DIRY[d];
+        if (!inMap(nx, ny)) continue;
+        const ni = at(nx, ny);
+        if (comp[ni] >= 0 || kind[ni] === WATER) continue;
+        if (!steppable(cx, cy, nx, ny)) continue;
+        comp[ni] = id;
+        queue[tail++] = ni;
+      }
+    }
+    if (size > bestSize) { bestSize = size; bestComp = id; }
+  }
+  for (let i = 0; i < MAP * MAP; i++) {
+    if (kind[i] !== WATER && comp[i] !== bestComp) {
+      kind[i] = WATER;
+      elev[i] = 0;
+    }
+  }
+
+  return bestSize;
+}
+
+// Below this, what survives the prune is a scattering of islets with nowhere to
+// put three or four herds.
+const LAND_FLOOR = 1400;
+
+function generate(seed) {
+  // Some seeds shatter once the unreachable ground is drowned. Walk along to
+  // the next one rather than handing over a dud map. Keep the best if none of
+  // them clear the bar.
+  let pick = seed, best = -1;
+  for (let k = 0; k < 10; k++) {
+    const s = seed + k * 7919;
+    const n = layout(s);
+    if (n > best) { best = n; pick = s; }
+    if (n >= LAND_FLOOR) break;
+  }
+  // The arrays hold whatever ran last, so lay the winner down again.
+  layout(pick);
+
+  landTiles = 0;
+  for (let i = 0; i < MAP * MAP; i++) if (kind[i] !== WATER) landTiles++;
+
+  // Ambient occlusion. Ground with taller ground around it sits in shadow, and
+  // that's most of what turns flat diamonds into something with volume. One
+  // pass over eight neighbours, done once, since elevation never changes.
+  for (let y = 0; y < MAP; y++) {
+    for (let x = 0; x < MAP; x++) {
+      const i = at(x, y);
+      const e = elev[i];
+      let occ = 0;
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          if (!ox && !oy) continue;
+          const n = inMap(x + ox, y + oy) ? elev[at(x + ox, y + oy)] : e;
+          // Up and to the left is where the light is, so that's what shadows.
+          if (n > e) occ += (n - e) * (ox <= 0 && oy <= 0 ? 1.4 : 0.7);
+        }
+      }
+      ao[i] = 1 - Math.min(0.40, occ * 0.055);
+    }
+  }
+}
+
+// --- tile art ------------------------------------------------------------------
+
+// Each tile image gets drawn once at startup into its own little canvas, then
+// blitted forever after. Nothing is loaded and the code is far smaller than the
+// pixels it makes.
+//
+// tiles[herd][kind][vitLevel][variant]. Level 0 is blight and looks the same for
+// everyone, but generating it per herd costs nothing at runtime and keeps the
+// lookup flat.
+const tiles = [];
+
+function diamondPath(g, cx, cy) {
+  g.beginPath();
+  g.moveTo(cx, cy - TH / 2);
+  g.lineTo(cx + TW / 2, cy);
+  g.lineTo(cx, cy + TH / 2);
+  g.lineTo(cx - TW / 2, cy);
+  g.closePath();
+}
+
+function makeTile(herd, k, level, variant) {
+  const cv = document.createElement("canvas");
+  cv.width = TW;
+  cv.height = TH + OVER;
+  const g = cv.getContext("2d");
+  const cx = TW / 2, cy = OVER + TH / 2;
+
+  const t = level / (VITS - 1);
+  const terrain = TERRAIN[k];
+  let base = mix(terrain.dead, terrain.live, t);
+  base = mix(base, HERDS[herd].rgb, terrain.tint * t);
+
+  const rand = stream(herd * 7919 + k * 613 + level * 97 + variant * 13);
+
+  // Top face. Clipped to the diamond so everything after this stays inside the
+  // tile and the grid stays tidy.
+  g.save();
+  diamondPath(g, cx, cy);
+  g.clip();
+  g.fillStyle = shade(base, 1);
+  g.fillRect(0, 0, TW, TH + OVER);
+
+  // Mottling. Enough to break up the flat fill without turning into static.
+  const specks = k === WATER ? 26 : 54;
+  for (let i = 0; i < specks; i++) {
+    const px = rand() * TW;
+    const py = cy - TH / 2 + rand() * TH;
+    const k2 = 0.78 + rand() * 0.44;
+    g.fillStyle = shade(base, k2);
+    const w = 1 + (rand() * 2 | 0);
+    g.fillRect(px | 0, py | 0, w, 1);
+  }
+
+  if (k === WATER) {
+    // Shimmer, brighter the clearer the water gets.
+    for (let i = 0; i < 4; i++) {
+      const py = cy - TH / 2 + 4 + rand() * (TH - 8);
+      const w = 8 + rand() * 20;
+      g.fillStyle = css(mix(base, [220, 240, 255], 0.35 + 0.4 * t), 0.10 + 0.22 * t);
+      g.fillRect(cx - w / 2 + (rand() - 0.5) * 14, py | 0, w, 1);
+    }
+  }
+
+  if (k === ROCK) {
+    // Chips, not specks. Round dots on rock just look like grass.
+    for (let i = 0; i < 7; i++) {
+      const px = cx + (rand() - 0.5) * TW * 0.6;
+      const py = cy + (rand() - 0.5) * TH * 0.6;
+      g.fillStyle = shade(base, 0.74 + rand() * 0.1);
+      g.beginPath();
+      g.moveTo(px, py - 2);
+      g.lineTo(px + 3, py);
+      g.lineTo(px, py + 2);
+      g.lineTo(px - 3, py);
+      g.fill();
+    }
+  }
+
+  // Light comes from the top left, so lift the two edges facing it.
+  g.strokeStyle = css(mix(base, [255, 255, 255], 0.45), 0.20 + 0.14 * t);
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(cx - TW / 2, cy);
+  g.lineTo(cx, cy - TH / 2);
+  g.lineTo(cx + TW / 2, cy);
+  g.stroke();
+  g.restore();
+
+  // Grass sticks up past the diamond, so it goes on unclipped, and only on
+  // land. This is what makes bloom readable at a glance: bare at 0, tufts by 2,
+  // flowers in your colour at 3.
+  if (k === GRASS && level > 0) {
+    const blades = level * 7;
+    const hue = HERDS[herd].rgb;
+    for (let i = 0; i < blades; i++) {
+      // Rejection sample inside the diamond: |dx|/32 + |dy|/16 <= 1.
+      let bx, by;
+      do {
+        bx = (rand() - 0.5) * TW;
+        by = (rand() - 0.5) * TH;
+      } while (Math.abs(bx) / (TW / 2) + Math.abs(by) / (TH / 2) > 0.92);
+      const px = cx + bx, py = cy + by;
+      const hgt = 2 + rand() * (1 + level * 1.6);
+      g.strokeStyle = shade(mix(base, TERRAIN[GRASS].live, 0.5), 0.8 + rand() * 0.5);
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(px, py);
+      g.lineTo(px + (rand() - 0.5) * 2, py - hgt);
+      g.stroke();
+
+      // Flowers only at full bloom, and not on every blade.
+      if (level === VITS - 1 && rand() < 0.22) {
+        g.fillStyle = css(mix(hue, [255, 255, 255], 0.25), 0.95);
+        g.fillRect(px - 1, py - hgt - 1, 2, 2);
+      }
+    }
+  }
+
+  if (k === SAND && level === VITS - 1) {
+    for (let i = 0; i < 5; i++) {
+      const px = cx + (rand() - 0.5) * TW * 0.7;
+      const py = cy + (rand() - 0.5) * TH * 0.7;
+      g.fillStyle = css(mix(HERDS[herd].rgb, [255, 255, 255], 0.4), 0.7);
+      g.fillRect(px | 0, py | 0, 1, 1);
+    }
+  }
+
+  return cv;
+}
+
+// Black diamond, laid over a tile at whatever alpha its occlusion works out to.
+// One image covers every shade, and drawImage is much cheaper than filling the
+// same path two thousand times a frame.
+let shadowTile = null, okTile = null;
+
+function makeDiamond(fill) {
+  const cv = document.createElement("canvas");
+  cv.width = TW;
+  cv.height = TH;
+  const g = cv.getContext("2d");
+  diamondPath(g, TW / 2, TH / 2);
+  g.fillStyle = fill;
+  g.fill();
+  return cv;
+}
+
+function buildTiles() {
+  shadowTile = makeDiamond("#000");
+  // Goes over every tile that could take a building while one is armed. Puts
+  // the placement rule on the map instead of leaving you to find it by clicking.
+  okTile = makeDiamond("#9fe8b0");
+  for (let h = 0; h < HERDS.length; h++) {
+    const byKind = [];
+    for (let k = 0; k < 4; k++) {
+      const byLevel = [];
+      for (let l = 0; l < VITS; l++) {
+        const byVariant = [];
+        for (let v = 0; v < VARIANTS; v++) byVariant.push(makeTile(h, k, l, v));
+        byLevel.push(byVariant);
+      }
+      byKind.push(byLevel);
+    }
+    tiles.push(byKind);
+  }
+}
+
+// --- projection ----------------------------------------------------------------
+
+// Tile to world pixel, camera handles the rest. Takes an integer tile coord and
+// gives back the centre of the diamond drawn for it.
+const worldX = (tx, ty) => (tx - ty) * (TW / 2);
+const worldY = (tx, ty, e) => (tx + ty) * (TH / 2) - e * EH;
+
+// Anything at a fractional position needs its own projection, off by half a tile
+// from the one above.
+//
+// Tile (tx, ty) draws as a diamond centred on worldX/worldY of the integer
+// coordinate, but the ground it stands for is the square out to (tx+1, ty+1),
+// centred half a tile further along. Run a unit through worldY and it lands half
+// a tile up the screen, inside the terrace behind it rather than on the one it
+// is standing on. The x halves cancel out; only y shifts, by exactly TH/2.
+//
+// Diagonal movement is where you notice. +x +y in tile space is straight down
+// the screen, so the entire error reads as depth.
+const spotX = (px, py) => (px - py) * (TW / 2);
+const spotY = (px, py, z) => (px + py - 1) * (TH / 2) - z * EH;
+
+// Close enough at the start to tell a charger from a foal without touching the
+// wheel.
+const cam = { x: 0, y: 0, z: 1.7 };
+
+// World pixel back to a tile, elevation included. A screen point could be the top
+// of a tall tile or the ground behind it, and you see the tall one, so search
+// downward from the highest elevation and take the first tile that agrees.
+function pick(wx, wy) {
+  for (let e = LEVELS - 1; e >= 0; e--) {
+    const y = wy + e * EH;
+    // Inverse of spotX/spotY, so this returns the tile whose diamond the cursor
+    // is really inside. Inverting worldY is out by half a tile, and you feel it
+    // as placement refusing ground that looks fine and taking ground that does
+    // not.
+    const tx = Math.floor(wx / TW + y / TH + 0.5);
+    const ty = Math.floor(y / TH - wx / TW + 0.5);
+    if (inMap(tx, ty) && elev[at(tx, ty)] === e) return [tx, ty];
+  }
+  return null;
+}
+
+// --- unit art ------------------------------------------------------------------
+
+// A unicorn is one list of balls and limbs in its own 3D space. Rotate it and
+// project it through the terrain camera and you get every facing and every walk
+// frame out of that single description. Eight facings by four frames by three
+// types by four herds, all from about a hundred lines.
+//
+// Local axes: x forward, y to its left, z up. One unit of x or y is one map tile,
+// so the animal is sized against the ground under it.
+
+const FOAL = 0, CHARGER = 1, PRISM = 2;
+
+const UNITS = [
+  // scale     hp  speed  bloom  cost   what it is
+  // Foals are tough for the price and hit for almost nothing. They have to live
+  // long enough to cross open ground under prism fire, since chasing prisms down
+  // is the job. What they must never be is a cheap way to deal damage.
+  { s: 0.82, hp: 34, v: 2.15, b: 2.2, c: 12 },  // foal, fast, cheap, blooms best
+  { s: 1.16, hp: 62, v: 1.25, b: 0.6, c: 30 },  // charger, heavy melee
+  { s: 0.98, hp: 26, v: 1.65, b: 1.0, c: 26 },  // prism, ranged, fragile
+];
+
+const DIRS = 8, FRAMES = 4;
+// One unit of x, y or z is a map tile. A horse is roughly two and a half times
+// longer than tall and the body has to be laid out against that, or you get a
+// spider. Works out around 26 pixels long, 18 tall.
+const US = 32, UZ = 32;                  // screen pixels per unit of length, of height
+const SPR_W = 48, SPR_H = 56, ANCHOR = 40;
+
+// Direction index to a tile step. Index d is d * 45 degrees, so one number drives
+// both the flow field and which sprite to draw.
+const DIRX = [1, 1, 0, -1, -1, -1, 0, 1];
+const DIRY = [0, 1, 1, 1, 0, -1, -1, -1];
+
+const sprites = [];  // sprites[herd][type][dir][frame]
+
+function projU(x, y, z) {
+  return [(x - y) * US, (x + y) * (US / 2) - z * UZ];
+}
+
+// Parts for one type at one point in its stride. Phase is 0 to 1 over a full walk
+// cycle. All local space, the caller does the rotating.
+function unicornParts(type, phase, pal) {
+  const parts = [];
+  const ball = (x, y, z, r, col) => parts.push({ a: [x, y, z], r, col });
+  const limb = (x0, y0, z0, x1, y1, z1, w, col) =>
+    parts.push({ a: [x0, y0, z0], b: [x1, y1, z1], r: w, col });
+
+  const tau = Math.PI * 2;
+  // Body bobs twice a stride. Without it the walk looks like a model on rails.
+  const bob = Math.sin(phase * tau * 2) * 0.011;
+  const heavy = type === CHARGER;
+  const light = type === FOAL;
+
+  // Legs go in first and the depth sort sorts out which pair ends up behind the
+  // barrel. Short, thin, dark. Long pale ones made the first attempt look like a
+  // spider.
+  const legs = [
+    [0.160, 0.075, 0.0], [0.160, -0.075, 0.5],
+    [-0.205, 0.075, 0.5], [-0.205, -0.075, 0.0],
+  ];
+  const hip = 0.268 + bob;
+  for (const [lx, ly, off] of legs) {
+    const ph = (phase + off) * tau;
+    const swing = Math.sin(ph) * 0.055;
+    const lift = Math.max(0, Math.sin(ph)) * 0.030;
+    limb(lx, ly, hip, lx + swing * 0.45, ly, 0.130 + lift * 0.5, heavy ? 0.036 : 0.028, pal.leg);
+    limb(lx + swing * 0.45, ly, 0.130 + lift * 0.5, lx + swing, ly, lift, heavy ? 0.030 : 0.023, pal.leg);
+    ball(lx + swing, ly, lift + 0.010, heavy ? 0.026 : 0.021, pal.hoof);
+  }
+
+  // Tail. Sits behind the lot.
+  limb(-0.310, 0, 0.400 + bob, -0.395, 0.025, 0.175 + Math.sin(phase * tau) * 0.02,
+    0.045, pal.mane);
+
+  // Barrel, as overlapping balls. They have to overlap or you can see the seams.
+  // Radii dip in the middle and come back up at haunch and withers. That dip is
+  // basically the whole silhouette of a horse. Equal spheres give you a
+  // caterpillar, which is what this looked like side on the first time.
+  const fat = light ? 0.94 : heavy ? 1.12 : 1;
+  ball(-0.250, 0, 0.382 + bob, 0.124 * fat, pal.coat);
+  ball(-0.135, 0, 0.372 + bob, 0.112 * fat, pal.coat);
+  ball(-0.010, 0, 0.366 + bob, 0.104 * fat, pal.coat);
+  ball(0.110, 0, 0.372 + bob, 0.112 * fat, pal.coat);
+  ball(0.205, 0, 0.386 + bob, 0.118 * fat, pal.coat);
+
+  // Barding on a charger. Quickest way to say heavy at this size.
+  if (heavy) {
+    ball(-0.060, 0, 0.412 + bob, 0.106, pal.barding);
+    ball(0.080, 0, 0.414 + bob, 0.100, pal.barding);
+  }
+
+  // Neck and head. Foals get a bigger head for their size, which is the trick for
+  // reading as young instead of just small.
+  limb(0.205, 0, 0.420 + bob, 0.300, 0, 0.510 + bob, 0.074, pal.coat);
+  limb(0.212, 0, 0.452 + bob, 0.315, 0, 0.545 + bob, 0.044, pal.mane);
+  ball(0.340, 0, 0.538 + bob, light ? 0.070 : 0.061, pal.coat);
+  ball(0.400, 0, 0.512 + bob, 0.041, pal.muzzle);
+  ball(0.322, 0.042, 0.590 + bob, 0.019, pal.coat);
+  ball(0.322, -0.042, 0.590 + bob, 0.019, pal.coat);
+
+  // Eyes sit a touch forward of the head, so the depth sort reveals them when it
+  // faces you and hides them behind it when it doesn't. Two dark dots are the
+  // difference between an animal and a lump, and head on it was very much a
+  // lump.
+  ball(0.378, 0.044, 0.556 + bob, 0.018, pal.eye);
+  ball(0.378, -0.044, 0.556 + bob, 0.018, pal.eye);
+
+  // Horn. Stubby on a foal, heavy on a charger, long on a prism, never so long it
+  // looks like an aerial.
+  const hl = light ? 0.060 : heavy ? 0.095 : 0.125;
+  limb(0.360, 0, 0.576 + bob, 0.360 + hl * 0.40, 0, 0.576 + hl + bob,
+    heavy ? 0.026 : 0.018, pal.horn);
+
+  // Prisms carry a lit shard above the horn. Only glowing thing on the field, so
+  // you can pick the ranged units out of a scrum.
+  if (type === PRISM) {
+    ball(0.360 + hl * 0.44, 0, 0.598 + hl + bob, 0.036, pal.glow);
+    ball(0.360 + hl * 0.44, 0, 0.598 + hl + bob, 0.019, pal.glowHot);
+  }
+
+  return parts;
+}
+
+function makeUnit(herd, type, dir, frame) {
+  const cv = document.createElement("canvas");
+  cv.width = SPR_W;
+  cv.height = SPR_H;
+  const g = cv.getContext("2d");
+
+  const hue = HERDS[herd].rgb;
+  const pal = {
+    // Pale body, saturated trim. Not white, though. Herds have to be tellable
+    // apart across a battle line and a hint of hue doesn't cut it, but going
+    // fully saturated loses against terrain wearing the same colour.
+    coat: mix(hue, [255, 252, 255], 0.62),
+    leg: mix(hue, [176, 170, 186], 0.46),
+    muzzle: mix(hue, [214, 196, 210], 0.40),
+    mane: mix(hue, [255, 255, 255], 0.04),
+    horn: mix(hue, [255, 255, 255], 0.58),
+    barding: mix(hue, [30, 26, 38], 0.42),
+    hoof: [46, 40, 52],
+    eye: [26, 20, 32],
+    // Outline colour. At twenty pixels on textured grass there's nothing else
+    // holding the animal off the ground.
+    ink: mix(hue, [12, 9, 18], 0.78),
+    glow: mix(hue, [255, 255, 255], 0.35),
+    glowHot: [255, 255, 255],
+  };
+
+  const scale = UNITS[type].s;
+  const a = dir * Math.PI / 4;
+  const ca = Math.cos(a), sa = Math.sin(a);
+  const parts = unicornParts(type, frame / FRAMES, pal);
+
+  // Rotate into world space and project. Depth is x + y after rotating, bigger
+  // meaning lower on screen and nearer the camera.
+  for (const p of parts) {
+    const place = (q) => {
+      const x = (q[0] * ca - q[1] * sa) * scale;
+      const y = (q[0] * sa + q[1] * ca) * scale;
+      const s = projU(x, y, q[2] * scale);
+      return [s[0] + SPR_W / 2, s[1] + ANCHOR, x + y];
+    };
+    p.sa = place(p.a);
+    if (p.b) p.sb = place(p.b);
+    p.depth = p.b ? (p.sa[2] + p.sb[2]) / 2 : p.sa[2];
+  }
+  parts.sort((m, n) => m.depth - n.depth);
+
+  // Silhouette first, every part again but fatter and nearly black. Has to be a
+  // whole separate pass. Outline per part and you get outlines landing on top of
+  // parts already lit.
+  g.lineCap = "round";
+  g.fillStyle = g.strokeStyle = shade(pal.ink, 1);
+  for (const p of parts) {
+    const r = p.r * scale * US + 1.35;
+    if (p.b) {
+      g.lineWidth = r * 2;
+      g.beginPath();
+      g.moveTo(p.sa[0], p.sa[1]);
+      g.lineTo(p.sb[0], p.sb[1]);
+      g.stroke();
+    } else {
+      g.beginPath();
+      g.arc(p.sa[0], p.sa[1], r, 0, 7);
+      g.fill();
+    }
+  }
+
+  // Light from the upper left, same as the terrain. Fill each solid in shadow,
+  // then a smaller highlight offset toward the light. Enough for volume at this
+  // size.
+  for (const p of parts) {
+    const r = p.r * scale * US;
+    // Keep the highlight weak. Strong and every sphere gets its own little moon,
+    // and the animal falls apart into the balls it's built from.
+    if (p.b) {
+      g.lineCap = "round";
+      g.strokeStyle = shade(p.col, 0.84);
+      g.lineWidth = r * 2;
+      g.beginPath();
+      g.moveTo(p.sa[0], p.sa[1]);
+      g.lineTo(p.sb[0], p.sb[1]);
+      g.stroke();
+      g.strokeStyle = shade(p.col, 1.07);
+      g.lineWidth = Math.max(1, r * 1.0);
+      g.beginPath();
+      g.moveTo(p.sa[0] - r * 0.24, p.sa[1] - r * 0.30);
+      g.lineTo(p.sb[0] - r * 0.24, p.sb[1] - r * 0.30);
+      g.stroke();
+    } else {
+      g.fillStyle = shade(p.col, 0.84);
+      g.beginPath();
+      g.arc(p.sa[0], p.sa[1], r, 0, 7);
+      g.fill();
+      g.fillStyle = shade(p.col, 1.07);
+      g.beginPath();
+      g.arc(p.sa[0] - r * 0.22, p.sa[1] - r * 0.28, r * 0.74, 0, 7);
+      g.fill();
+    }
+  }
+
+  return cv;
+}
+
+// One ellipse per type, on the ground, drawn before the unit so it never lands on
+// the hooves.
+const shadows = [];
+
+function makeShadow2(type) {
+  const cv = document.createElement("canvas");
+  cv.width = SPR_W;
+  cv.height = 16;
+  const g = cv.getContext("2d");
+  const s = UNITS[type].s;
+  g.fillStyle = "rgba(0,0,0,0.32)";
+  g.beginPath();
+  g.ellipse(SPR_W / 2, 8, 13 * s, 6 * s, 0, 0, 7);
+  g.fill();
+  return cv;
+}
+
+function buildUnits() {
+  for (let h = 0; h < HERDS.length; h++) {
+    const byType = [];
+    for (let t = 0; t < UNITS.length; t++) {
+      const byDir = [];
+      for (let d = 0; d < DIRS; d++) {
+        const byFrame = [];
+        for (let f = 0; f < FRAMES; f++) byFrame.push(makeUnit(h, t, d, f));
+        byDir.push(byFrame);
+      }
+      byType.push(byDir);
+    }
+    sprites.push(byType);
+  }
+  for (let t = 0; t < UNITS.length; t++) shadows.push(makeShadow2(t));
+}
+
+// --- movement ------------------------------------------------------------------
+
+// No walking on water, and a step can only climb or drop one terrace. That second
+// rule is why high ground matters: a cliff is a wall and the ramps between
+// terraces are the only way up.
+function walkable(x, y) {
+  return inMap(x, y) && kind[at(x, y)] !== WATER && !occupied[at(x, y)];
+}
+
+// Symmetric on purpose. If a step is legal one way it has to be legal back.
+//
+// The corner test used to check the two tiles beside a diagonal against the tile
+// being left but not the one being entered, so a handful of steps were one-way.
+// Units could walk into pockets they couldn't leave, and the connectivity flood
+// fill split differently depending on which end it started from.
+function steppable(fx, fy, tx, ty) {
+  if (!walkable(tx, ty) || !walkable(fx, fy)) return false;
+  const ef = elev[at(fx, fy)], et = elev[at(tx, ty)];
+  if (Math.abs(et - ef) > 1) return false;
+
+  // No diagonal shortcuts round the corner of a cliff.
+  if (fx !== tx && fy !== ty) {
+    if (!walkable(tx, fy) || !walkable(fx, ty)) return false;
+    for (const e of [elev[at(tx, fy)], elev[at(fx, ty)]]) {
+      if (Math.abs(e - ef) > 1 || Math.abs(e - et) > 1) return false;
+    }
+  }
+  return true;
+}
+
+// One breadth first search out from the goal, writing the next step into every
+// tile it reaches. Costs a single pass over the map and then any number of units
+// can read it for nothing. Cheaper than A* per unit by a mile.
+const GOAL = 254, UNREACHED = 255;
+
+function buildField(gx, gy) {
+  const f = new Uint8Array(MAP * MAP).fill(UNREACHED);
+  if (!walkable(gx, gy)) return f;
+  const q = new Int32Array(MAP * MAP);
+  let head = 0, tail = 0;
+  f[at(gx, gy)] = GOAL;
+  q[tail++] = at(gx, gy);
+  while (head < tail) {
+    const ci = q[head++];
+    const cx = ci % MAP, cy = (ci / MAP) | 0;
+    for (let d = 0; d < 8; d++) {
+      // Which tile would land here by stepping d.
+      const nx = cx - DIRX[d], ny = cy - DIRY[d];
+      if (!inMap(nx, ny) || f[at(nx, ny)] !== UNREACHED) continue;
+      if (!steppable(nx, ny, cx, cy)) continue;
+      f[at(nx, ny)] = d;
+      q[tail++] = at(nx, ny);
+    }
+  }
+  return f;
+}
+
+const fieldCache = new Map();
+
+function getField(gx, gy) {
+  const key = gx + "," + gy;
+  let f = fieldCache.get(key);
+  if (!f) {
+    if (fieldCache.size > 12) fieldCache.clear();
+    f = buildField(gx, gy);
+    fieldCache.set(key, f);
+  }
+  return f;
+}
+
+// --- units ---------------------------------------------------------------------
+
+const units = [];
+
+function spawn(herd, type, x, y) {
+  const u = {
+    herd, type,
+    x, y,
+    hp: UNITS[type].hp,
+    dir: 0,
+    phase: Math.random(),
+    gx: -1, gy: -1,
+    field: null,
+    sel: false,
+    foe: null,
+    cool: Math.random() * 0.5,
+    hurt: 0,
+    // Drawn height, eased toward whatever tile is underneath. Float because the
+    // ground is terraced and the unit isn't, and stepping between terraces would
+    // otherwise jump the sprite a whole step.
+    z: elev[at(x | 0, y | 0)],
+  };
+  units.push(u);
+  return u;
+}
+
+// Orders snap to the nearest tile a unicorn can stand on.
+//
+// A building footprint isn't walkable, which makes the most obvious attack target
+// the one kind of tile you can't build a flow field for. Refusing those orders
+// meant right clicking a settlement did nothing, and since the AI aims its waves
+// at buildings, every wave order it ever gave went in the bin.
+function nearestWalkable(gx, gy) {
+  if (walkable(gx, gy)) return [gx, gy];
+  for (let r = 1; r < 12; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        if (walkable(gx + dx, gy + dy)) return [gx + dx, gy + dy];
+      }
+    }
+  }
+  return null;
+}
+
+function order(list, tx, ty) {
+  const spot = nearestWalkable(tx, ty);
+  if (!spot) return;
+  const [gx, gy] = spot;
+  const f = getField(gx, gy);
+  for (const u of list) {
+    u.gx = gx;
+    u.gy = gy;
+    u.field = f;
+    // Drop the current target, or it re-engages the moment it's back in reach and
+    // never goes anywhere.
+    u.foe = null;
+  }
+}
+
+// Coarse bucket grid, rebuilt every tick. Separation and target finding both want
+// "who's near me", and all-pairs over a few hundred units eats a frame.
+const CELL = 3;
+const GW = Math.ceil(MAP / CELL);
+let buckets = [];
+
+function rebuildBuckets() {
+  buckets = new Array(GW * GW);
+  for (const u of units) {
+    const c = (u.y / CELL | 0) * GW + (u.x / CELL | 0);
+    (buckets[c] || (buckets[c] = [])).push(u);
+  }
+}
+
+// Separation cares about a tile or so and one ring of cells does it. Target
+// finding needs to see past the longest weapon in the game, so it asks for three.
+// One ring is about three tiles, which is why nothing ever started a fight back
+// when this was hardcoded to one.
+function nearby(u, out, rad = 1) {
+  out.length = 0;
+  const cx = u.x / CELL | 0, cy = u.y / CELL | 0;
+  for (let y = cy - rad; y <= cy + rad; y++) {
+    for (let x = cx - rad; x <= cx + rad; x++) {
+      if (x < 0 || y < 0 || x >= GW || y >= GW) continue;
+      const b = buckets[y * GW + x];
+      if (b) for (const o of b) if (o !== u) out.push(o);
+    }
+  }
+  return out;
+}
+
+const scratch = [];
+
+// --- combat --------------------------------------------------------------------
+
+// Prisms hit softly from a long way off. Both halves earn their keep. The reach
+// breaks a charge before it lands; the weak base damage stops them also beating
+// the foals meant to run them down.
+const BLOOM_RATE = 0.075;
+
+const REACH = [0.75, 0.95, 5.5];
+const DAMAGE = [4, 15, 7];
+// Slowed by the same factor movement was, so a prism still lands the same number
+// of shots while something crosses its reach. Keeps pacing and balance apart.
+const RATE = [1.07, 1.9, 1.3];     // seconds between blows
+
+// Rock paper scissors as a table, not a rule to be derived. Chargers trample
+// foals, prisms shoot chargers before they arrive, foals run prisms down.
+// COUNTER[attacker][defender].
+//
+// The multiplier is big because units here do not kite. A counter cannot show up
+// through positioning the way it would in a larger game, so it has to be in the
+// numbers or the triangle is decoration and you just build whatever has the best
+// raw stats.
+const ADVANTAGE = 2.6;
+const COUNTER = [
+  [1, 1, ADVANTAGE],           // foal beats prism
+  [ADVANTAGE, 1, 1],           // charger beats foal
+  [1, ADVANTAGE, 1],           // prism beats charger
+];
+
+// Hitting downhill hurts more. Gives the terraces a reason to exist beyond
+// scenery.
+const HIGH_GROUND = 1.35;
+
+// How far a unit looks for trouble before someone tells it to.
+const AGGRO = 9;
+
+const shots = [];   // in flight prism beams, purely visual
+
+function elevAt(u) {
+  return elev[at(u.x | 0, u.y | 0)];
+}
+
+function fight(u, dt) {
+  const spec = UNITS[u.type];
+  u.cool -= dt;
+
+  // Only look again if there's nothing to hit or the last one died.
+  if (!u.foe || u.foe.hp <= 0) {
+    u.foe = null;
+    let best = 1e9;
+    for (const o of nearby(u, scratch, 3)) {
+      if (o.herd === u.herd || o.hp <= 0) continue;
+      const d = Math.hypot(o.x - u.x, o.y - u.y);
+      if (d < best) { best = d; u.foe = o; }
+    }
+    // Needs clearance over the longest reach in the game. At six it was barely
+    // above a prism's 5.5, so a unit hammering a building could be shot from
+    // just outside its notice and never turn round.
+    if (best > AGGRO) u.foe = null;
+  }
+
+  if (!u.foe) return false;
+
+  const d = Math.hypot(u.foe.x - u.x, u.foe.y - u.y);
+  if (d > REACH[u.type]) return false;
+
+  // In range. Turn to face, swing when the cooldown lets us.
+  u.dir = ((Math.round(Math.atan2(u.foe.y - u.y, u.foe.x - u.x) / (Math.PI / 4)) % 8) + 8) % 8;
+  if (u.cool > 0) return true;
+  u.cool = RATE[u.type];
+
+  let dmg = DAMAGE[u.type] * COUNTER[u.type][u.foe.type];
+  if (elevAt(u) > elevAt(u.foe)) dmg *= HIGH_GROUND;
+  u.foe.hp -= dmg;
+  u.foe.hurt = 0.28;
+  // Anything hit turns on whoever hit it, assuming it had no target already.
+  // Otherwise a unit under fire from beyond its own reach carries on hammering a
+  // wall while something shoots it in the back.
+  if (!u.foe.foe) u.foe.foe = u;
+
+  if (u.type === PRISM) {
+    shots.push({
+      x0: u.x, y0: u.y, z0: u.z,
+      x1: u.foe.x, y1: u.foe.y, z1: u.foe.z,
+      herd: u.herd, t: 0.22,
+    });
+    sfx.beam();
+  } else {
+    sfx.melee();
+  }
+  return true;
+}
+
+// Buildings get attacked too. Lose every grove and you're out, conditions
+// permitting.
+function fightBuilding(u, dt) {
+  if (u.foe) return false;
+  for (const b of buildings) {
+    if (b.herd === u.herd || b.hp <= 0) continue;
+    // Distance to the nearest point of the 2x2. Measuring from the centre of the
+    // top-left tile left a unit on the far side out of range of a building it
+    // was pressed against, and it just refused to swing.
+    const nx = Math.min(Math.max(u.x, b.x), b.x + 2);
+    const ny = Math.min(Math.max(u.y, b.y), b.y + 2);
+    const d = Math.hypot(nx - u.x, ny - u.y);
+    if (d > REACH[u.type] + 0.7) continue;
+    u.cool -= dt;
+    if (u.cool > 0) return true;
+    u.cool = RATE[u.type];
+    b.hp -= DAMAGE[u.type];
+    b.hurt = 0.28;
+    return true;
+  }
+  return false;
+}
+
+function reap() {
+  for (let i = units.length - 1; i >= 0; i--) {
+    const u = units[i];
+    if (u.hp > 0) continue;
+    // Bodies bleach the ground under them, so a lost battle stays on the map long
+    // after the fighting has moved on.
+    const j = at(u.x | 0, u.y | 0);
+    if (own[j] !== u.herd) vit[j] = Math.max(0, vit[j] - 0.5);
+    units.splice(i, 1);
+    sfx.die();
+  }
+  for (let i = buildings.length - 1; i >= 0; i--) {
+    const b = buildings[i];
+    if (b.hp > 0) continue;
+    for (let dy = 0; dy < 2; dy++) {
+      for (let dx = 0; dx < 2; dx++) occupied[at(b.x + dx, b.y + dy)] = 0;
+    }
+    buildings.splice(i, 1);
+    fieldCache.clear();
+    sfx.raze();
+  }
+}
+
+function stepUnits(dt) {
+  rebuildBuckets();
+  for (const u of units) {
+    const spec = UNITS[u.type];
+    if (u.hurt > 0) u.hurt -= dt;
+
+    // Drawn height, eased downward only.
+    //
+    // Units are depth sorted by the tile they stand on and drawn straight after
+    // it, which only holds while the drawn height matches that tile. Draw one
+    // lower and it lands inside its own terrace's cliff face, then on top of
+    // whatever comes next, and it looks like the unicorn is walking through the
+    // block. So climbing snaps, since that is the direction that would clip into
+    // the wall, and only stepping down gets smoothed, where being drawn a little
+    // high cannot hurt anything.
+    const ground = elev[at(u.x | 0, u.y | 0)];
+    if (ground >= u.z) u.z = ground;
+    else u.z += (ground - u.z) * Math.min(1, dt * 11);
+
+    // Units in contact stop and fight, unless they've been told to go somewhere.
+    //
+    // Combat used to be checked first and unconditionally, so anything standing
+    // next to an enemy ignored its orders. Order accepted, selection ring lit,
+    // nothing moves. A move order now breaks off the fight and holds until the
+    // unit arrives, at which point the field clears and it engages again on its
+    // own.
+    if (!u.field && (fight(u, dt) || fightBuilding(u, dt))) {
+      bloomAt(u.x | 0, u.y | 0, u.herd, dt * spec.b * BLOOM_RATE, 1.7);
+      continue;
+    }
+
+    let vx = 0, vy = 0;
+
+    if (u.field) {
+      const d = u.field[at(u.x | 0, u.y | 0)];
+      if (d === GOAL) {
+        u.field = null;
+      } else if (d === UNREACHED) {
+        // Standing somewhere the field never got to, which happens when a
+        // building goes up on the tile underneath. Dropping the order here left
+        // the unit deaf to everything afterwards, so head straight at the goal
+        // and let it pick the field back up once it's clear.
+        vx = u.gx + 0.5 - u.x;
+        vy = u.gy + 0.5 - u.y;
+        const len = Math.hypot(vx, vy) || 1;
+        vx /= len;
+        vy /= len;
+      } else {
+        vx = DIRX[d];
+        vy = DIRY[d];
+        const len = Math.hypot(vx, vy);
+        vx /= len;
+        vy /= len;
+      }
+      // Close enough. Skip it and a crowd grinds against the goal tile forever.
+      if (u.field && Math.hypot(u.x - u.gx - 0.5, u.y - u.gy - 0.5) < 0.9) u.field = null;
+    } else if (u.foe) {
+      // Nothing to do and something hostile nearby, so go for it. Without this a
+      // prism never gets to use its reach, since nothing walks into it, and the
+      // AI has no way of bringing a fight to anyone.
+      vx = u.foe.x - u.x;
+      vy = u.foe.y - u.y;
+      const len = Math.hypot(vx, vy) || 1;
+      vx /= len;
+      vy /= len;
+    }
+
+    // Separation, so a herd looks like a herd and not one unit drawn eight times
+    // in the same spot.
+    let sx = 0, sy = 0;
+    for (const o of nearby(u, scratch)) {
+      const dx = u.x - o.x, dy = u.y - o.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > 0.0001 && d2 < 0.64) {
+        const w = (0.8 - Math.sqrt(d2)) / 0.8;
+        const d = Math.sqrt(d2);
+        sx += (dx / d) * w;
+        sy += (dy / d) * w;
+      }
+    }
+    vx += sx * 1.5;
+    vy += sy * 1.5;
+
+    const sp = Math.hypot(vx, vy);
+    if (sp > 0.02) {
+      const step = spec.v * dt;
+      let nx = u.x + (vx / sp) * step;
+      let ny = u.y + (vy / sp) * step;
+      // Slide along anything it can't enter instead of gluing itself to it.
+      if (!steppable(u.x | 0, u.y | 0, nx | 0, u.y | 0)) nx = u.x;
+      if (!steppable(u.x | 0, u.y | 0, u.x | 0, ny | 0)) ny = u.y;
+      u.x = Math.max(0.01, Math.min(MAP - 0.01, nx));
+      u.y = Math.max(0.01, Math.min(MAP - 0.01, ny));
+      u.dir = ((Math.round(Math.atan2(vy, vx) / (Math.PI / 4)) % 8) + 8) % 8;
+      u.phase = (u.phase + step * 1.6) % 1;
+    }
+
+    // The whole game, one line. Stand somewhere and it comes back to life.
+    bloomAt(u.x | 0, u.y | 0, u.herd, dt * spec.b * BLOOM_RATE, 1.7);
+  }
+
+  for (let i = shots.length - 1; i >= 0; i--) {
+    if ((shots[i].t -= dt) <= 0) shots.splice(i, 1);
+  }
+  reap();
+}
+
+// --- buildings -----------------------------------------------------------------
+
+// Buildings want a 2x2 of level ground the herd has already brought back. That
+// one rule keeps this from being a build-order race. Nothing goes down until you
+// have walked somewhere and held it, so expanding is a movement decision.
+
+const GROVE = 0, STABLE = 1, SPIRE = 2;
+
+// Bloom buys buildings and nothing else. Units come free on a timer, capped by
+// what the buildings can sustain.
+//
+// Charging for units as well seems reasonable and isn't. Production runs on its
+// own schedule, so it quietly drinks the entire income and the purse never
+// grows. Splitting them makes the trickle visible and leaves one question worth
+// asking, which is what to build and where.
+const BUILD = [
+  // cost  seconds  makes    hit points  population it sustains
+  { c: 180, p: 9, m: FOAL, hp: 420, cap: 16, n: "grove" },
+  { c: 90, p: 13, m: CHARGER, hp: 280, cap: 12, n: "stable" },
+  { c: 130, p: 11, m: PRISM, hp: 240, cap: 10, n: "spire" },
+];
+
+// How far a building blooms the ground round it, and how quickly. Replaced
+// vitality decay. Territory now grows from what you have built as well as where
+// you walk, instead of draining the moment nobody is stood on it.
+const AURA = [4.5, 0, 8];
+const AURA_RATE = [0.028, 0, 0.045];
+
+// Hard ceiling per herd, set in the lobby. Without one the population is just the
+// sum of everything ever built and climbs forever. Where to put it is taste, so
+// it's the player's call.
+const POPS = [40, 90, 160, 260];
+let popIdx = 1;
+const maxPop = () => POPS[popIdx];
+
+// Every building of a kind costs half again as much as the last, so the answer to
+// every question stops being another building and starts being more ground.
+function costOf(herd, type) {
+  let n = 0;
+  for (const b of buildings) if (b.herd === herd && b.type === type) n++;
+  return Math.round(BUILD[type].c * (1 + 0.5 * n));
+}
+
+const BW = 132, BH = 184, BANCHOR = 144;   // building sprite canvas and its base
+const builds = [];                          // sprites[herd][type]
+const buildings = [];
+const occupied = new Uint8Array(MAP * MAP);
+
+// Box with a diamond top, extruded up from a base centred on (cx, cy). Three
+// faces, lit from upper left like everything else.
+function isoBox(g, cx, cy, hw, hh, ht, col) {
+  const top = cy - ht;
+  g.fillStyle = shade(col, 1.06);
+  g.beginPath();
+  g.moveTo(cx, top - hh);
+  g.lineTo(cx + hw, top);
+  g.lineTo(cx, top + hh);
+  g.lineTo(cx - hw, top);
+  g.fill();
+  g.fillStyle = shade(col, 0.58);
+  g.beginPath();
+  g.moveTo(cx - hw, top);
+  g.lineTo(cx, top + hh);
+  g.lineTo(cx, cy + hh);
+  g.lineTo(cx - hw, cy);
+  g.fill();
+  g.fillStyle = shade(col, 0.80);
+  g.beginPath();
+  g.moveTo(cx, top + hh);
+  g.lineTo(cx + hw, top);
+  g.lineTo(cx + hw, cy);
+  g.lineTo(cx, cy + hh);
+  g.fill();
+}
+
+// Gabled roof on a diamond footprint. Ridge runs between the midpoints of two
+// opposite edges, which is the bit that stops it looking like another box.
+function gable(g, cx, cy, hw, hh, rh, col) {
+  const m1x = cx - hw / 2, m1y = cy - hh / 2 - rh;
+  const m2x = cx + hw / 2, m2y = cy + hh / 2 - rh;
+  g.fillStyle = shade(col, 1.02);
+  g.beginPath();
+  g.moveTo(cx, cy - hh);
+  g.lineTo(cx + hw, cy);
+  g.lineTo(m2x, m2y);
+  g.lineTo(m1x, m1y);
+  g.fill();
+  g.fillStyle = shade(col, 0.64);
+  g.beginPath();
+  g.moveTo(cx - hw, cy);
+  g.lineTo(cx, cy + hh);
+  g.lineTo(m2x, m2y);
+  g.lineTo(m1x, m1y);
+  g.fill();
+}
+
+function makeBuilding(herd, type) {
+  const cv = document.createElement("canvas");
+  cv.width = BW;
+  cv.height = BH;
+  const g = cv.getContext("2d");
+  const cx = BW / 2, cy = BANCHOR;
+  const hue = HERDS[herd].rgb;
+  const rand = stream(herd * 31 + type * 977);
+
+  const stone = mix([96, 92, 88], hue, 0.16);
+  isoBox(g, cx, cy, 62, 31, 9, stone);
+
+  if (type === GROVE) {
+    // Big tree. Blossom carries the herd colour, so you can tell whose capital
+    // you're looking at from across the map.
+    const bark = mix([84, 64, 52], hue, 0.10);
+    isoBox(g, cx, cy - 9, 13, 7, 32, bark);
+    const leaf = mix([56, 104, 52], hue, 0.22);
+    const crown = cy - 9 - 32;
+    for (let i = 0; i < 16; i++) {
+      const a = rand() * 7, r = rand();
+      const bx = cx + Math.cos(a) * r * 34;
+      const by = crown - 14 + Math.sin(a) * r * 15 - rand() * 12;
+      g.fillStyle = shade(leaf, 0.74 + rand() * 0.42);
+      g.beginPath();
+      g.arc(bx, by, 12 + rand() * 8, 0, 7);
+      g.fill();
+    }
+    for (let i = 0; i < 22; i++) {
+      const a = rand() * 7, r = 0.4 + rand() * 0.6;
+      g.fillStyle = css(mix(hue, [255, 255, 255], rand() * 0.5), 0.95);
+      g.beginPath();
+      g.arc(cx + Math.cos(a) * r * 32, crown - 14 + Math.sin(a) * r * 14 - rand() * 10,
+        1.6, 0, 7);
+      g.fill();
+    }
+  } else if (type === STABLE) {
+    const timber = mix([124, 96, 66], hue, 0.14);
+    isoBox(g, cx, cy - 9, 46, 23, 24, timber);
+    gable(g, cx, cy - 9 - 24, 52, 26, 20, mix([78, 58, 46], hue, 0.18));
+    // Doorway, otherwise the front is a blank panel.
+    g.fillStyle = "rgba(18,14,20,0.8)";
+    g.beginPath();
+    g.moveTo(cx + 10, cy - 20);
+    g.lineTo(cx + 26, cy - 28);
+    g.lineTo(cx + 26, cy - 12);
+    g.lineTo(cx + 10, cy - 4);
+    g.fill();
+  } else {
+    // Crystal spire. Narrowing boxes in the herd colour with a shard on top.
+    // This one blooms a wide ring on its own, so it ought to look like it's
+    // radiating something.
+    const cry = mix(hue, [255, 255, 255], 0.30);
+    let w = 34, h = 17, base = cy - 9;
+    for (let i = 0; i < 4; i++) {
+      isoBox(g, cx, base, w, h, 20, mix(cry, [255, 255, 255], i * 0.10));
+      base -= 20;
+      w *= 0.72;
+      h *= 0.72;
+    }
+    g.fillStyle = css(mix(hue, [255, 255, 255], 0.55), 0.95);
+    g.beginPath();
+    g.moveTo(cx, base - 26);
+    g.lineTo(cx + 9, base - 8);
+    g.lineTo(cx, base + 4);
+    g.lineTo(cx - 9, base - 8);
+    g.fill();
+    g.fillStyle = "rgba(255,255,255,0.85)";
+    g.beginPath();
+    g.arc(cx, base - 8, 3.4, 0, 7);
+    g.fill();
+  }
+
+  return cv;
+}
+
+function buildBuildings() {
+  for (let h = 0; h < HERDS.length; h++) {
+    const byType = [];
+    for (let t = 0; t < BUILD.length; t++) byType.push(makeBuilding(h, t));
+    builds.push(byType);
+  }
+}
+
+// 2x2, all four at the same elevation, all four alive and yours, none built on.
+function canPlace(herd, x, y) {
+  if (!inMap(x, y) || !inMap(x + 1, y + 1)) return false;
+  const e = elev[at(x, y)];
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      const i = at(x + dx, y + dy);
+      if (kind[i] === WATER || elev[i] !== e || occupied[i]) return false;
+      if (own[i] !== herd || vit[i] < 0.45) return false;
+    }
+  }
+  return true;
+}
+
+function place(herd, type, x, y) {
+  const b = { herd, type, x, y, hp: BUILD[type].hp, t: 0, hurt: 0 };
+  buildings.push(b);
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) occupied[at(x + dx, y + dy)] = 1;
+  }
+  // Shove anything standing here out of the way. Left in place it ends up on a
+  // tile no flow field reaches and stops answering orders entirely.
+  for (const u of units) {
+    if (u.x >= x && u.x < x + 2 && u.y >= y && u.y < y + 2) {
+      const spot = nearestWalkable(u.x | 0, u.y | 0);
+      if (spot) {
+        u.x = spot[0] + 0.5;
+        u.y = spot[1] + 0.5;
+      }
+    }
+  }
+
+  // Claim the ground under it outright. Any flow field built before this no
+  // longer describes the map.
+  bloomAt(x, y, herd, 1, 4);
+  fieldCache.clear();
+  return b;
+}
+
+// --- economy -------------------------------------------------------------------
+
+// One resource, and it's the map. Income is whatever living ground you hold, so
+// there's nothing to click for money, only ground to go and stand on. Territory
+// is also the score and the win condition.
+const purse = HERDS.map(() => 0);
+const territory = HERDS.map(() => 0);
+const pop = HERDS.map(() => 0);
+const cap = HERDS.map(() => 0);
+
+const INCOME = 0.026;   // bloom per living tile per second
+
+let slowT = 0;
+
+// Slow tick, not every frame. Nothing in here moves fast enough to justify a full
+// pass over the map at 60Hz.
+function economy(dt) {
+  slowT += dt;
+  if (slowT < 0.4) return;
+  const step = slowT;
+  slowT = 0;
+
+  // Buildings bloom the ground around them. Anything already brought back stays
+  // back; nothing rots on its own and only a rival walking on it takes it away.
+  for (const b of buildings) {
+    if (AURA[b.type]) bloomAt(b.x, b.y, b.herd, AURA_RATE[b.type] * step, AURA[b.type]);
+  }
+
+  territory.fill(0);
+  for (let i = 0; i < MAP * MAP; i++) {
+    if (vit[i] > 0) territory[own[i]] += vit[i];
+  }
+
+  for (let h = 0; h < herdCount; h++) purse[h] += territory[h] * INCOME * step;
+
+  // Headcount against what the buildings can sustain. Building is the only way to
+  // lift the ceiling, so bloom is worth saving up.
+  pop.fill(0);
+  cap.fill(0);
+  for (const u of units) pop[u.herd]++;
+  for (const b of buildings) cap[b.herd] += BUILD[b.type].cap;
+  for (let h = 0; h < herdCount; h++) cap[h] = Math.min(maxPop(), cap[h]);
+
+  for (const b of buildings) {
+    const spec = BUILD[b.type];
+    b.t += step;
+    if (b.t >= spec.p && pop[b.herd] < cap[b.herd]) {
+      b.t = 0;
+      for (let tries = 0; tries < 24; tries++) {
+        const a = Math.random() * Math.PI * 2;
+        const x = b.x + 0.5 + Math.cos(a) * (2 + Math.random() * 2);
+        const y = b.y + 0.5 + Math.sin(a) * (2 + Math.random() * 2);
+        if (walkable(x | 0, y | 0)) { spawn(b.herd, spec.m, x, y); pop[b.herd]++; break; }
+      }
+    }
+  }
+}
+
+// --- audio ---------------------------------------------------------------------
+
+// No samples. Every sound is an oscillator or a burst of noise through an
+// envelope, a few hundred bytes for the lot.
+//
+// The music is the scoreboard. Each herd is one voice in a slow arpeggio, loud in
+// proportion to the ground it holds, so a herd getting pushed off the map fades
+// out of the chord. Taking ground is the only thing that changes it.
+
+let actx = null, master = null, noiseBuf = null;
+let muted = false;
+let voices = 0;    // sounds started this frame, so a big melee cannot flood it
+
+function audioInit() {
+  if (actx) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  actx = new Ctx();
+  master = actx.createGain();
+  master.gain.value = 0.3;
+  master.connect(actx.destination);
+
+  // A second of white noise, made once, shared by every percussive sound. A
+  // buffer per hit would allocate its way through the entire battle.
+  noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+
+function tone(freq, dur, type, gain, bend) {
+  if (!actx || muted || voices > 6) return;
+  voices++;
+  const t = actx.currentTime;
+  const o = actx.createOscillator();
+  const g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (bend && bend !== 1) o.frequency.exponentialRampToValueAtTime(Math.max(24, freq * bend), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  g.connect(master);
+  o.start(t);
+  o.stop(t + dur + 0.03);
+}
+
+function thud(dur, gain, freq, q) {
+  if (!actx || muted || voices > 6) return;
+  voices++;
+  const t = actx.currentTime;
+  const s = actx.createBufferSource();
+  s.buffer = noiseBuf;
+  const f = actx.createBiquadFilter();
+  f.type = "bandpass";
+  f.frequency.value = freq;
+  f.Q.value = q || 1.2;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f);
+  f.connect(g);
+  g.connect(master);
+  s.start(t);
+  s.stop(t + dur + 0.02);
+}
+
+const sfx = {
+  melee: () => thud(0.13, 0.5, 260, 0.9),
+  beam: () => tone(1250, 0.16, "sawtooth", 0.09, 0.35),
+  die: () => tone(300, 0.42, "triangle", 0.16, 0.28),
+  raze: () => { thud(0.7, 0.7, 90, 0.6); tone(150, 0.6, "square", 0.1, 0.4); },
+  built: () => { tone(392, 0.18, "triangle", 0.13, 1); tone(587, 0.3, "triangle", 0.11, 1); },
+  pick: () => tone(760, 0.05, "square", 0.05, 1),
+  deny: () => tone(150, 0.11, "square", 0.09, 0.7),
+};
+
+// Minor pentatonic, herds a third apart, so three voices at once come out
+// consonant instead of as a cluster.
+const SCALE = [0, 3, 5, 7, 10];
+let musT = 0, musStep = 0;
+
+function music(dt) {
+  if (!actx || muted) return;
+  musT -= dt;
+  if (musT > 0) return;
+  musT = 1.15;
+  let total = 0;
+  for (let h = 0; h < herdCount; h++) total += territory[h];
+  if (total < 1) return;
+  for (let h = 0; h < herdCount; h++) {
+    const share = territory[h] / total;
+    if (share < 0.06) continue;
+    const n = SCALE[(musStep + h * 2) % SCALE.length] + h * 3;
+    tone(110 * Math.pow(2, n / 12), 1.7, "triangle", 0.03 + share * 0.09, 1);
+  }
+  musStep++;
+}
+
+// --- the opposing herds --------------------------------------------------------
+
+// Rivals play the same game you do. Same prices out of the same purse, same
+// canPlace, same flow fields, no map knowledge you lack. Nothing gets multiplied
+// for them, which means a mistake in the rules can't be papered over by handing
+// them more of everything.
+//
+// Difficulty was cadence and wave size to begin with, and that did almost
+// nothing, because attacking is not what wins. Spreading out and blooming ground
+// is. So it also has to reach how eagerly a rival builds and how much of its herd
+// it pushes to the frontier.
+const RIVALS = [
+  // name       decide every   wave   bank before building   share of foals sent out
+  ["Gentle", 7, 18, 2.2, 0.35],
+  ["Even", 4.4, 12, 1.35, 0.7],
+  ["Fierce", 2.5, 8, 1, 1],
+];
+let difficulty = 1;
+
+// Scales the timestep the simulation gets and nothing else. Panning stays on real
+// time so the controls feel identical whatever this is set to.
+const SPEEDS = [["Slow", 0.6], ["Brisk", 1], ["Swift", 1.7]];
+let speed = 1;
+
+const brains = HERDS.map(() => null);
+
+// Somewhere worth walking to. Dead or barely alive, not too far from home.
+// Sampled rather than searched; scanning the whole map is a lot of work just to
+// pick a direction to wander in.
+function frontier(h, hx, hy) {
+  let best = null, bestScore = -1e9;
+  for (let n = 0; n < 70; n++) {
+    const a = Math.random() * Math.PI * 2, d = 5 + Math.random() * 17;
+    const x = (hx + Math.cos(a) * d) | 0, y = (hy + Math.sin(a) * d) | 0;
+    if (!walkable(x, y)) continue;
+    const i = at(x, y);
+    // Dead, not already ours, and close. In that order.
+    const score = (own[i] === h ? -2.5 : 0) + (1 - vit[i]) * 3 - d * 0.03;
+    if (score > bestScore) { bestScore = score; best = [x, y]; }
+  }
+  return best;
+}
+
+function findSpot(h) {
+  for (const b of buildings) {
+    if (b.herd !== h) continue;
+    for (let r = 2; r < 10; r++) {
+      for (let k = 0; k < 10; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const x = (b.x + Math.cos(a) * r) | 0, y = (b.y + Math.sin(a) * r) | 0;
+        if (canPlace(h, x, y)) return [x, y];
+      }
+    }
+  }
+  return null;
+}
+
+// Nearest thing belonging to someone else, buildings first. Groves are how a herd
+// actually gets removed from the game, so waves aim at those rather than at
+// whichever unit happens to be nearby.
+function quarry(h, hx, hy) {
+  let best = null, bestD = 1e9;
+  for (const b of buildings) {
+    if (b.herd === h) continue;
+    const d = Math.hypot(b.x - hx, b.y - hy) - (b.type === GROVE ? 12 : 0);
+    if (d < bestD) { bestD = d; best = [b.x, b.y]; }
+  }
+  if (best) return best;
+  for (const u of units) {
+    if (u.herd === h) continue;
+    const d = Math.hypot(u.x - hx, u.y - hy);
+    if (d < bestD) { bestD = d; best = [u.x | 0, u.y | 0]; }
+  }
+  return best;
+}
+
+function think(h, dt) {
+  const b = brains[h];
+  b.t -= dt;
+  if (b.t > 0) return;
+  b.t = RIVALS[difficulty][1];
+
+  const home = buildings.find((x) => x.herd === h) || null;
+  if (!home) return;                       // razed; nothing left to decide with
+  const hx = home.x, hy = home.y;
+
+  // Build order. Spire first, for the ring of ground it blooms on its own.
+  const mine = buildings.filter((x) => x.herd === h);
+  const spires = mine.filter((x) => x.type === SPIRE).length;
+  const stables = mine.filter((x) => x.type === STABLE).length;
+  const groves = mine.filter((x) => x.type === GROVE).length;
+  const greed = RIVALS[difficulty][3];
+  let want = -1;
+  if (spires < groves && purse[h] >= costOf(h, SPIRE) * greed) want = SPIRE;
+  else if (stables < groves + 1 && pop[h] < maxPop() &&
+    purse[h] >= costOf(h, STABLE) * greed) want = STABLE;
+  else if (purse[h] >= costOf(h, GROVE) * 1.3 * greed) want = GROVE;
+  if (want >= 0) {
+    const spot = findSpot(h);
+    if (spot) {
+      purse[h] -= costOf(h, want);
+      place(h, want, spot[0], spot[1]);
+    }
+  }
+
+  // Fighters pile up until there are enough, then leave together. Foals never go
+  // with them; their job is being out on the map holding ground, which is the
+  // entire economy.
+  const army = [], scouts = [];
+  for (const u of units) {
+    if (u.herd !== h) continue;
+    (u.type === FOAL ? scouts : army).push(u);
+  }
+
+  if (army.length >= b.wave) {
+    const target = quarry(h, hx, hy);
+    if (target) {
+      order(army, target[0], target[1]);
+      // Next wave has to be bigger, or a herd that loses one attack feeds the
+      // replacements in one at a time.
+      b.wave = Math.min(34, army.length + RIVALS[difficulty][2] * 0.5);
+    }
+  }
+
+  // Idle foals go out onto dead ground in small groups, so the herd fans across
+  // the frontier instead of marching as one column.
+  const idle = scouts.filter((u) => !u.field);
+  const send = Math.ceil(idle.length * RIVALS[difficulty][4]);
+  for (let i = 0; i < send; i += 3) {
+    const spot = frontier(h, hx, hy);
+    if (spot) order(idle.slice(i, i + 3), spot[0], spot[1]);
+  }
+}
+
+// --- rendering -----------------------------------------------------------------
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const el = (id) => document.getElementById(id);
+let vw = 0, vh = 0;
+
+function resize() {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  vw = innerWidth;
+  vh = innerHeight;
+  canvas.width = vw * dpr;
+  canvas.height = vh * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener("resize", resize);
+
+// Which of the four images a tile draws at. A function so the float field and the
+// discrete art only meet in one place.
+function levelOf(i) {
+  const v = vit[i];
+  if (v <= 0.02) return 0;
+  return Math.min(VITS - 1, 1 + (v * (VITS - 1)) | 0);
+}
+
+function drawCliffs(tx, ty, sx, sy, e, base, occ) {
+  // Only two faces are visible: +tx is down and right on screen, +ty is down and
+  // left.
+  const rightE = inMap(tx + 1, ty) ? elev[at(tx + 1, ty)] : -1;
+  const leftE = inMap(tx, ty + 1) ? elev[at(tx, ty + 1)] : -1;
+
+  const face = (dropTo, isLeft) => {
+    const drop = (e - Math.max(0, dropTo)) * EH;
+    if (drop <= 0) return;
+    const k = (isLeft ? 0.52 : 0.72) * occ;
+    ctx.fillStyle = shade(base, k);
+    ctx.beginPath();
+    if (isLeft) {
+      ctx.moveTo(sx - TW / 2, sy);
+      ctx.lineTo(sx, sy + TH / 2);
+      ctx.lineTo(sx, sy + TH / 2 + drop);
+      ctx.lineTo(sx - TW / 2, sy + drop);
+    } else {
+      ctx.moveTo(sx, sy + TH / 2);
+      ctx.lineTo(sx + TW / 2, sy);
+      ctx.lineTo(sx + TW / 2, sy + drop);
+      ctx.lineTo(sx, sy + TH / 2 + drop);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Strata, or a tall face is just a flat trapezoid.
+    ctx.fillStyle = shade(base, k * 0.82);
+    for (let d = EH; d < drop; d += EH) {
+      if (isLeft) ctx.fillRect(sx - TW / 2, sy + d, TW / 2, 1);
+      else ctx.fillRect(sx, sy + TH / 2 + d, TW / 2, 1);
+    }
+  };
+
+  face(leftE, true);
+  face(rightE, false);
+}
+
+// Units get bucketed by the tile they stand on and drawn when that tile is drawn.
+// That interleaves them with the terrain properly: behind a cliff means behind
+// it. Sorting units among themselves separately would put the whole lot either in
+// front of the ground or behind it.
+const unitTile = new Map();
+const buildTile = new Map();
+
+function bucketUnits() {
+  unitTile.clear();
+  for (const u of units) {
+    const key = at(u.x | 0, u.y | 0);
+    let b = unitTile.get(key);
+    if (!b) unitTile.set(key, b = []);
+    b.push(u);
+  }
+  // Buildings draw with the nearest tile of their footprint, so anything in front
+  // gets drawn after and covers them properly.
+  buildTile.clear();
+  for (const b of buildings) buildTile.set(at(b.x + 1, b.y + 1), b);
+}
+
+function drawBuilding(b, alpha) {
+  const sx = worldX(b.x + 0.5, b.y + 0.5);
+  const sy = worldY(b.x + 0.5, b.y + 0.5, elev[at(b.x, b.y)]);
+  if (alpha) ctx.globalAlpha = alpha;
+  ctx.drawImage(builds[b.herd][b.type], sx - BW / 2, sy - BANCHOR);
+  if (alpha) ctx.globalAlpha = 1;
+  if (alpha) return;
+
+  if (b.hurt > 0) {
+    b.hurt -= 1 / 60;
+    ctx.fillStyle = "rgba(255,90,80," + Math.max(0, b.hurt * 1.8).toFixed(2) + ")";
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 58, 29, 0, 0, 7);
+    ctx.fill();
+  }
+  const frac = b.hp / BUILD[b.type].hp;
+  if (frac < 0.999) bar(sx, sy - 78, 44, frac);
+}
+
+function drawUnit(u) {
+  const sx = spotX(u.x, u.y);
+  const sy = spotY(u.x, u.y, u.z);
+  const f = (u.phase * FRAMES | 0) % FRAMES;
+
+  if (u.sel) {
+    ctx.strokeStyle = "rgba(190,255,190,0.85)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 14 * UNITS[u.type].s, 7 * UNITS[u.type].s, 0, 0, 7);
+    ctx.stroke();
+  }
+  ctx.drawImage(shadows[u.type], sx - SPR_W / 2, sy - 8);
+  ctx.drawImage(sprites[u.herd][u.type][u.dir][f], sx - SPR_W / 2, sy - ANCHOR);
+
+  // Hits flash on the ground rather than tinting the sprite. Tinting means
+  // pushing the sprite through a second canvas every time anything gets hit.
+  if (u.hurt > 0) {
+    ctx.fillStyle = "rgba(255,90,80," + (u.hurt * 2.2).toFixed(2) + ")";
+    ctx.beginPath();
+    ctx.ellipse(sx, sy - 8, 13, 7, 0, 0, 7);
+    ctx.fill();
+  }
+
+  const frac = u.hp / UNITS[u.type].hp;
+  if (frac < 0.999) bar(sx, sy - 32, 16, frac);
+}
+
+// One health bar for both units and buildings.
+function bar(cx, y, w, frac) {
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(cx - w / 2 - 1, y - 1, w + 2, 4);
+  ctx.fillStyle = frac > 0.5 ? "#6ee06c" : frac > 0.25 ? "#e3d055" : "#e0574f";
+  ctx.fillRect(cx - w / 2, y, w * frac, 2);
+}
+
+function render() {
+  bucketUnits();
+
+  // Deep water past the edge, so off-map looks like open sea and not a hole.
+  ctx.fillStyle = "#0b1622";
+  ctx.fillRect(0, 0, vw, vh);
+
+  ctx.save();
+  ctx.translate(vw / 2, vh / 2);
+  ctx.scale(cam.z, cam.z);
+  ctx.translate(-cam.x, -cam.y);
+
+  // Visible world rect, plus margin for tall tiles and overhang.
+  const halfW = vw / (2 * cam.z) + TW;
+  const halfH = vh / (2 * cam.z) + TH + LEVELS * EH + OVER;
+  const l = cam.x - halfW, r = cam.x + halfW;
+  const t = cam.y - halfH, b = cam.y + halfH;
+
+  // Same rect in tile space. What's visible is a rotated square, so this is a
+  // loose box round it and the per-tile test below throws out the corners. Skip
+  // it and the loop walks the entire map plus its ocean margin every frame.
+  const uMin = l / (TW / 2), uMax = r / (TW / 2);
+  const vMin = t / (TH / 2), vMax = b / (TH / 2);
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const txLo = clamp(Math.floor((uMin + vMin) / 2), -OCEAN, MAP + OCEAN);
+  const txHi = clamp(Math.ceil((uMax + vMax) / 2), -OCEAN, MAP + OCEAN);
+  const tyLo = clamp(Math.floor((vMin - uMax) / 2), -OCEAN, MAP + OCEAN);
+  const tyHi = clamp(Math.ceil((vMax - uMin) / 2), -OCEAN, MAP + OCEAN);
+
+  // Back to front. ty outer, tx inner is painter order here: anything overlapping
+  // a tile on screen has a greater ty, or the same ty and a greater tx.
+  let drawn = 0;
+  for (let ty = tyLo; ty < tyHi; ty++) {
+    for (let tx = txLo; tx < txHi; tx++) {
+      const on = inMap(tx, ty);
+      const sx = worldX(tx, ty);
+      const sy = worldY(tx, ty, on ? elev[at(tx, ty)] : 0);
+      if (sx < l || sx > r || sy < t || sy > b) continue;
+
+      // Open sea past the border. The continent already has deep water out to
+      // its edge, so this joins on invisibly and the map stops looking like a
+      // square floating in a background colour.
+      if (!on) {
+        ctx.drawImage(tiles[0][WATER][0][(hash2(tx, ty, 991) * VARIANTS) | 0],
+          sx - TW / 2, sy - TH / 2 - OVER);
+        drawn++;
+        continue;
+      }
+
+      const i = at(tx, ty);
+      const e = elev[i];
+      const k = kind[i];
+      const lv = levelOf(i);
+      const herd = own[i];
+      const terrain = TERRAIN[k];
+      let base = mix(terrain.dead, terrain.live, lv / (VITS - 1));
+      base = mix(base, HERDS[herd].rgb, terrain.tint * (lv / (VITS - 1)));
+
+      const shade1 = ao[i];
+      if (e > 0) drawCliffs(tx, ty, sx, sy, e, base, shade1);
+      ctx.drawImage(tiles[herd][k][lv][vari[i]], sx - TW / 2, sy - TH / 2 - OVER);
+      if (shade1 < 0.999) {
+        ctx.globalAlpha = 1 - shade1;
+        ctx.drawImage(shadowTile, sx - TW / 2, sy - TH / 2);
+        ctx.globalAlpha = 1;
+      }
+
+      // Buildable ground, shown while something is armed.
+      if (choice >= 0 && own[i] === 0 && vit[i] >= 0.45 && k !== WATER && !occupied[i]) {
+        ctx.globalAlpha = 0.22;
+        ctx.drawImage(okTile, sx - TW / 2, sy - TH / 2);
+        ctx.globalAlpha = 1;
+      }
+
+      const bl = buildTile.get(i);
+      if (bl) drawBuilding(bl, 0);
+
+      const here = unitTile.get(i);
+      if (here) {
+        if (here.length > 1) here.sort((m, n) => (m.x + m.y) - (n.x + n.y));
+        for (const u of here) drawUnit(u);
+      }
+      drawn++;
+    }
+  }
+
+  // Prism beams, over the ground and under the interface. A fifth of a second is
+  // long enough to see where the shot came from.
+  for (const s of shots) {
+    ctx.strokeStyle = css(mix(HERDS[s.herd].rgb, [255, 255, 255], 0.55), s.t / 0.22);
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(spotX(s.x0, s.y0), spotY(s.x0, s.y0, s.z0) - 22);
+    ctx.lineTo(spotX(s.x1, s.y1), spotY(s.x1, s.y1, s.z1) - 14);
+    ctx.stroke();
+  }
+
+  // Placement ghost, last thing inside the world transform so it sits over
+  // whatever it's about to replace.
+  if (choice >= 0 && hover) {
+    const ok = canPlace(0, hover[0], hover[1]) && purse[0] >= costOf(0, choice);
+    drawBuilding({ herd: 0, type: choice, x: hover[0], y: hover[1] }, 0.55);
+    const sx = worldX(hover[0] + 0.5, hover[1] + 0.5);
+    const sy = worldY(hover[0] + 0.5, hover[1] + 0.5, elev[at(hover[0], hover[1])]);
+    ctx.strokeStyle = ok ? "rgba(150,255,150,0.9)" : "rgba(255,110,110,0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - TH);
+    ctx.lineTo(sx + TW, sy);
+    ctx.lineTo(sx, sy + TH);
+    ctx.lineTo(sx - TW, sy);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  if (box.on) {
+    const l = Math.min(box.x0, box.x1), t = Math.min(box.y0, box.y1);
+    const w = Math.abs(box.x1 - box.x0), h = Math.abs(box.y1 - box.y0);
+    ctx.fillStyle = "rgba(150,230,160,0.12)";
+    ctx.fillRect(l, t, w, h);
+    ctx.strokeStyle = "rgba(180,255,190,0.75)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(l + 0.5, t + 0.5, w, h);
+  }
+
+  return drawn;
+}
+
+// --- input ---------------------------------------------------------------------
+
+const keys = new Set();
+let choice = -1;      // which building is armed for placement, -1 for none
+let hover = null;     // tile under the cursor, shared between the loop and render
+
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  // Audio needs a gesture to start, so take whichever one arrives first instead of
+  // making people find a button.
+  audioInit();
+  if (k === "m") {
+    muted = !muted;
+    if (master) master.gain.value = muted ? 0 : 0.3;
+    return;
+  }
+  if (k === "r" && state !== PLAY) {
+    seed = (Math.random() * 1e9) | 0;
+    begin(seed);
+    if (state === MENU) showMenu(); else play();
+    return;
+  }
+  if (state === PAUSED && (k === "escape" || k === "p")) { resume(); return; }
+  if (state !== PLAY) return;
+
+  if (k === "," && speed > 0) speed--;
+  if (k === "." && speed < SPEEDS.length - 1) speed++;
+  if (k >= "1" && k <= "3") choice = +k - 1;
+  if (k === "0") choice = -1;
+  // Escape cancels a placement first and only pauses once there's nothing left to
+  // cancel.
+  if (k === "escape" || k === "p") {
+    if (choice >= 0 && k === "escape") choice = -1;
+    else showPause();
+  }
+});
+addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+let mouseX = 0, mouseY = 0, panning = false;
+const box = { on: false, x0: 0, y0: 0, x1: 0, y1: 0 };
+
+// Screen pixel to world pixel. Inverse of the camera transform in render.
+function toWorld(px, py) {
+  return [(px - vw / 2) / cam.z + cam.x, (py - vh / 2) / cam.z + cam.y];
+}
+
+function toScreen(wx, wy) {
+  return [(wx - cam.x) * cam.z + vw / 2, (wy - cam.y) * cam.z + vh / 2];
+}
+
+// Which building is under a screen point, if any.
+//
+// Buildings draw about a hundred pixels tall, so the tile under the cursor is
+// ground well behind them. Right clicking a grove used to send the herd somewhere
+// else and there was no way to order an attack on one at all. Test the sprite
+// instead, frontmost wins when two overlap.
+function buildingAt(px, py) {
+  let best = null;
+  for (const b of buildings) {
+    const sx = toScreen(worldX(b.x + 0.5, b.y + 0.5), 0)[0];
+    const sy = toScreen(0, worldY(b.x + 0.5, b.y + 0.5, elev[at(b.x, b.y)]))[1];
+    const hw = BW * 0.38 * cam.z;
+    if (px < sx - hw || px > sx + hw) continue;
+    if (py < sy - BANCHOR * cam.z || py > sy + (BH - BANCHOR) * cam.z) continue;
+    if (!best || b.x + b.y > best.x + best.y) best = b;
+  }
+  return best;
+}
+
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+canvas.addEventListener("mousedown", (e) => {
+  audioInit();
+  if (e.button === 0 && choice >= 0) {
+    // Placing, not selecting. Shift keeps it armed for laying down a row.
+    const hit = pick(...toWorld(e.clientX, e.clientY));
+    const price = costOf(0, choice);
+    if (hit && canPlace(0, hit[0], hit[1]) && purse[0] >= price) {
+      purse[0] -= price;
+      place(0, choice, hit[0], hit[1]);
+      sfx.built();
+      if (!keys.has("shift")) choice = -1;
+    } else {
+      sfx.deny();
+    }
+  } else if (e.button === 0) {
+    box.on = true;
+    box.x0 = box.x1 = e.clientX;
+    box.y0 = box.y1 = e.clientY;
+  } else if (e.button === 1) {
+    panning = true;
+  }
+  e.preventDefault();
+});
+
+// Select against the animal, not the point it stands on.
+//
+// A unit's anchor is its hooves and the unicorn is drawn thirty-odd pixels above
+// that. Hit testing the anchor means a box drawn neatly round what you can see
+// selects nothing, and a click on a body lands well above the only point that
+// counts. Build the sprite's screen rect and test rect against rect instead,
+// which also handles a plain click, since a zero-size box still overlaps whatever
+// is under the cursor.
+function applyBox() {
+  const l = Math.min(box.x0, box.x1), r = Math.max(box.x0, box.x1);
+  const t = Math.min(box.y0, box.y1), b = Math.max(box.y0, box.y1);
+  let hit = false;
+  for (const u of units) {
+    if (u.herd !== 0) continue;
+    const [px, py] = toScreen(spotX(u.x, u.y), spotY(u.x, u.y, u.z));
+    const s = UNITS[u.type].s * cam.z;
+    const hw = 16 * s;
+    u.sel = px + hw >= l && px - hw <= r && py + 6 * s >= t && py - 32 * s <= b;
+    hit = hit || u.sel;
+  }
+  return hit;
+}
+
+addEventListener("mouseup", (e) => {
+  if (e.button === 1) panning = false;
+  if (state !== PLAY) { box.on = false; return; }
+  if (e.button === 0 && box.on) {
+    box.on = false;
+    if (applyBox()) sfx.pick();
+  }
+  // Right click sends whatever's selected to the tile under the cursor.
+  if (e.button === 2) {
+    const sel = units.filter((u) => u.sel);
+    // If there's a building under the cursor that's the target, never mind which
+    // tile sits behind its sprite. order() snaps to the ground beside it and they
+    // engage when they get there.
+    const b = buildingAt(e.clientX, e.clientY);
+    if (b && b.herd !== 0) {
+      order(sel, b.x, b.y);
+    } else {
+      const hit = pick(...toWorld(e.clientX, e.clientY));
+      if (hit) order(sel, hit[0], hit[1]);
+    }
+  }
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (panning) {
+    cam.x -= e.movementX / cam.z;
+    cam.y -= e.movementY / cam.z;
+  }
+  if (box.on) {
+    box.x1 = e.clientX;
+    box.y1 = e.clientY;
+  }
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+canvas.addEventListener("wheel", (e) => {
+  // Zoom on the cursor, so whatever's under the pointer stays under it.
+  const before = toWorld(e.clientX, e.clientY);
+  cam.z = Math.min(2.5, Math.max(0.35, cam.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+  const after = toWorld(e.clientX, e.clientY);
+  cam.x += before[0] - after[0];
+  cam.y += before[1] - after[1];
+  e.preventDefault();
+}, { passive: false });
+
+// Brings ground back to life around a point. Units call this every tick as they
+// walk, buildings call it for their aura, and the opening blob at each home comes
+// through here too.
+function bloomAt(tx, ty, herd, amount, radius) {
+  const r = Math.ceil(radius);
+  for (let y = ty - r; y <= ty + r; y++) {
+    for (let x = tx - r; x <= tx + r; x++) {
+      if (!inMap(x, y)) continue;
+      const d = Math.hypot(x - tx, y - ty);
+      if (d > radius) continue;
+      const i = at(x, y);
+      const gain = amount * (1 - d / radius);
+      if (vit[i] <= 0) {
+        // Dead ground belongs to nobody. The owner field only means anything
+        // where something is growing, so blight goes to whoever reaches it
+        // instead of defaulting to herd zero.
+        own[i] = herd;
+        vit[i] = Math.min(1, gain);
+      } else if (own[i] !== herd) {
+        // Someone else's living ground gets bleached toward grey first and only
+        // flips once it's dead, which is why a front line shows up as a band of
+        // blight between two colours. Anything left over after killing it
+        // carries through as bloom for the new owner, so arriving in force takes
+        // ground in one go rather than stalling on it.
+        const left = vit[i] - gain;
+        if (left > 0) {
+          vit[i] = left;
+        } else {
+          own[i] = herd;
+          vit[i] = Math.min(1, -left);
+        }
+      } else {
+        vit[i] = Math.min(1, vit[i] + gain);
+      }
+    }
+  }
+}
+
+// --- interface -----------------------------------------------------------------
+
+// ENDED, not OVER. OVER is already the tile overhang.
+const MENU = 0, PLAY = 1, PAUSED = 2, ENDED = 3;
+let state = MENU;
+
+const BLURB = [
+  ["Grove", "Trains foals, and greens the land around it. +16 herd. Lose every grove and you are out."],
+  ["Stable", "Trains chargers, heavy melee that tramples foals. +12 herd."],
+  ["Spire", "Trains prisms, long reach. Blooms a wide ring of land on its own. +10 herd."],
+];
+
+const elHud = el("hud"), elRes = el("res"), elBar = el("bar"), elObj = el("obj");
+const elBuild = el("build"), elVeil = el("veil"), elCard = el("card");
+
+// One segment per herd, with blight showing through as the bar's own background.
+// This is the score. The game is about who holds the most ground, so the score is
+// a picture of the ground.
+const segs = HERDS.map((h) => {
+  const d = document.createElement("div");
+  d.style.background = "rgb(" + h.rgb.join(",") + ")";
+  elBar.appendChild(d);
+  return d;
+});
+
+const costEls = [];
+const btns = BLURB.map(([name, desc], i) => {
+  const d = document.createElement("div");
+  const head = document.createElement("b");
+  const price = document.createElement("u");
+  const body = document.createElement("i");
+  d.className = "b";
+  head.textContent = (i + 1) + "  " + name + "   ";
+  body.textContent = desc;
+  head.appendChild(price);
+  d.appendChild(head);
+  d.appendChild(body);
+  d.onclick = () => {
+    audioInit();
+    choice = choice === i ? -1 : i;
+  };
+  elBuild.appendChild(d);
+  costEls.push(price);
+  return d;
+});
+
+function card(html, cls) {
+  elCard.innerHTML = html;
+  elVeil.className = cls || "";
+  // The playing HUD belongs to the game, not to whatever menu is in front of it.
+  elHud.style.opacity = elBuild.style.opacity = "0";
+}
+
+// Rival shares, phrased for a sentence.
+function rivalShares() {
+  const parts = [];
+  for (let h = 1; h < herdCount; h++) parts.push(HERDS[h].name + " " + share(h) + "%");
+  return parts.join(", ");
+}
+
+const KEYS = "<p class=keys>drag to select &middot; right click to move &middot; " +
+  "<kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> build &middot; " +
+  "<kbd>wheel</kbd> zoom &middot; <kbd>,</kbd><kbd>.</kbd> speed &middot; " +
+  "<kbd>esc</kbd> pause &middot; <kbd>m</kbd> mute</p>";
+
+// The lobby. What's behind it is the map you're about to play, so the panel sits
+// off to one side and the veil is thin. Change opponents or roll a new continent
+// and it regenerates in place while you watch.
+let seed = 1337;
+
+function showMenu() {
+  state = MENU;
+  const swatch = (h) => "<span class=sw style=background:rgb(" + HERDS[h].rgb.join(",") + ")></span>";
+  let rivals = "";
+  for (let h = 1; h < herdCount; h++) rivals += swatch(h);
+
+  card(
+    "<h1>bloomfront</h1>" +
+    "<p>The continent is blighted. <em>Where your herd walks, it comes back to life " +
+    "in your colour.</em></p>" +
+    "<p>Bloom trickles in from every living tile you hold, and living ground is the " +
+    "only ground you can build on. Buildings train unicorns free, and set how large " +
+    "a herd you can keep, so bloom is spent on buildings alone.</p>" +
+    "<p class=row><b>Opponents</b>" +
+    [1, 2, 3].map((n) =>
+      "<button class='pick" + (herdCount - 1 === n ? " sel" : "") + "' data-n=" + n + ">" +
+      n + "</button>").join("") +
+    "</p>" +
+    "<p class=row><b>Herds</b>" + swatch(0) + "<i>you</i>" + rivals + "</p>" +
+    "<p class=row><b>Herd size</b>" +
+    POPS.map((n, i) =>
+      "<button class='pick" + (popIdx === i ? " sel" : "") + "' data-p=" + i + ">" +
+      n + "</button>").join("") +
+    "</p>" +
+    "<p class=row><b>Speed</b>" +
+    SPEEDS.map((r, i) =>
+      "<button class='pick" + (speed === i ? " sel" : "") + "' data-s=" + i + ">" +
+      r[0] + "</button>").join("") +
+    "</p>" +
+    "<p class=row><b>Rivals</b>" +
+    RIVALS.map((r, i) =>
+      "<button class='pick" + (difficulty === i ? " sel" : "") + "' data-r=" + i + ">" +
+      r[0] + "</button>").join("") +
+    "</p>" +
+    "<p class=row><b>Victory</b>" +
+    "<button class='pick" + (winDominion ? " sel" : "") + "' data-w=d>Dominion " +
+    (goalShare() * 100).toFixed(0) + "%</button>" +
+    "<button class='pick" + (winConquest ? " sel" : "") + "' data-w=c>Conquest</button>" +
+    "</p>" +
+    "<p class=rules>You are the " + HERDS[0].name + " herd. " + winText() + "</p>" +
+    KEYS +
+    "<button id=go>Begin</button>" +
+    "<button id=roll class=ghost>New world</button>" +
+    "<span class=seed>seed " + seed + "</span>",
+    "lobby"
+  );
+
+  el("go").onclick = () => { audioInit(); play(); };
+  el("roll").onclick = () => { seed = (Math.random() * 1e9) | 0; preview(); };
+  for (const b of elCard.querySelectorAll(".pick")) {
+    b.onclick = () => {
+      if (b.dataset.n) {
+        herdCount = +b.dataset.n + 1;
+        preview();
+        return;
+      }
+      if (b.dataset.r) {
+        difficulty = +b.dataset.r;
+        preview();
+        return;
+      }
+      if (b.dataset.s) {
+        speed = +b.dataset.s;
+        showMenu();
+        return;
+      }
+      if (b.dataset.p) {
+        popIdx = +b.dataset.p;
+        showMenu();
+        return;
+      }
+      // Toggling a route only needs the panel redrawn, not a new world. Can't
+      // switch off the last one or nothing would ever end the game.
+      if (b.dataset.w === "d") {
+        if (winDominion && !winConquest) return;
+        winDominion = !winDominion;
+      } else {
+        if (winConquest && !winDominion) return;
+        winConquest = !winConquest;
+      }
+      showMenu();
+    };
+  }
+}
+
+// How this game gets won, in a sentence, depending on what's on.
+function winText() {
+  const dom = "hold <em>" + (goalShare() * 100).toFixed(0) + "% of the continent</em>, " +
+    "an even share and a little more";
+  const con = "raze every rival grove";
+  if (winDominion && winConquest) return "Win by either: " + dom + ", or " + con + ".";
+  if (winDominion) {
+    return "Win by dominion only: " + dom + ". Groves are just buildings here, so a " +
+      "herd that loses them all fights on from its stables and spires.";
+  }
+  return "Win by conquest only: " + con + ", and lose if you lose your own. " +
+    "Ground is worth holding for the bloom it pays, but it will not win the game.";
+}
+
+// New world under the lobby, panel redrawn, without leaving it.
+function preview() {
+  begin(seed, true);
+  showMenu();
+}
+
+function play() {
+  // Drop from the wide preview down onto your home.
+  cam.x = worldX(homes[0][0], homes[0][1]);
+  cam.y = worldY(homes[0][0], homes[0][1], elev[at(homes[0][0], homes[0][1])]);
+  cam.z = 1.7;
+  resume();
+}
+
+function showPause() {
+  state = PAUSED;
+  card(
+    "<h2>Paused</h2>" +
+    "<p>You hold <em>" + share(0) + "%</em> of the continent" +
+    (winDominion ? ", and need " + (goalShare() * 100).toFixed(0) + "%" : "") +
+    ". The rivals hold " + rivalShares() + ".</p>" +
+    KEYS +
+    "<button id=go>Resume</button>" +
+    "<button id=re class=ghost>Restart</button>" +
+    "<button id=lob class=ghost>Lobby</button>"
+  );
+  el("go").onclick = resume;
+  el("re").onclick = () => { seed = (Math.random() * 1e9) | 0; begin(seed); play(); };
+  el("lob").onclick = () => { begin(seed); showMenu(); };
+}
+
+function showOver(won) {
+  state = ENDED;
+  const razed = won && winConquest && !buildings.some((b) => b.herd !== 0 && b.type === GROVE);
+  card(
+    "<h2>" + (won
+      ? (razed ? "Every rival grove has fallen" : "The continent is yours")
+      : "Your last grove has fallen") + "</h2>" +
+    "<p>" + (won
+      ? "You brought <em>" + share(0) + "%</em> of the blighted land back to life."
+      : "The herd is scattered. The rivals hold " + rivalShares() + ".") +
+    "</p>" +
+    "<button id=re>Play again</button>" +
+    "<button id=lob class=ghost>Lobby</button>"
+  );
+  el("re").onclick = () => { seed = (Math.random() * 1e9) | 0; begin(seed); play(); };
+  el("lob").onclick = () => { begin(seed); showMenu(); };
+}
+
+function resume() {
+  state = PLAY;
+  elVeil.className = "hide";
+  elHud.style.opacity = elBuild.style.opacity = "1";
+}
+
+function share(h) {
+  return (territory[h] / Math.max(1, landTiles) * 100).toFixed(1);
+}
+
+function updateHud() {
+  const goal = (goalShare() * 100).toFixed(0);
+  elRes.textContent = "bloom " + (purse[0] | 0) +
+    "  +" + (territory[0] * INCOME).toFixed(1) + "/s" +
+    "      herd " + pop[0] + "/" + cap[0] +
+    "      land " + share(0) + "%" + (winDominion ? " of " + goal + "%" : "") +
+    (speed === 1 ? "" : "      " + SPEEDS[speed][0]);
+  for (let h = 0; h < HERDS.length; h++) {
+    segs[h].style.width = h < herdCount
+      ? (territory[h] / Math.max(1, landTiles) * 100).toFixed(2) + "%"
+      : "0";
+  }
+
+  // Hint answers whatever hasn't been done yet, in order. Judges give this about
+  // five minutes, so the first ninety seconds have to explain themselves.
+  let hint;
+  if (choice >= 0) {
+    hint = "Click the highlighted ground to place the " + BLURB[choice][0].toLowerCase() +
+      ". It needs a flat 2x2 of land you have already brought to life.";
+  } else if (!units.some((u) => u.herd === 0 && u.field)) {
+    hint = "Drag a box over your unicorns, then right click on grey ground. " +
+      "They bring it back to life by standing on it.";
+  } else if (purse[0] >= BUILD[STABLE].c) {
+    hint = "You have bloom to spend. Press 1, 2 or 3 to build. " +
+      "Buildings raise how large a herd you can keep.";
+  } else if (pop[0] >= cap[0]) {
+    hint = "Your herd is at its limit. Build to raise it.";
+  } else {
+    hint = "Bloom trickles in from every living tile you hold. Spread out to earn more.";
+  }
+  elObj.textContent = hint;
+
+  for (let i = 0; i < btns.length; i++) {
+    const price = costOf(0, i);
+    costEls[i].textContent = price;
+    btns[i].className = "b" + (choice === i ? " on" : "") + (purse[0] < price ? " no" : "");
+  }
+}
+
+// --- who has won ---------------------------------------------------------------
+
+// Two routes to victory, either switchable off in the lobby, both open to the
+// rivals as well.
+//
+// Conquest on, a herd that loses every grove is out. Conquest off, groves are
+// just buildings and a herd without one keeps training from stables and spires,
+// leaving ground to decide it. One route is always on, or nothing ends.
+let winDominion = true;
+let winConquest = true;
+
+function judge() {
+  if (winConquest) {
+    const groves = HERDS.map(() => 0);
+    for (const b of buildings) if (b.type === GROVE) groves[b.herd]++;
+    if (!groves[0]) return -1;
+    let rivalGroves = 0;
+    for (let h = 1; h < herdCount; h++) rivalGroves += groves[h];
+    if (!rivalGroves) return 1;
+  }
+
+  if (winDominion) {
+    const need = landTiles * goalShare();
+    if (territory[0] >= need) return 1;
+    for (let h = 1; h < herdCount; h++) if (territory[h] >= need) return -1;
+  }
+
+  return 0;
+}
+
+// --- loop ----------------------------------------------------------------------
+
+let last = performance.now();
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (state === PLAY) {
+    // Panning stays off the speed multiplier. Controls should feel the same
+    // however fast the world is running.
+    const pan = 900 * dt / cam.z;
+    if (keys.has("a") || keys.has("arrowleft")) cam.x -= pan;
+    if (keys.has("d") || keys.has("arrowright")) cam.x += pan;
+    if (keys.has("w") || keys.has("arrowup")) cam.y -= pan;
+    if (keys.has("s") || keys.has("arrowdown")) cam.y += pan;
+
+    hover = pick(...toWorld(mouseX, mouseY));
+
+    const sdt = dt * SPEEDS[speed][1];
+    voices = 0;
+    stepUnits(sdt);
+    economy(sdt);
+    for (let h = 1; h < herdCount; h++) think(h, sdt);
+    music(sdt);
+    updateHud();
+
+    const verdict = judge();
+    if (verdict) showOver(verdict > 0);
+  }
+
+  render();
+  requestAnimationFrame(frame);
+}
+
+// --- start ---------------------------------------------------------------------
+
+
+function goodHome(x, y, taken, gap) {
+  if (!inMap(x, y) || !inMap(x + 1, y + 1)) return false;
+  const i = at(x, y);
+  if (kind[i] === WATER || elev[i] >= LEVELS - 1) return false;
+  // The home tile has to be a legal footprint in its own right, so the opening
+  // grove is guaranteed somewhere to stand once the ground is bloomed. Picking a
+  // home and hoping a flat 2x2 turns up nearby falls over on rough seeds.
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      const j = at(x + dx, y + dy);
+      if (kind[j] === WATER || elev[j] !== elev[i]) return false;
+    }
+  }
+  // No two herds opening on top of each other.
+  for (const t of taken) if (Math.hypot(t[0] - x, t[1] - y) < gap) return false;
+  return true;
+}
+
+// Herds spread evenly round the middle of the continent. Walking in along a spoke
+// finds ground on nearly every seed, but not all: a spoke can run over water the
+// whole way, or over nothing but the top terrace. The spiral is the fallback, and
+// it always comes back with a home, because a herd without one has no grove and
+// loses the moment the game starts.
+function pickHomes() {
+  const out = [];
+  for (let h = 0; h < herdCount; h++) {
+    const ang = (h / herdCount) * Math.PI * 2 - Math.PI / 2;
+    const cx = Math.round(MAP / 2 + Math.cos(ang) * MAP * 0.3);
+    const cy = Math.round(MAP / 2 + Math.sin(ang) * MAP * 0.3);
+    let best = null;
+
+    // Preferred spacing first, then progressively closer. A cramped continent
+    // still has to seat everybody. The floor stays well above the opening bloom
+    // radius: any closer and the second herd finds its ground already owned by
+    // the first and can't place a grove.
+    for (const gap of [MAP * 0.22, MAP * 0.16, MAP * 0.12, MAP * 0.10]) {
+      for (let d = 0.40; d >= 0 && !best; d -= 0.02) {
+        const x = Math.round(MAP / 2 + Math.cos(ang) * MAP * d);
+        const y = Math.round(MAP / 2 + Math.sin(ang) * MAP * d);
+        if (goodHome(x, y, out, gap)) best = [x, y];
+      }
+      for (let r = 1; r < MAP && !best; r++) {
+        for (let a = 0; a < 32 && !best; a++) {
+          const t = a / 32 * Math.PI * 2;
+          const x = Math.round(cx + Math.cos(t) * r);
+          const y = Math.round(cy + Math.sin(t) * r);
+          if (goodHome(x, y, out, gap)) best = [x, y];
+        }
+      }
+      if (best) break;
+    }
+
+    out.push(best || [MAP >> 1, MAP >> 1]);
+  }
+  return out;
+}
+
+// First grove goes on the nearest legal footprint to home, searched in rings
+// rather than assumed, since whether a flat 2x2 exists anywhere depends on the
+// map.
+function seedGrove(h, hx, hy) {
+  for (let r = 0; r < 16; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        if (canPlace(h, hx + dx, hy + dy)) return place(h, GROVE, hx + dx, hy + dy);
+      }
+    }
+  }
+  // goodHome already guaranteed this tile is a legal footprint, so the only way
+  // to land here is ground a neighbour claimed first. Take it back rather than
+  // leave a herd with no centre and an instant loss it never earned.
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) {
+      const i = at(hx + dx, hy + dy);
+      own[i] = h;
+      vit[i] = 1;
+    }
+  }
+  return place(h, GROVE, hx, hy);
+}
+
+let homes = [];
+
+// Per game rather than per session. Sprite atlases are built once and survive a
+// restart. The world doesn't.
+function begin(seed) {
+  vit.fill(0);
+  own.fill(0);
+  occupied.fill(0);
+  units.length = 0;
+  buildings.length = 0;
+  shots.length = 0;
+  fieldCache.clear();
+  territory.fill(0);
+  for (let h = 0; h < HERDS.length; h++) {
+    brains[h] = h && h < herdCount
+      ? { t: RIVALS[difficulty][1] + h * 1.5, wave: RIVALS[difficulty][2] }
+      : null;
+  }
+  slowT = 0;
+  choice = -1;
+
+  generate(seed);
+  homes = pickHomes();
+
+  for (let h = 0; h < herdCount; h++) {
+    purse[h] = 100;
+    bloomAt(homes[h][0], homes[h][1], h, 1, 6);
+    seedGrove(h, homes[h][0], homes[h][1]);
+
+    // Starting herd, seated on walkable ground round the home. Collect the open
+    // ground first and deal it out, rather than each unicorn hunting for itself.
+    // Sampling per unit comes up short on a cramped home and the herd quietly
+    // starts one or two light. Separation untangles anything sharing a tile on
+    // the first tick.
+    const roster = [FOAL, FOAL, FOAL, FOAL, FOAL, FOAL, CHARGER, CHARGER, PRISM, PRISM];
+    const spots = [];
+    for (let r = 1; r < 30 && spots.length < 60; r++) {
+      for (let a = 0; a < r * 8; a++) {
+        const t = a / (r * 8) * Math.PI * 2;
+        const x = Math.round(homes[h][0] + Math.cos(t) * r);
+        const y = Math.round(homes[h][1] + Math.sin(t) * r);
+        if (walkable(x, y)) spots.push([x + 0.5, y + 0.5]);
+      }
+    }
+    for (let n = 0; n < roster.length; n++) {
+      const s = spots.length ? spots[(n * 7) % spots.length] : [homes[h][0] + 0.5, homes[h][1] + 0.5];
+      spawn(h, roster[n], s[0] + (Math.random() - 0.5) * 0.6, s[1] + (Math.random() - 0.5) * 0.6);
+    }
+  }
+
+  // Wide on the middle of the continent for the lobby preview. play() drops it
+  // onto your home when the game actually starts.
+  cam.x = worldX(MAP / 2, MAP / 2);
+  cam.y = worldY(MAP / 2, MAP / 2, 2);
+  cam.z = 0.62;
+
+  updateHud();
+}
+
+buildTiles();
+buildUnits();
+buildBuildings();
+resize();
+
+// World first, since the lobby draws it.
+begin(seed);
+showMenu();
+
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>

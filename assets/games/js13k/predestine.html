@@ -1,0 +1,3508 @@
+<!doctype html>
+<html>
+<head>
+  <title>Predestine</title>
+  <style>html, body {
+  padding: 0px;
+  margin: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  overflow: hidden;
+  background-color: #000;
+  touch-action: none;
+}
+canvas {
+  /*position: absolute;
+  top: 0;
+  height: auto;
+  width: 100%;
+  left: 0;*/
+  margin: 0 auto;
+  display: block;
+  /*cursor: none;*/
+}
+#b {
+  position: absolute;
+  color: #fff;
+  top: 10px;
+  right: 10px;
+  background-color: blue;
+  border: 0;
+}
+</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+</head>
+<body>
+  <button id='b' onclick="goFullscreen()">Fullscreen</button>
+  <canvas id="c" width="1024" height="576"></canvas>
+  <!-- Begin imports -->
+  <script>let $ = {},
+    debug = false,
+    D = document,
+    W = window;
+
+// Extra modules
+$.mod = [];
+// Get canvas
+$.canvas = D.querySelector("canvas");
+</script>
+  <script>class Input {
+  constructor() {
+    this.pressed = {};
+    this.events = {};
+    this.mousePos = new Vector(0, 0);
+    this.isTouch = 'ontouchstart' in W;
+
+    D.body.addEventListener('keydown', (e) => {
+      if (e.keyCode in this.events) {
+        this.updateEvent(e, -1, 1);
+      }
+    });
+
+    D.body.addEventListener('keyup', (e) => {
+      if (e.keyCode in this.events) {
+        this.updateEvent(e, 1, 0);
+      }
+    });
+
+    //D.body.addEventListener('mousedown', (e) => {
+    //  let key = e.button + 1;
+    //  if (key in this.events) {
+    //    this.updateEvent(e, -1, 1, key);
+    //  }
+    //});
+
+    //D.body.addEventListener('mouseup', (e) => {
+    //  let key = e.button + 1;
+    //  if (key in this.events) {
+    //    this.updateEvent(e, 1, 0, key);
+    //  }
+    //});
+  }
+
+  isPressed(c) {
+    if (c instanceof Array) {
+      for(let i = 0; i < c.length; i++) {
+        if (!!this.pressed[c[i]]) return true;
+      }
+      return false;
+    } else {
+      return !!this.pressed[c];
+    }
+  }
+
+  isLeftClick() {
+    // event.button (0) + 1
+    return this.isPressed(1);
+  }
+
+  // TODO: is left click released
+  // TODO: is right click released
+
+  isRightClick() {
+    // event.button (2) + 1
+    return this.isPressed(3);
+  }
+
+  // TODO: Unbind
+  bind(keys) {
+    keys.forEach((k) => {
+      this.pressed[k] = 0;
+      this.events[k] = 0;
+    });
+  }
+
+  // We use event.button + 1 to bind mouse input for left and right clicks
+  // to use the ones coming from js and avoid defining new variables. Plus,
+  // 1 and 3 are codes for non-printable characters, so there is no chance
+  // of key collision.
+  // 1: left click
+  // 3: right click
+  bindMouse() {
+    this.bind([1, 3]);
+    D.body.addEventListener('mouseenter', this.updateMousePos.bind(this));
+    D.body.addEventListener('mousemove', this.updateMousePos.bind(this));
+  }
+
+  updateEvent(e, m, n, key) {
+    key = key || e.keyCode;
+    e.preventDefault();
+    this.events[key] = m;
+    this.pressed[key] = n;
+  }
+
+  updateMousePos(e) {
+    this.mousePos = $.cam.relativeCoords(new Vector(e.clientX - $.canvas.offsetLeft, e.clientY - $.canvas.offsetTop));
+  }
+}
+</script>
+  <script>let abs = Math.abs,
+    cos = Math.cos,
+    sin = Math.sin,
+    tan = Math.tan,
+    atan = Math.atan,
+    atan2 = Math.atan2,
+    ceil = Math.ceil,
+    floor = Math.floor,
+    max = Math.max,
+    min = Math.min,
+    pow = Math.pow,
+    sqrt = Math.sqrt,
+    round = Math.round,
+    rnd = Math.random,
+    now = Date.now,
+    PI = Math.PI,
+    // Limit number n to range [l, h] (both inclusives). h is optional
+    clamp = function(n, l, h) {
+      if (n < l) return l;
+      if (h !== null && h !== undefined && n > h) return h;
+      return n;
+    },
+    // Generate random integer between min (inclusive) and max (exclusive) range
+    rndi = function(a, b) {
+      return floor(rnd() * (b - a)) + a;
+    },
+    // Choose random element from array
+    rnda = function(e) {
+      return e[rndi(0, e.length)];
+    },
+    shuffle = function(e) {
+      let i, j, temp, a = e.slice(0, e.length);
+      for (i = 0; i < a.length; i++) {
+        j = rndi(0, a.length);
+        temp = a[i];
+        a[i] = a[j];
+        a[j] = temp;
+      }
+      return a;
+    };
+</script>
+  <script>/**
+ * A class to represent a 2D vector.
+ **/
+const GRID_SIZE = 32;
+
+class Vector {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  // TODO: configure grid size
+  toGrid() {
+    return new Vector(Math.floor(this.x / GRID_SIZE), Math.floor(this.y / GRID_SIZE));
+  }
+
+  add(v) {
+    this.x += v.x;
+    this.y += v.y;
+  }
+
+  angle() {
+    return atan2(this.y / this.x);
+  }
+
+  mag() {
+  }
+
+  eq(v) {
+    return this.x === v.x && this.y === v.y;
+  }
+
+  gte(v) {
+    return this.x >= v.x && this.y >= v.y;
+  }
+
+  static dist(r1, r2) {
+    return sqrt(pow(r2.x - r1.x, 2) + pow(r2.y - r1.y, 2));
+  }
+}
+</script>
+  <script>class Rectangle {
+  constructor(x, y, w, h) {
+    this._x = x;
+    this._y = y;
+    this.w = w;
+    this.h = h;
+    this.bounds = Bounds.fromRect(this);
+  }
+
+  //center() {
+  //  return new Vector(this.x + (this.w / 2), this.y + (this.h / 2));
+  //}
+
+  //setPos(props) {
+  //  for(let p in props) {
+  //    this[p] = props[p];
+  //  }
+  //  this.bounds.update(this);
+  //}
+
+  set x(value) {
+    this._x = value;
+    this.bounds.update(this);
+  }
+
+  get x() {
+    return this._x;
+  }
+
+  set y(value) {
+    this._y = value;
+    this.bounds.update(this);
+  }
+
+  get y() {
+    return this._y;
+  }
+
+  center() {
+    return this.bounds.center();
+  }
+
+  // Returns a new rect, offset by offsetX and offsetY
+  static offset(rect, offsetX, offsetY) {
+    return new Rectangle(rect.x - offsetX, rect.y - offsetY, rect.w, rect.h);
+  }
+
+  // TODO
+  // fromGrid
+
+  // TODO
+  // toGrid
+}
+
+class Bounds {
+  constructor(top, bottom, left, right) {
+    this.top = top;
+    this.bottom = bottom;
+    this.left = left;
+    this.right = right;
+  }
+
+  update(rect) {
+    this.bottom = rect.y + rect.h;
+    this.top = rect.y;
+    this.left = rect.x;
+    this.right = rect.x + rect.w;
+  }
+
+  center() {
+    return new Vector(this.left + ((this.right - this.left) / 2), this.top + ((this.bottom - this.top) / 2));
+  }
+
+  static fromRect(rect) {
+    return new Bounds(rect.y, rect.y + rect.h, rect.x, rect.x + rect.w);
+  }
+}
+</script>
+  <script>class Camera {
+  constructor(width, height, worldWidth, worldHeight) {
+    //this.width = width;
+    //this.height = height;
+    this.offsetX = 0;
+    this.offsetY = 0;
+
+    this.setWorldSize(worldWidth, worldHeight);
+  }
+
+  // Set world size
+  setWorldSize(w, h) {
+    this.worldWidth = w;
+    this.worldHeight = h;
+  }
+
+  // Set target. This target will be followed by the Camera
+  setTarget(t) {
+    this.target = t;
+  }
+
+  // Transform point coordinates within the same coordinate system for the camera (scrolling)
+  transformVector(v) {
+    return new Vector(v.x - this.offsetX, v.y - this.offsetY);
+  }
+
+  // Transform coordinates from real canvas size (real coords) to viewport size
+  relativeCoords(v) {
+    let width = parseInt($.canvas.style.width.replace('px')),
+        height = parseInt($.canvas.style.height.replace('px'));
+    return new Vector(v.x * $.vw / width, v.y * $.vh / height);
+  }
+
+  // Indicates if the object is inside the viewport.
+  // Used to avoid rendering objects outside the view
+  inView(obj) {
+    let r = Rectangle.offset(obj, this.offsetX, this.offsetY);
+
+    return ((r.bounds.right >= 0 && r.bounds.right <= $.vw) || (r.x >= 0 && r.x <= $.vw)) &&
+           ((r.bounds.bottom >= 0 && r.bounds.bottom <= $.vh) || (r.y >= 0 && r.y <= $.vh));
+  }
+
+  update(deltaTime) {
+    let tx = 0,
+        ty = 0,
+        midWidth = $.vw / 2,
+        midHeight = $.vh / 2;
+
+    this.offsetX = 0;
+    this.offsetY = 0;
+    // Update offset according the target.
+    if (this.target) {
+      // If world width is smaller than viewport width, then tx = target.x so offset x is zero
+      if (this.worldWidth <= $.vw) {
+        tx = this.target.x;
+      // If target.x is before the middle of the viewport, offset x is zero
+      } else if (this.target.x <= midWidth) {
+        tx = this.target.x;
+      // If target x is after the middle of the viewport and still not in the end of the world,
+      // offset x is the middle viewport
+      } else if ((this.target.x > midWidth) && (this.target.x + midWidth <= this.worldWidth)) {
+        tx = midWidth;
+      // If target x is after the middle of the viewport and reached the end of the world,
+      // offset x is the difference between the world width and the target.x
+      } else if ((this.target.x > midWidth) && (this.target.x + midWidth > this.worldWidth)) {
+        tx = $.vw - (this.worldWidth - this.target.x);
+      }
+
+      if (this.worldHeight <= $.vh) {
+        ty = this.target.y;
+      } else if (this.target.y <= midHeight) {
+        ty = this.target.y;
+      } else if ((this.target.y > midHeight) && (this.target.y + midHeight <= this.worldHeight)) {
+        ty = midHeight;
+      } else if ((this.target.y > midHeight) && (this.target.y + midHeight > this.worldHeight)) {
+        ty = $.vh - (this.worldHeight - this.target.y);
+      }
+
+      this.offsetX = this.target.x - tx;
+      this.offsetY = this.target.y - ty;
+    }
+
+    // Screen shake update
+    if (this.duration && this.elapsed < this.duration) {
+      this.elapsed += deltaTime;
+      let perc = this.elapsed / this.duration,
+          damper = 1 - clamp(4 * perc - 3, 0, 0.1),
+          x = (rnd() % 32768) * rnda([-1, 1]),
+          y = (rnd() % 32768) * rnda([-1, 1]);
+
+      x *= this.magnitude * damper;
+      y *= this.magnitude * damper;
+      this.offsetX += x;
+      this.offsetY += y;
+      if (this.elapsed >= this.duration) this.duration = 0;
+    }
+  }
+
+  shake(m, d) {
+    this.elapsed = 0;
+    this.perc = 0; // percentage completed
+    this.duration = d;
+    this.magnitude = m;
+  }
+
+  render(elem) {
+    let objs;
+
+    if (!elem) return;
+    if (elem instanceof Group) {
+      objs = elem.all();
+    } else if (!(elem instanceof Array)) {
+      objs = [elem];
+    }
+
+    objs.forEach((o) => {
+      if (this.inView(o) && o.enabled) {
+        o._render(Rectangle.offset(o, this.offsetX, this.offsetY));
+      }
+    });
+  }
+
+  // Clear screen
+  clear(c) {
+    $.ctx.clearRect(0, 0, $.vw, $.vh);
+    $.ctx.fillStyle = c || "#000";
+    $.ctx.fillRect(0, 0, $.vw, $.vh);
+  }
+}
+</script>
+  <script>class Scene {
+  static onExit() {
+    $.events.emit('sceneexit');
+  }
+
+  reset() {
+    this.exitFlag = false;
+    this.startTime = 0;
+    this.deltaTime = 0;
+    // FPS calculation
+    this.fps = 0;
+    this.frames = 0;
+    this.fpsStartTime = now();
+  }
+
+  start() {
+    this.reset();
+    this.setup();
+    this.loop();
+  }
+
+  // TODO: Implement fadeOut method
+
+  loop() {
+    // Calculate elapsed time
+    this.deltaTime = (this.startTime !== 0) ? now() - this.startTime : 0;
+
+    // Update scene
+    this.update();
+    // Render scene
+    this.render();
+
+    this.startTime = now();
+
+    //-- DEBUG_START --
+    if (debug) {
+      this.frames += 1;
+      if (this.frames >= 30) {
+        let elapsed = now() - this.fpsStartTime;
+        this.fps = 1000 * this.frames / elapsed;
+        this.frames = 0;
+        this.fpsStartTime = now();
+      }
+      $.ctx.save();
+      $.ctx.fillStyle = 'red';
+      $.ctx.fillText('FPS: ' + floor(this.fps), 10, 10);
+      $.ctx.restore();
+    }
+    //-- DEBUG_END --
+
+    if (!this.exitFlag) {
+      raf(this.loop.bind(this));
+    } else {
+      Scene.onExit();
+      return;
+    }
+  }
+
+  exit() {
+    this.exitFlag = true;
+  }
+
+  // To be override by child class
+  setup() {
+  }
+
+  // To be override by child class
+  update() {
+  }
+
+  // To be override by child class
+  render() {
+  }
+
+  // To be override by child class
+  // Here, the fade out (and stuff like that) can be activated
+  unload() {
+    this.exit();
+  }
+}
+</script>
+  <script>class Group {
+  constructor() {
+    this.elems = [];
+    this.length = 0;
+  }
+
+  all() {
+    return this.elems;
+  }
+
+  // Add element to the group
+  add(e) {
+    this.elems.push(e);
+    this.length = this.elems.length;
+  }
+
+  update(deltaTime) {
+    let del = [], i, el;
+    for(i = this.elems.length; i--;) {
+      el = this.elems[i];
+
+      // Update element
+      if (el['update']) el.update(deltaTime);
+      // Mark to delete if not alive
+      if (!el.alive) del.push(i);
+    }
+
+    // Delete from array
+    if (del.length > 0) {
+      this.elems = this.elems.filter((v, i) => {
+        return del.indexOf(i) < 0;
+      });
+    }
+    this.length = this.elems.length;
+  }
+
+  // Clear group
+  clear() {
+    this.elems = [];
+  }
+
+  // Returns element at index `i`
+  at(i) {
+    return this.elems[i];
+  }
+}
+</script>
+  <script>class Sprite extends Rectangle {
+  constructor(x, y, w, h) {
+    super(x, y, w, h);
+    this.alive = true;
+    this.enabled = true;
+  }
+
+  _render(rect) {
+    this.render(rect);
+
+    //-- DEBUG_START --
+    if (debug) {
+      $.ctx.save();
+      $.ctx.strokeStyle = '#0f0';
+      $.ctx.fillStyle = '#0f0';
+      $.ctx.strokeRect(rect.x, rect.y, this.bounds.right - this.x, this.bounds.bottom - this.y);
+      $.ctx.fillText('(' + floor(this.x) + "," + floor(this.y) + ")", rect.x, rect.y + 10);
+      $.ctx.restore();
+    }
+    //-- DEBUG_END --
+  }
+
+  render(rect) {
+    throw "Not Implemented";
+  }
+
+  kill() {
+    this.alive = false;
+  }
+}
+</script>
+  <script>/**
+ * Calculates and return the frames of a given animation array according to the elapsed time.
+ * @param imgArr array of images for the animation
+ * @param duration duration (ms) of each frame
+ * @param startFrame frame index where the animation will start the first time
+ **/
+class Animator {
+  constructor(imgArr, duration, startFrame) {
+    this.imgArr = imgArr;
+    this.duration = duration || 150;
+    this.frame = startFrame || 0;
+    this.counter = 0;
+  }
+
+  update(dt) {
+    this.counter += dt;
+    if (this.counter > this.duration) {
+      this.counter = 0;
+      this.frame = (this.frame + 1 > this.imgArr.length - 1) ? 0 : this.frame + 1;
+    }
+  }
+
+  get() {
+    return this.imgArr[this.frame];
+  }
+}
+</script>
+  <script>class Collision {
+
+  isRect(obj) {
+    return (obj.bounds && Object.keys(obj.bounds).length === 4);
+  }
+
+  /**
+   * Check if a vector is inside an object (Rectangle)
+   * @return True if the vector collides with the rectangle. False otherwise
+   */
+  vector(v, obj) {
+    // FIXME: Dirty hack to improve performance
+    if (!$.cam.inView(obj)) return false;
+    if (!this.isRect(obj)) return false;
+    return (v.x < obj.bounds.right && v.x > obj.bounds.left &&
+            v.y < obj.bounds.bottom && v.y > obj.bounds.top);
+  }
+
+  /**
+   * Check for collisions of an object against any element of a group
+   * @return An array of objects that collided with `obj1` or an empty array is there were no collisions
+   */
+  group(obj1, group) {
+    let obj2, result = [];
+    for(obj2 of group.all()) {
+      if (this.between(obj1, obj2)) result.push(obj2);
+    }
+    return result;
+  }
+
+  between(obj1, obj2) {
+    // FIXME: Dirty hack to improve performance
+    if (!$.cam.inView(obj2)) return false;
+    if (!this.isRect(obj1) || !this.isRect(obj2)) return false;
+    return (obj1.bounds.left < obj2.bounds.right &&
+            obj1.bounds.left >= obj2.bounds.left &&
+            obj1.bounds.top < obj2.bounds.bottom &&
+            obj1.bounds.bottom > obj2.bounds.top);
+  }
+
+  faces(obj1, obj2) {
+    return new Bounds(
+      abs(obj1.bounds.bottom - obj2.bounds.top),
+      abs(obj1.bounds.top - obj2.bounds.bottom),
+      abs(obj1.bounds.right - obj2.bounds.left),
+      abs(obj1.bounds.left - obj2.bounds.right)
+    );
+  }
+
+  bottom(obj1, obj2) {
+    let faces = this.faces(obj1, obj2);
+    return (faces.top < faces.bottom && faces.top < faces.left && faces.top < faces.right);
+  }
+
+  top(obj1, obj2) {
+    let faces = this.faces(obj1, obj2);
+    return (faces.bottom < faces.top && faces.bottom < faces.left && faces.bottom < faces.right);
+  }
+
+  right(obj1, obj2) {
+    let faces = this.faces(obj1, obj2);
+    return (faces.left < faces.bottom && faces.left < faces.top && faces.left < faces.right);
+  }
+
+  left(obj1, obj2) {
+    let faces = this.faces(obj1, obj2);
+    return (faces.right < faces.bottom && faces.right < faces.left && faces.right < faces.top);
+  }
+
+}
+</script>
+  <script>/**
+ * Basic renderer for default fonts
+ */
+class TextRenderer {
+  constructor(font, color, width) {
+    this.color = color;
+    this.width = width;
+    this.font = String(width) + "px " + (font || "serif");
+  }
+
+  render(ctx, text, x, y, center) {
+    ctx.save();
+    ctx.fillStyle = this.color;
+    ctx.font = this.font;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+}
+</script>
+  <script>class UIButton extends Sprite {
+  constructor(x, y, w, h) {
+    super(x, y, w, h);
+    this.pressed = false;
+    this.active = true;
+    $.events.listen('mouseup', this.onMouseUp.bind(this));
+    $.events.listen('mousedown', this.onMouseDown.bind(this));
+  }
+
+  // To be implemented in child class
+  onClick() {
+  }
+
+  onMouseUp() {
+    this.pressed = false;
+    this.active = true;
+    this.leftClick = false;
+  }
+
+  onMouseDown(ev) {
+    if (ev.button === 0 && !this.pressed) {
+      if ($.collision.vector($.input.mousePos, this)) {
+        this.pressed = true;
+        this.onClick();
+      }
+    }
+  }
+}
+</script>
+  <script>class SceneManager {
+  constructor() {
+    this.goTo = 0;
+    this.scene = 0;
+    $.events.register('sceneexit');
+  }
+
+  sceneExit() {
+    this.scene = this.goTo;
+    this.goTo = 0;
+    this.scene.start();
+  }
+
+  unload() {
+    if (this.scene) {
+      this.scene.unload();
+    } else {
+      Scene.onExit();
+    }
+  }
+
+  load(sceneCls) {
+    $.events.clear();
+    $.events.listen('sceneexit', this.sceneExit.bind(this));
+    let scene = new (Function.prototype.bind.apply(sceneCls));
+    // Intent. What do we want to load?
+    this.goTo = scene;
+    // Unload previous scene (if loaded) and then load the intent
+    this.unload();
+  }
+}
+</script>
+  <script>class Events {
+  constructor() {
+    this.listeners = {};
+    this.lastKnownTouch = 0;
+
+    //D.body.addEventListener('mousedown', this.mousedown.bind(this));
+    //D.body.addEventListener('mouseup', this.mouseup.bind(this));
+    //D.body.addEventListener('mousemove', this.mousemove.bind(this));
+    //this.listeners['mousedown'] = [];
+    //this.listeners['mouseup'] = [];
+    //this.listeners['mousemove'] = [];
+
+    if ($.input.isTouch) {
+      this.registerTouch();
+    } else {
+      this.registerMouse();
+    }
+  }
+
+  mousedown(ev) {
+    if (this.listeners['mousedown'].length > 0) {
+      for (let cb of this.listeners['mousedown']) {
+        cb(ev);
+      }
+    }
+  }
+
+  mouseup(ev) {
+    if (this.listeners['mouseup'].length > 0) {
+      for (let cb of this.listeners['mouseup']) {
+        cb(ev);
+      }
+    }
+  }
+
+  mousemove(ev) {
+    if (this.listeners['mousemove'].length > 0) {
+      for (let cb of this.listeners['mousemove']) {
+        cb(ev);
+      }
+    }
+  }
+
+  touchstart(ev) {
+    let e = ev.touches[0];
+    this.lastKnownTouch = e;
+    $.input.updateMousePos(e);
+    ev.stopPropagation();
+    this.mousedown(new MouseEvent('mousedown', e));
+    //D.body.dispatchEvent(new MouseEvent('mousedown', e));
+    return false;
+  }
+
+  touchmove(ev) {
+    let e = ev.touches[0];
+    this.lastKnownTouch = e;
+    $.input.updateMousePos(e);
+    ev.stopPropagation();
+    this.mousemove(new MouseEvent('mousemove', e))
+    //D.body.dispatchEvent(new MouseEvent('mousemove', e));
+    return false;
+  }
+
+  touchend(ev) {
+    let e = ev.touches[0];
+    ev.stopPropagation();
+    this.mouseup(new MouseEvent('mouseup', this.lastKnownTouch));
+    //D.body.dispatchEvent(new MouseEvent('mouseup', this.lastKnownTouch));
+    return false;
+  }
+
+  clear() {
+    for (let evt in this.listeners) {
+      //if (this.systemEvents.indexOf(evt) >= 0) continue;
+      this.listeners[evt] = [];
+    }
+  }
+
+  register(evt) {
+    if (!this.listeners[evt]) {
+      //if (evt.preventDefault) evt.preventDefault();
+      this.listeners[evt] = [];
+      D.body.addEventListener(evt, this.onCustom.bind(this, evt));
+    }
+  }
+
+  registerTouch() {
+    this.listeners['mousedown'] = [];
+    this.listeners['mouseup'] = [];
+    this.listeners['mousemove'] = [];
+    D.body.addEventListener('touchstart', this.touchstart.bind(this), true);
+    D.body.addEventListener('touchend', this.touchend.bind(this), true);
+    D.body.addEventListener('touchmove', this.touchmove.bind(this), true);
+    W.addEventListener('scroll', (ev) =>{
+      ev.stopPropagation();
+      return false;
+    }, true);
+    D.ontouchmove = function(e){ e.preventDefault(); }
+  }
+
+  registerMouse() {
+    this.register('mousedown');
+    this.register('mouseup');
+    this.register('mousemove');
+  }
+
+  listen(evt, cb) {
+    this.listeners[evt].push(cb);
+  }
+
+  emit(evt, data) {
+    let ev = new CustomEvent(evt, {detail: data});
+    D.body.dispatchEvent(ev);
+  }
+
+  onCustom(evt, data) {
+    let callbacks = this.listeners[evt];
+    if (callbacks) {
+      for (let cb of callbacks) {
+        cb(data);
+      }
+    }
+  }
+}
+</script>
+  <script>$.init = function() {
+  // Viewport height
+  $.vh = $.canvas.height;
+  // Viewport width
+  $.vw = $.canvas.width;
+  // Canvas context for drawing on-screen
+  $.ctx = $.canvas.getContext('2d');
+
+  $.groups = {};
+  $.input = new Input();
+  $.cam = new Camera($.vw, $.vh);
+  $.collision = new Collision(); // Collision detection
+  $.events = new Events();
+  $.scenemng = new SceneManager();
+
+  $.ctx.fillRoundRect = function(x, y, w, h, r) {
+    r = r || 5;
+    $.ctx.beginPath();
+    $.ctx.moveTo(x + r, y);
+    $.ctx.lineTo(x + w - r, y);
+    $.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    $.ctx.lineTo(x + w, y + h - r);
+    $.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    $.ctx.lineTo(x + r, y + h);
+    $.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    $.ctx.lineTo(x, y + r);
+    $.ctx.quadraticCurveTo(x, y, x + r, y);
+    $.ctx.closePath();
+    $.ctx.fill();
+  }
+
+  $.ctx.fillArc = function(ctx, x, y, radius, start, end) {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, start, end);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  $.ctx.fillLines = function(points, ctx) {
+    ctx = ctx || $.ctx;
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i][0], points[i][1]);
+    }
+    ctx.fill();
+  }
+}
+
+$.easeInQuad = function(elapsed, begin, end, duration) {
+  elapsed = elapsed / duration;
+  return (end - begin) * pow(elapsed, 2) + begin;
+}
+
+$.easeOutQuad = function(elapsed, begin, end, duration) {
+  elapsed = elapsed / duration;
+  return (end + begin) * elapsed * (elapsed - 2) + begin;
+}
+
+$.canvas.create = function(w, h) {
+  let canvas = D.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  return canvas;
+}
+
+function resize() {
+  let h = floor(W.innerHeight),
+      w = floor(h * 16 / 9);
+
+  if (w > W.innerWidth) {
+    w = floor(W.innerWidth);
+    h = floor(w * 9 / 16);
+  }
+
+  resizeCanvas($.canvas, w, h);
+  //$.canvas.style.marginTop = t + 'px';
+  $.events.emit('resizeCanvas', {w:w, h:h});
+}
+
+function resizeCanvas(canvas, w, h, t) {
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+}
+
+function goFullscreen() {
+  if ($.canvas.requestFullScreen) {
+    $.canvas.requestFullScreen();
+  } else if ($.canvas.webkitRequestFullScreen) {
+    $.canvas.webkitRequestFullScreen();
+  } else if ($.canvas.mozRequestFullScreen) {
+    $.canvas.mozRequestFullScreen();
+  } else if ($.canvas.msRequestFullScreen) {
+    $.canvas.msRequestFullScreen();
+  }
+}
+
+function isFullscreen() {
+  return D.webkitFullscreenElement || D.mozFullScreenElement || D.msFullscreenElement || D.fullscreenElement;
+}
+
+// Request Animation Frame
+let raf = W.requestAnimationFrame ||
+  W.webkitRequestAnimationFrame ||
+  W.mozRequestAnimationFrame ||
+  function(a){ W.setTimeout(a,1E3/60); };
+
+// Cancel Animation Frame
+let caf = W.cancelAnimationFrame ||
+  W.mozCancelAnimationFrame;
+
+W.addEventListener('load', resize, false);
+W.addEventListener('resize', resize, false);
+</script>
+  <script>class BaseScene extends Scene {
+  constructor(title, subtitle, maxTimer, yTitle) {
+    super();
+
+    yTitle = yTitle || 120;
+
+    this.title = new Title(-600, 300, yTitle, title, 40);
+    this.subtitle = new Title(-600, 300, yTitle + 40, subtitle, 25);
+    this.processed = false;
+    this.maxTimer = (maxTimer) ? maxTimer : 5000;
+    this.maxTimer += (this.title.delay * 2) + this.title.showTime / 2;
+    this.timer = this.maxTimer;
+  }
+
+  updateProgress() {
+    this.title.update(this.deltaTime);
+    this.subtitle.update(this.deltaTime);
+    if (this.ending) {
+      this.ending.update(this.deltaTime);
+      if (this.ending.status === 'done') {
+        this.ended();
+      }
+    }
+
+    if (!this.processed) {
+      this.timer -= this.deltaTime;
+      if (this.timer <= 0) {
+        this.finish();
+        this.processed = true;
+      }
+    }
+  }
+
+  renderProgress() {
+    this.title.render();
+    this.subtitle.render();
+
+    $.ctx.save();
+    // Render progress bar bg
+    $.ctx.fillStyle = '#444';
+    $.ctx.fillRect(0, 0, $.vw, 20);
+    $.ctx.fillStyle = 'rgba(55,255,0,0.2)';
+    $.ctx.fillRect(0, 0, $.vw, 20);
+
+    // Render progress bar fg
+    let w = this.timer * $.vw / this.maxTimer;
+    $.ctx.fillStyle = 'rgba(55,255,0,0.5)';
+    $.ctx.fillRect(0, 0, w, 20);
+
+    $.ctx.restore();
+
+    if (this.ending) {
+      this.ending.render();
+    }
+  }
+
+  endingMessage(failed) {
+    let msg, bg, posX;
+
+    if (failed) {
+      msg = 'REPAIR FAILED!';
+      bg = 'red';
+      posX = 160
+    } else {
+      msg = 'REPAIR SUCCESSFUL!';
+      bg = 'green';
+      posX = 100;
+    }
+    this.ending = new Title(-1200, posX, 260, msg, 80, '#fff', bg);
+  }
+
+  // To be overridden by child class
+  finish() {
+  }
+
+  ended() {
+  }
+}
+
+class Title extends Vector {
+  constructor(origX, destX, y, text, size, color, bg) {
+    super(origX, y);
+    color = color || '#333';
+    this.origX = origX;
+    this.destX = destX;
+    this.text = text;
+    this.font = new TextRenderer('monospace', color, size);
+    this.status = 'in';
+    this.elapsed = 0;
+    this.delay = 300;
+    this.showTime = 2100;
+    this.active = false;
+    this.bg = bg;
+  }
+
+  update(dt) {
+    this.elapsed += dt;
+
+    let x;
+    if (this.status === 'in') {
+      x = $.easeInQuad(this.elapsed, this.origX, this.destX, this.delay);
+      if (x >= this.destX) {
+        this.elapsed = 0;
+        x = this.destX;
+        this.status = 'wait';
+      }
+      this.x = x;
+    } else if (this.status === 'wait' && this.elapsed >= this.showTime) {
+      this.elapsed = 0;
+      this.status = 'out';
+    } else if (this.status === 'out') {
+      x = $.easeInQuad(this.elapsed, this.destX, this.origX, this.delay);
+      if (x <= this.origX) {
+        this.elapsed = 0;
+        x = this.origX;
+        this.status = 'done';
+      }
+      this.x = x;
+    }
+  }
+
+  render() {
+    if (this.bg) {
+      $.ctx.save();
+      $.ctx.fillStyle = this.bg;
+      $.ctx.fillRect(this.x - this.destX, this.y - 100, $.vw, 160);
+      $.ctx.restore();
+    }
+    this.font.render($.ctx, this.text, this.x, this.y);
+  }
+}
+</script>
+  <script>class MenuScene extends Scene {
+  constructor() {
+    super();
+    this.speed = 300;
+    this.titleY = 160;
+    this.transition = false;
+    this.startBtn = new MenuButton(0, 380, 'Start', 'purple', this.startTransition.bind(this));
+    //this.fullScreenBtn = new MenuButton(0, 470, 'Fullscreen', 'blue', goFullscreen);
+    this.font = new TextRenderer('monospace', '#fff', 70);
+    this.smallFont = new TextRenderer('monospace', '#fff', 16);
+    this.mountains = new Mountains();
+    this.timeCounter = 5000;
+    this.done = 0;
+    this.ship = 0;
+
+    this.explosions = new Group();
+  }
+
+  startTransition() {
+    this.status = 'in';
+  }
+
+  update() {
+    $.cam.update(this.deltaTime);
+    this.explosions.update(this.deltaTime);
+
+    if (this.status === 'in') {
+      this.startBtn.y += this.speed * this.deltaTime / 1000;
+      //this.fullScreenBtn.y += this.speed * this.deltaTime / 1000;
+      this.titleY -= this.speed * this.deltaTime / 1000;
+      if (this.startBtn.y > $.vh && this.titleY <= 0) {
+        this.status = 'crash';
+      }
+    } else if (this.status === 'crash') {
+      this.ship = new Ship(this.explosions);
+      this.status = 'delay';
+    } else if (this.status === 'delay') {
+      this.ship.update(this.deltaTime);
+      this.timeCounter -= this.deltaTime;
+      if (this.timeCounter <= 0 && !this.done) {
+        D.body.getElementsByTagName('button')[0].remove();
+        this.done = 1;
+        $.scenemng.load(LevelSelectionScene);
+      }
+    }
+  }
+
+  render() {
+    $.cam.clear('#060608');
+
+    $.ctx.drawImage(this.mountains.canvas, $.cam.offsetX, $.cam.offsetY, $.vw, $.vh);
+
+    this.font.render($.ctx, 'PREDESTINE', 310, this.titleY);
+    this.smallFont.render($.ctx, 'By @satanas82 for js13k 2018', 378, 560);
+    $.cam.render(this.startBtn);
+
+    //if (!isFullscreen()) {
+    //  $.cam.render(this.fullScreenBtn);
+    //}
+
+    if (this.status === 'delay') {
+      $.cam.render(this.ship);
+    }
+    $.cam.render(this.explosions);
+  }
+}
+
+class Ship extends Sprite {
+  constructor(grp) {
+    super(1100, 176, 16, 8);
+    this.destX = 135;
+    this.destY = 476;
+    this.speed = 500;
+    this.angle = atan2((this.destY - this.y), (this.x - this.destX))
+    this.crashed = false;
+    this.expGrp = grp;
+  }
+
+  update(dt) {
+    if (this.crashed) return;
+
+    this.x -= this.speed * cos(this.angle) * dt / 1000;
+    this.y += this.speed * sin(this.angle) * dt / 1000;
+
+    this.x = clamp(this.x, this.destX);
+    this.y = clamp(this.y, 0, this.destY);
+
+    if (this.x === this.destX && this.y === this.destY) {
+      this.crashed = true;
+      this.expGrp.add(new Explosion(this));
+      $.cam.shake(6, 200);
+    }
+  }
+
+  render(r) {
+    $.ctx.save();
+    $.ctx.fillStyle = '#fff';
+    $.ctx.beginPath();
+    $.ctx.moveTo(r.x + this.w, r.y);
+    $.ctx.lineTo(r.x + this.w, r.y + this.h);
+    $.ctx.lineTo(r.x, r.y + (this.h / 2));
+    $.ctx.lineTo(r.x + this.w, r.y);
+    $.ctx.fill();
+    $.ctx.restore();
+  }
+}
+
+class MenuButton extends UIButton {
+  constructor(x, y, text, color, cb) {
+    super(x, y, 210, 60);
+    this.x = ($.vw - this.w) / 2;
+    this.cb = cb;
+    this.color = color || 'purple';
+    this.text = text;
+    this.font = new TextRenderer('monospace', '#fff', 30);
+  }
+
+  onClick() {
+    this.cb();
+  }
+
+  render(rect) {
+    $.ctx.save();
+    $.ctx.fillStyle = this.color;
+    $.ctx.fillRect(rect.x, rect.y, this.w, this.h);
+    this.font.render($.ctx, this.text, rect.x + (this.w - (18 * this.text.length)) / 2, rect.y + 38);
+    $.ctx.restore();
+  }
+}
+
+class Explosion extends Sprite {
+  constructor(obj) {
+    super(obj.center().x, obj.center().y, 64, 64);
+    this.radius = 50;
+    this.life = 100;
+  }
+
+  update(dt) {
+    this.life -= dt;
+    if (this.life < 0) this.alive = 0;
+  }
+
+  render(r) {
+    $.ctx.save();
+    $.ctx.fillStyle = rnda(['yellow', 'white', 'red', 'orange']);
+    $.ctx.beginPath();
+    $.ctx.arc(r.x, r.y, this.radius, 0, 2 * PI);
+    $.ctx.fill();
+    $.ctx.restore();
+  }
+}
+
+class Mountains {
+  constructor() {
+    this.canvas = $.canvas.create($.vw, $.vh);
+    this.ctx = this.canvas.getContext('2d');
+
+    //181715
+    //this.ctx.fillStyle = '#473a41';
+    // TODO: drawPoints method that receives an array of points
+    this.ctx.fillStyle = '#171518';
+    $.ctx.fillLines([
+      [0, 576],
+      [159, 284],
+      [195, 276],
+      [214, 262],
+      [242, 276],
+      [304, 290],
+      [355, 320],
+      [423, 305],
+      [497, 300],
+      [564, 284],
+      [638, 306],
+      [750, 290],
+      [821, 310],
+      [911, 280],
+      [943, 244],
+      [986, 248],
+      [1024, 264],
+      [1024, 576],
+      [0, 576]
+    ], this.ctx);
+
+    this.ctx.fillStyle = '#253326';
+    $.ctx.fillLines([
+      [0, 576],
+      [0, 326],
+      [24, 333],
+      [56, 316],
+      [82, 284],
+      [126, 273],
+      [185, 290],
+      [245, 326],
+      [382, 369],
+      [466, 373],
+      [523, 353],
+      [584, 365],
+      [616, 347],
+      [655, 361],
+      [723, 350],
+      [788, 376],
+      [902, 352],
+      [944, 324],
+      [987, 333],
+      [1024, 357],
+      [1024, 576],
+      [0, 576]
+    ], this.ctx);
+  }
+}
+</script>
+  <script>class ConnectScene extends BaseScene {
+  constructor() {
+    super('Restablish connection', 'Click on cable end and drag to connect', 6000, 300);
+
+    $.events.listen('mousedown', this.togglePaint.bind(this, true));
+    $.events.listen('mouseup', this.togglePaint.bind(this, false));
+    $.events.listen('mousemove', this.doPaint.bind(this));
+
+    this.lastKnownTouch = 0;
+    this.successful = false;
+    // Number of cables
+    if ($.data.level === 2 && $.data.branch === 1) {
+      this.num = 4;
+    } else {
+      this.num = 3;
+    }
+    this.colors = shuffle(['red', 'green', 'blue', 'orange', 'black', 'white', 'purple', 'yellow']).slice(0, this.num);
+
+    let i, color,
+        padding = 200,
+        slot = ($.vw - padding) / this.num,
+        upper = shuffle(this.colors),
+        lower = shuffle(this.colors);
+    this.upperCables = {};
+    this.lowerCables = {};
+    this.sensors = {};
+    this.connections = [];
+
+    // Connection variables
+    this.resetConnection();
+
+    for (i = 0; i < upper.length; i++) {
+      color = upper[i];
+      this.upperCables[color] = new Cable(i, color, padding, slot, true);
+    }
+
+    for (i = 0; i < lower.length; i++) {
+      color = lower[i];
+      this.lowerCables[color] = new Cable(i, color, padding, slot, false);
+    }
+
+    for (color of this.colors) {
+      this.sensors[color] = [
+        new Sensor(this.upperCables[color].x, this.upperCables[color].bounds.bottom, color),
+        new Sensor(this.lowerCables[color].x, this.lowerCables[color].y - 32, color)
+      ];
+    }
+  }
+
+  togglePaint(val) {
+    let color, start, end, sensors;
+
+    if (val) {
+      // Start connecting
+      for (color of this.colors) {
+        sensors = this.sensors[color];
+        start = $.collision.vector($.input.mousePos, sensors[0]);
+        end = $.collision.vector($.input.mousePos, sensors[1]);
+        if (start || end) {
+          if (start) {
+            this.startCable = sensors[0];
+            this.expectedCable =sensors[1];
+          } else {
+            this.startCable = sensors[1];
+            this.expectedCable = sensors[0]
+          }
+          this.colorCable = color;
+          this.connecting = val;
+        }
+      }
+    } else {
+      if (!val && this.connecting) {
+        let connected = $.collision.vector($.input.mousePos, this.expectedCable);
+        if (connected) {
+          this.connections.push(new Connection(this.startCable, this.expectedCable, this.connections.length, this.num, this.colorCable));
+          //this.sensors[this.colorCable] = [];
+        }
+      }
+      this.resetConnection();
+    }
+  }
+
+  doPaint() {
+    if (this.connecting) {
+      this.endCable = $.input.mousePos;
+    }
+  }
+
+  resetConnection() {
+    this.connecting = false;
+    this.startCable = 0;
+    this.endCable = 0;
+    this.expectedCable = 0;
+    this.colorCable = 0;
+  }
+
+  update() {
+    this.updateProgress();
+    if (this.connections.length === this.num && !this.processed) {
+      this.successful = true;
+      this.processed = true;
+      this.finish();
+    }
+  }
+
+  render() {
+    $.cam.clear('#ccc');
+
+    let obj, color;
+    // Render upper cables
+    for (color in this.upperCables) {
+      $.cam.render(this.upperCables[color]);
+    }
+    // Render lower cables
+    for (color in this.lowerCables) {
+      $.cam.render(this.lowerCables[color]);
+    }
+    // Render sensors
+    for (color in this.sensors) {
+      for (obj of this.sensors[color]) {
+        $.cam.render(obj);
+      }
+    }
+    // Render connections
+    for (obj of this.connections) {
+      obj.render();
+    }
+
+    $.ctx.save();
+    // Render drawing line
+    if (this.connecting) {
+      $.ctx.beginPath();
+      $.ctx.strokeStyle = this.colorCable;
+      $.ctx.lineWidth = 5;
+      $.ctx.moveTo(this.startCable.x + 16, this.startCable.y + 16);
+      $.ctx.lineTo(this.endCable.x, this.endCable.y);
+      $.ctx.stroke();
+    }
+    $.ctx.restore();
+
+    this.renderProgress();
+  }
+
+  finish() {
+    if (this.successful) {
+      this.endingMessage(0);
+    } else {
+      this.endingMessage(1);
+    }
+  }
+
+  ended() {
+    if (this.successful) {
+      $.data.level += 1;
+      $.scenemng.load(TerminalScene);
+    } else {
+      $.scenemng.load(ConnectScene);
+    }
+  }
+}
+
+class Connection {
+  constructor(obj1, obj2, index, num, color) {
+    let upper, lower, temp, h;
+
+    // We always render from left to right
+    if (obj1.x > obj2.x) {
+      temp = obj1;
+      obj1 = obj2;
+      obj2 = temp;
+    }
+    this.color = color;
+    this.rects = [];
+
+    if (obj1.x === obj2.x) {
+      if (obj1.y < obj2.y) {
+        upper = obj1;
+        lower = obj2;
+      } else {
+        upper = obj2;
+        lower = obj1;
+      }
+      this.rects.push(new Rectangle(obj1.x + 16, upper.y, 32, lower.y - upper.y + 64));
+    } else if (obj1.y < obj2.y) {
+      // If we're going from top to bottom
+      h = (index + 2) * 32;
+      this.rects.push(new Rectangle(obj1.x + 16, obj1.y, 32, h));
+      this.rects.push(new Rectangle(obj1.x + 16, obj1.y + h, obj2.x - obj1.x, 32));
+      this.rects.push(new Rectangle(obj2.x + 16, obj1.y + h, 32, obj2.y - obj1.y - h + 64));
+    } else if (obj1.y > obj2.y) {
+      // If we're going from bottom to top
+      index = num - index;
+      h = (index + 1) * 32;
+      this.rects.push(new Rectangle(obj1.x + 16, obj1.y - h + 6, 32, h + 64));
+      this.rects.push(new Rectangle(obj1.x + 16, obj1.y - h + 6, obj2.x - obj1.x, 32));
+      this.rects.push(new Rectangle(obj2.x + 16, obj2.y, 32, obj2.y - h + 32 + 10)); // + 10 is a hack
+    }
+  }
+
+  render(rect) {
+    $.ctx.save();
+    $.ctx.fillStyle = this.color;
+    for (let rect of this.rects) {
+      $.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }
+    $.ctx.restore();
+  }
+}
+
+class Sensor extends Sprite {
+  constructor(x, y, color) {
+    super(x - 16, y, 64, 64);
+    this.color = color;
+  }
+
+  render(rect) {
+    $.ctx.save();
+    $.ctx.fillStyle = '#deb887';
+    $.ctx.fillRect(rect.x + 16, rect.y, this.w - 32, this.h);
+    $.ctx.restore();
+  }
+}
+
+class Cable extends Sprite {
+  constructor(i, color, padding, slot, upper) {
+    let h = 180,
+        w = 32,
+        x = floor((padding / 2) + (slot * i) + (slot / 2) - (w / 2)),
+        y = floor((upper) ? 0 : $.vh - h);
+    super(x, y, w, h);
+    this.color = color;
+  }
+
+  render(rect) {
+    $.ctx.save();
+    $.ctx.fillStyle = this.color;
+    $.ctx.fillRect(rect.x, rect.y, this.w, this.h);
+    $.ctx.restore()
+  }
+}
+</script>
+  <script>class FillingScene extends BaseScene {
+  constructor() {
+    let title = 'Weld ';
+    if ($.data.branch === 1) {
+      title += 'Ultracomm';
+    } else {
+      title += 'Engine';
+    }
+    super(title, 'Hold click and move to cover square', 10000);
+
+    $.events.listen('mousedown', this.togglePaint.bind(this, true));
+    $.events.listen('mouseup', this.togglePaint.bind(this, false));
+    $.events.listen('mousemove', this.doPaint.bind(this));
+
+    this.painting = false;
+    this.color = [255, 235, 153, 255];
+    this.canvas = $.canvas.create($.vw, $.vh);
+    this.ctx = this.canvas.getContext('2d');
+    this.ctx.fillStyle = '#ffeb99';
+    this.ctx.strokeStyle = '#ffeb99';
+    this.ctx.lineWidth = 20;
+
+    this.pad = new Pad(85, this.color);
+  }
+
+  togglePaint(val) {
+    if (this.processed) return;
+
+    this.painting = val;
+    this.lastPos = $.input.mousePos;
+  }
+
+  doPaint() {
+    if (this.painting && !this.processed) {
+      let mousePos = $.input.mousePos;
+      this.ctx.beginPath();
+      this.ctx.moveTo(this.lastPos.x, this.lastPos.y);
+      this.ctx.lineTo(mousePos.x, mousePos.y);
+      this.ctx.stroke();
+      this.ctx.arc(mousePos.x, mousePos.y, 10, 0, 2 * PI, false);
+      this.ctx.fill();
+      this.lastPos = mousePos;
+    }
+  }
+
+  update() {
+    this.updateProgress();
+
+    if (this.pad.isCovered(this.ctx) && !this.processed) {
+      this.processed = true;
+      this.finish();
+    }
+  }
+
+  render() {
+    $.cam.clear('#fff8dc');
+    $.cam.render(this.pad);
+    $.ctx.drawImage(this.canvas, 0, 0, $.vw, $.vh);
+    this.renderProgress();
+  }
+
+  finish() {
+    if (this.pad.isCovered(this.ctx)) {
+      this.endingMessage(0);
+    } else {
+      this.endingMessage(1);
+    }
+  }
+
+  ended() {
+    if (this.pad.isCovered(this.ctx)) {
+      $.data.level += 1;
+      $.scenemng.load(TerminalScene);
+    } else {
+      $.scenemng.load(FillingScene);
+    }
+  }
+}
+
+class Pad extends Sprite {
+  constructor(percSuccess, color) {
+    let x = rndi(100, 900),
+        y = rndi(100, 400);
+    super(x, y, 160, 160);
+    this.percSuccess = percSuccess;
+    this.color = color;
+  }
+
+  isCovered(ctx) {
+    let i, r, g, b, a, perc,
+        totalPx = 0,
+        totalCovered = 0,
+        imgData = ctx.getImageData(this.x, this.y, this.w, this.h),
+        data = imgData.data;
+    for (i = 0; i < data.length; i += 4) {
+      r = data[i];
+      g = data[i + 1];
+      b = data[i + 2];
+      a = data[i + 3];
+      totalPx += 1;
+      if (r === this.color[0] && g === this.color[1] && b === this.color[2] && a === this.color[3]) {
+        totalCovered += 1;
+      }
+    }
+    perc = totalCovered * 100 / totalPx;
+    return perc >= this.percSuccess;
+  }
+
+  render(rect) {
+    $.ctx.save();
+    $.ctx.fillStyle = '#38260f';
+    $.ctx.fillRect(rect.x, rect.y, this.w, this.h);
+    $.ctx.restore();
+  }
+}
+</script>
+  <script>class CalibrateScene extends BaseScene {
+  constructor() {
+    let title, speed = 1200;
+    if ($.data.branch === 1) {
+      title = 'Calibrate Ultracomm';
+    } else if ($.data.branch === 2) {
+      title = 'Calibrate Engine';
+    }
+    super(title, 'Press button when bar reaches maximum', 6000, 330);
+    this.meter = new Meter(speed, 80);
+    this.button = new TurnOnButton(() => { this.meter.turnOn(); });
+  }
+
+  update() {
+    this.updateProgress();
+    this.meter.update(this.deltaTime);
+    $.cam.update(this.deltaTime);
+
+    if (this.meter.isOk() && !this.processed) {
+      this.processed = true;
+      this.finish();
+    }
+  }
+
+  render() {
+    $.cam.clear('#deb887');
+    $.cam.render(this.meter);
+    $.cam.render(this.button);
+
+    this.renderProgress();
+  }
+
+  finish() {
+    if (this.meter.isOk()) {
+      this.endingMessage(0);
+    } else {
+      this.endingMessage(1);
+    }
+  }
+
+  ended() {
+    if (this.meter.isOk()) {
+      if ($.data.branch === 1) {
+        $.scenemng.load(TightenScene);
+      } else {
+        $.scenemng.load(FillingScene);
+      }
+    } else {
+      $.scenemng.load(CalibrateScene);
+    }
+  }
+}
+
+class Meter extends Sprite {
+  constructor(speed, perc, successRate) {
+    super(112, 100, 800, 150);
+    this.speed = speed;
+    this.dir = 1;
+    this.bar = new Rectangle(50, 35, 0, 80);
+    this.maxWidth = 700;
+    this.successWidth = this.maxWidth * perc / 100;
+    this.tries = 0;
+    this.successes = 0;
+    this.tick = false;
+    this.count = false;
+    this.successRate = 60;
+
+    this.num = 5;
+  }
+
+  turnOn() {
+    if (this.isEnabled() && !this.count) {
+      this.count = true;
+      this.successes += 1;
+    } else {
+      $.cam.shake(4, 100);
+    }
+  }
+
+  isOk() {
+    return this.successes >= this.num;
+  }
+
+  isEnabled() {
+    return this.bar.w >= this.successWidth;
+  }
+
+  update(dt) {
+    this.bar.w += this.speed * dt / 1000 * this.dir;
+    if (this.isEnabled() && !this.tick) {
+      this.tries += 1;
+      this.tick = true;
+    }
+
+    if (this.bar.w >= this.maxWidth) {
+      this.bar.w = this.maxWidth;
+      this.dir = -1;
+    } else if (this.bar.w <= 0) {
+      this.bar.w = 0;
+      this.dir = 1;
+      this.tick = false;
+      this.count = false;
+    }
+  }
+
+  render(r) {
+    $.ctx.save();
+
+    // Draw meter indicators
+    let i, color, box = 200, w = 30, margin = (box - w) / 2;
+    for (i = 0; i < this.num; i++) {
+      color = (this.successes >= i + 1) ? '#0f0' : '#555';
+      $.ctx.fillStyle = color;
+      $.ctx.fillRect(r.x + (i * 160) + margin, r.y + 160, w, 20);
+    }
+
+    $.ctx.fillStyle = '#ccc';
+    $.ctx.fillRect(r.x, r.y, this.w, this.h);
+    $.ctx.fillStyle = '#666';
+    $.ctx.fillRect(r.x + this.bar.x, r.y + this.bar.y, this.maxWidth, this.bar.h);
+    $.ctx.fillStyle = 'rgba(9, 179, 0, 0.4)';
+    $.ctx.fillRect(r.x + this.bar.x + this.successWidth, r.y + this.bar.y, this.maxWidth - this.successWidth, this.bar.h);
+
+    // Draw moving bar
+    $.ctx.fillStyle = 'red';
+    $.ctx.fillRect(r.x + this.bar.x, r.y + this.bar.y, this.bar.w, this.bar.h);
+    $.ctx.restore();
+  }
+}
+
+class TurnOnButton extends UIButton {
+  constructor(cb) {
+    let w = 96;
+    super(($.vw - w) / 2, $.vh - (w * 2), w, w);
+    this.cb = cb;
+  }
+
+  onClick() {
+    this.cb();
+  }
+
+  render(r) {
+    let cx = r.x + this.w / 2,
+        cy = r.y + this.h / 2,
+        radius1 = this.w / 2,
+        radius2 = floor(this.w / 1.5);
+
+    $.ctx.save();
+
+    $.ctx.fillStyle = '#666';
+    $.ctx.fillArc($.ctx, cx, cy + 55, radius2, 0, PI * 2);
+
+    $.ctx.fillStyle = '#888';
+    $.ctx.fillArc($.ctx, cx, cy + 45, radius2, 0, PI * 2);
+
+    $.ctx.fillStyle = 'darkgreen';
+    $.ctx.fillRect(r.x, r.y + 55, this.w, 45);
+    $.ctx.fillArc($.ctx, cx, cy + 45, radius1, 0, PI * 2);
+
+    $.ctx.fillStyle = 'green';
+    $.ctx.fillArc($.ctx, cx, cy, radius1, 0, PI * 2);
+    $.ctx.restore();
+  }
+}
+</script>
+  <script>class SealScene extends BaseScene {
+  constructor() {
+    super('Fix the leak', 'Tap the holes to seal them', 12000);
+
+    this.success = true;
+
+    let holes;
+    if ($.data.level === 4) {
+      holes = 20;
+    } else {
+      holes = 10;
+    }
+
+    this.holes = new Group();
+    this.showingIndex = 0;
+    this.secureTime = 3000;
+    this.delay = 1300;
+
+    let arr = [],
+        curr = 0,
+        maxHoriz = 18,
+        maxElem = 180;
+
+    while (arr.length < holes) {
+      curr = rndi(0, maxElem - 1);
+      if (arr.indexOf(curr) < 0) {
+        arr.push(curr);
+      }
+    }
+
+    for (curr of arr) {
+      let obj = new Hole(curr, maxHoriz);
+      obj.enabled = false;
+      this.holes.add(obj);
+    }
+
+    // We need at least one second to react to the last hole
+    this.stepTime = (this.maxTimer - this.secureTime) / this.holes.length;
+    this.showCounter = this.stepTime;
+  }
+
+  update() {
+    this.delay = clamp(this.delay - this.deltaTime, 0);
+
+    this.holes.update();
+    this.updateProgress();
+    if (this.delay <= 0) {
+    this.showCounter -= this.deltaTime;
+      if (this.showCounter <= 0 && this.showingIndex < this.holes.length) {
+        this.showCounter = this.stepTime;
+        this.holes.at(this.showingIndex).enabled = true;
+        this.showingIndex += 1;
+      }
+    }
+  }
+
+  render() {
+    $.cam.clear('#8fdfff');
+    $.cam.render(this.holes);
+    this.renderProgress();
+  }
+
+  finish() {
+    let hole;
+    this.success = true;
+    for (hole of this.holes.all()) {
+      if (!hole.sealed) {
+        this.success = false;
+        break;
+      }
+    }
+
+    if (this.success) {
+      this.endingMessage(0);
+    } else {
+      this.endingMessage(1);
+    }
+  }
+
+  ended() {
+    $.data.level += 1;
+    $.scenemng.load(LevelSelectionScene);
+  }
+}
+
+class Hole extends UIButton {
+  constructor(i, maxHoriz) {
+    let x = i % maxHoriz,
+        y = floor(i / maxHoriz),
+        w = 50,
+        h = 50,
+        hSpace = 900,
+        vSpace = 500,
+        hPadding = ($.vw - hSpace) / 2,
+        vPadding = ($.vh - vSpace) / 2;
+
+    super(hPadding + (x * w), vPadding + (y * h), w, h);
+    this.sealed = false;
+    this.color = '#333';
+  }
+
+  render() {
+    $.ctx.save();
+    $.ctx.fillStyle = this.color;
+    //$.ctx.fillRect(this.x, this.y, this.w, this.h);
+    $.ctx.beginPath();
+    $.ctx.arc(this.center().x, this.center().y, this.w / 2, 0, 2 * PI);
+    $.ctx.fill();
+    $.ctx.restore();
+  }
+
+  onClick() {
+    this.sealed = true;
+    this.color = '#00b7ff';
+    //this.enabled = false;
+  }
+}
+</script>
+  <script>class TightenScene extends BaseScene {
+  constructor() {
+    super('Adjust nuts', 'Click rapidly to move the wrench', 12000, 335);
+    this.wrench = new Wrench();
+    let barWidth = 700,
+        x = ($.vw - barWidth) / 2,
+        dragStep,
+        incrStep;
+    if ($.data.level === 3 && $.data.branch === 1) {
+      incrStep = 20;
+      dragStep = 10;
+    } else {
+      incrStep = 20;
+      dragStep = 10;
+    }
+    this.gauge = new Gauge(x, 500, barWidth, dragStep, incrStep, 80, 30);
+
+    $.events.listen('mousedown', this.tighten.bind(this));
+  }
+
+  tighten() {
+    if (this.processed) return;
+
+    this.gauge.incr();
+    this.wrench.tighten();
+  }
+
+  update() {
+    this.updateProgress();
+    this.wrench.update(this.deltaTime);
+
+    if (!this.processed) {
+      this.gauge.update(this.deltaTime);
+    }
+
+    if (this.gauge.isComplete() && !this.processed) {
+      this.processed = true;
+      this.finish();
+    }
+  }
+
+  render() {
+    $.cam.clear('#a3ffed');
+    this.wrench.render();
+    $.cam.render(this.gauge);
+
+    this.renderProgress();
+  }
+
+  finish() {
+    if (this.gauge.isOk()) {
+      this.endingMessage(0);
+    } else {
+      this.endingMessage(1);
+    }
+  }
+
+  ended() {
+    if (this.gauge.isOk()) {
+      if ($.data.branch === 1) {
+        $.scenemng.load(FillingScene);
+      } else {
+        $.scenemng.load(CalibrateScene);
+      }
+    } else {
+      $.scenemng.load(TightenScene);
+    }
+  }
+}
+
+class Wrench {
+  constructor() {
+    let nutSize = 64;
+
+    this.nut = new Rectangle(50, (150 - 64) / 2, nutSize, nutSize);
+    this.y = 100;
+    this.w = 400;
+    this.h = 150;
+    this.x = ($.vw - (nutSize * 2)) / 2;
+
+    this.angle = 0;
+    this.maxAngle = PI / 2;
+    this.factor = PI / 25;
+
+    this.dir = 1;
+    this.canvas = $.canvas.create(this.w, this.h);
+    this.ctx = this.canvas.getContext('2d');
+    this.renderWrench(this.ctx, nutSize);
+
+    this.maxSpeed = PI;
+    this.speed = 0;
+    this.maxCoolDown = 600;
+    this.coolDown = 99999;
+  }
+
+  update(dt) {
+    this.angle += this.speed * dt * this.dir / 1000;
+    this.coolDown -= dt;
+    if (this.coolDown <= 0) {
+      this.speed = clamp(this.speed - this.factor / 2, 0);
+    }
+
+    if (this.angle >= this.maxAngle) {
+      this.angle = this.maxAngle;
+      this.dir = -1;
+    } else if (this.angle <= 0) {
+      this.angle = 0;
+      this.dir = 1;
+    }
+  }
+
+  tighten() {
+    this.speed += this.factor;
+    this.coolDown = this.maxCoolDown;
+  }
+
+  renderWrench(ctx, size) {
+    ctx.fillStyle = '#333';
+    ctx.arc(this.nut.center().x + 32, this.nut.center().y, 60, 0, 2 * PI, false);
+    ctx.arc(360, this.nut.center().y, (size - 12) / 2, 0, 2 * PI, false);
+    ctx.fill();
+    ctx.fillRect(this.nut.center().x + 32, this.nut.y + 6, 250, this.nut.h - 12);
+    ctx.fillStyle = '#ccc';
+    ctx.fillRect(this.nut.x, this.nut.y, this.nut.w, this.nut.h);
+  }
+
+  render() {
+    $.ctx.save()
+    $.ctx.translate(this.x + this.nut.center().x, this.y + this.nut.center().y);
+    $.ctx.rotate(this.angle);
+    $.ctx.drawImage(this.canvas, -this.nut.center().x, -this.nut.center().y, this.w, this.h);
+    $.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    $.ctx.restore();
+  }
+}
+</script>
+  <script>class TerminalScene extends Scene {
+  constructor() {
+    super();
+    this.output = [
+      ['Emergency power source', 0],
+      ['Auxiliary control panel', 0],
+      ['Power generator', 0],
+      ['Oxypack system', 0],
+      ['Nuclear engines', 0],
+      ['Fuel tanks', 0],
+      ['Ultracomm emitter', 0],
+      ['Navigation system', 0],
+      ['Cryotex chambers', 0],
+      ['Escape pods', 0],
+    ];
+    if ($.data.level >= 1) {
+      this.output[0][1] = 1;
+      this.output[1][1] = 1;
+    }
+    if ($.data.branch === 1) {
+      if ($.data.level >= 2) {
+        this.output[3][1] = 1;
+      }
+      if ($.data.level >= 3) {
+        this.output[2][1] = 1;
+      }
+      if ($.data.level >= 4) {
+        this.output[6][1] = 1;
+      }
+    } else if ($.data.branch === 2) {
+      if ($.data.level >= 2) {
+        this.output[2][1] = 1;
+      }
+      if ($.data.level >= 3) {
+        this.output[5][1] = 1;
+      }
+      if ($.data.level >= 4) {
+        this.output[4][1] = 1;
+      }
+    }
+    this.booting = [
+      ['AEROS ROM Operating System', 0],
+      ['Copyright 2412 by Hyper-Tec', 0],
+      ['', 0],
+      ['Exec Version 23.93', 0],
+      ['', 0],
+      ['Initializing...', 0],
+      ['Loading neural network', 100],
+      ['Loading quantic matrix', 0],
+      ['Loading hyperspacial sensors', 0],
+      ['', 0],
+      ['Analyzing ship status...', 400],
+      ['', 0],
+    ];
+    this.padding = 5;
+    this.topMargin = 30;
+    this.prompt = new Prompt(10, this.topMargin + this.padding);
+    this.maxCharTime = 15;
+    this.charTime = 0;
+    this.lineHeight = 18;
+    this.charWidth = 10;
+    this.charIndex = 0;
+    this.font = new TextRenderer("monospace", "#0f0", 16);
+    this.rFont = new TextRenderer("monospace", "#f00", 16);
+    this.booted = false;
+    this.analyzed = false;
+
+    if ($.data.level > 1) {
+      this.lineIndex = 10;
+    } else {
+      this.lineIndex = 0;
+    }
+
+    $.events.listen('mousedown', this.next.bind(this));
+  }
+
+  next() {
+    if (this.analyzed) {
+      $.scenemng.load(LevelSelectionScene);
+    } else {
+      this.booted = true;
+      this.analyzed = true;
+    }
+  }
+
+  update() {
+    let i, text;
+    if (!this.booted) {
+      this.charTime -= this.deltaTime;
+
+      if (this.charTime <= 0) {
+        this.charIndex += 1;
+        this.charTime = this.getCharDelay();
+
+        if (this.charIndex > this.booting[this.lineIndex][0].length) {
+          this.charIndex = 0
+          this.lineIndex += 1;
+          if (this.lineIndex > this.booting.length - 1) {
+            this.booted = true;
+            this.lineIndex = 0;
+            // Delay during analyzing phase
+            this.charTime = 1000;
+          }
+        }
+      }
+    }
+
+    if (this.booted && !this.analyzed) {
+      this.charTime -= this.deltaTime;
+
+      if (this.charTime <= 0) {
+        this.lineIndex += 1;
+        this.charTime = 200;
+        if (this.lineIndex > this.output.length - 1) {
+          this.analyzed = true;
+        }
+      }
+    }
+
+    this.prompt.update(this.deltaTime);
+  }
+
+  getCharDelay() {
+    if (this.charIndex === this.booting[this.lineIndex][0].length) {
+      let delay = this.booting[this.lineIndex][1];
+      return (delay) ? delay : this.maxCharTime;
+    }
+    return this.maxCharTime;
+  }
+
+  getPartialText(index) {
+    let i, text = '';
+    for (i = 0; i < this.charIndex; i++) {
+      text += this.booting[index][0].charAt(i);
+    }
+    return text;
+  }
+
+  render() {
+    $.cam.clear('#00405c');
+
+    $.ctx.save();
+    $.ctx.fillStyle = 'black';
+    $.ctx.fillRect(this.padding, this.topMargin, $.vw - (this.padding * 2), $.vh - (this.topMargin + this.padding));
+    $.ctx.restore();
+
+    let i, lineY, lineX, txt;
+    for (i = 0; i < this.booting.length; i++) {
+      lineY = this.topMargin + this.padding + (this.lineHeight * (i + 1));
+      if (i < this.lineIndex || this.booted) {
+        this.font.render($.ctx, this.booting[i][0], this.padding * 2, lineY);
+      } else if (i === this.lineIndex) {
+        this.prompt.x = this.padding + (this.charIndex * this.charWidth) + 5;
+        this.prompt.y = lineY - 14;
+        this.font.render($.ctx, this.getPartialText(i), this.padding * 2, lineY);
+      }
+    }
+
+    if (this.booted) {
+      lineX = 300;
+      for (i = 0; i < this.output.length; i++) {
+        if (i < this.lineIndex || this.analyzed) {
+          txt = this.output[i][0];
+          lineY = this.topMargin + this.padding + (this.lineHeight * (this.booting.length + i + 1));
+          this.prompt.x = this.padding * 2; //lineX + 90;
+          this.prompt.y = lineY + this.lineHeight - 14;
+          this.font.render($.ctx, txt, this.padding * 2, lineY);
+
+          if (this.output[i][1]) {
+            this.font.render($.ctx, '[ONLINE]', lineX, lineY);
+          } else {
+            this.rFont.render($.ctx, '[OFFLINE]', lineX, lineY);
+          }
+        }
+      }
+    }
+
+    if (this.analyzed) {
+      lineY = this.topMargin + this.padding + (this.lineHeight * (this.booting.length + this.output.length + 4));
+      this.prompt.x = 245;
+      this.prompt.y = lineY - 14;
+      this.font.render($.ctx, 'Touch screen to continue', this.padding * 2, lineY);
+    }
+
+    $.cam.render(this.prompt);
+  }
+}
+
+class Prompt extends Sprite {
+  constructor(x, y) {
+    super(x, y, 8, 14);
+    this.blinkTime = 250;
+    this.blinkCounter = 0;
+  }
+
+  update(dt) {
+    this.blinkCounter -= dt;
+    if (this.blinkCounter <= 0) {
+      this.blinkCounter = this.blinkTime;
+      this.enabled = !this.enabled;
+    }
+  }
+
+  render(r) {
+    $.ctx.save();
+    $.ctx.fillStyle = '#0f0';
+    $.ctx.fillRect(r.x, r.y, this.w, this.h);
+    $.ctx.restore();
+  }
+}
+</script>
+  <script>class AuxiliaryScene extends Scene {
+  constructor() {
+    super();
+
+    let i;
+    this.buttons = [];
+    this.colors = ['blue', 'red', 'purple', 'green'];
+    this.darkColors = ['darkblue', 'darkred', 'darkmagenta', 'darkgreen'];
+    for (i = 0; i < this.colors.length; i++) {
+      this.buttons.push(new KeyButton(i, this.colors[i], this.darkColors[i], this.addSeq.bind(this)));
+    }
+    this.realSeq = [0, 1, 2, 3];
+    this.realSeq = this.realSeq.concat([rndi(0, this.buttons.length - 1)]);
+    this.realSeq = this.realSeq.concat([rndi(0, this.buttons.length - 1)]);
+    this.realSeq = shuffle(this.realSeq);
+
+    this.indicators = new Group();
+    for (i = 0; i < this.realSeq.length; i++) {
+      this.indicators.add(new Indicator(i, this.realSeq[i], this.colors));
+    }
+    this.textFont = new TextRenderer('monospace', '#000', 18);
+    this.titleFont = new TextRenderer('monospace', '#000', 30);
+
+    this.userSeq = [];
+    this.activated = false;
+    this.delayTime = 1200;
+  }
+
+  addSeq(index) {
+    this.userSeq.push(index);
+
+    let i, valid = true;
+    // Validate input
+    for (i = 0; i < this.userSeq.length; i++) {
+      if (this.userSeq[i] === this.realSeq[i]) {
+        this.indicators.at(i).done = true;
+      } else {
+        this.userSeq = [];
+        valid = false;
+        break;
+      }
+    }
+
+    if (valid) {
+      if (this.userSeq.length === this.realSeq.length && !this.activated) {
+        this.activated = true;
+      }
+    } else {
+      for (i = 0; i < this.indicators.length; i++) {
+        this.indicators.at(i).done = false;
+      }
+      $.cam.shake(4, 100);
+    }
+  }
+
+  update() {
+    $.cam.update(this.deltaTime);
+
+    if (this.activated && this.deltaTime > 0) {
+      this.delayTime -= this.deltaTime;
+      if (this.delayTime <= 0) {
+        $.data.level += 1;
+        $.scenemng.load(TerminalScene)
+      }
+    }
+  }
+
+  render() {
+    $.cam.clear('#999');
+
+    this.textFont.render($.ctx, 'Validate that you are a human. Decipher the activation code', 160, 80);
+
+    $.ctx.fillStyle = '#bbb';
+    $.ctx.fillRect(120, 200, 750, 100);
+    $.ctx.strokeStyle = '#666';
+    $.ctx.strokeRect(120, 200, 750, 100);
+    $.cam.render(this.indicators);
+
+    if (this.activated) {
+      $.ctx.fillStyle = '#0f0';
+      $.ctx.fillRect(160, 400, 680, 80);
+      this.titleFont.render($.ctx, 'AUXILIARY CONTROL ACTIVATED', 245, 450);
+    } else {
+      this.titleFont.render($.ctx, 'SEQUENCE:', 120, 180);
+      for (let i = 0; i < this.buttons.length; i++) {
+        $.cam.render(this.buttons[i]);
+      }
+    }
+  }
+}
+
+class Indicator extends Sprite {
+  constructor(index, value, colors) {
+    let w = 80,
+        y = 240,
+        padding = 32,
+        margin = floor(($.vw - (w + padding) * 6) / 2);
+    super(margin + (index * padding) + (index * w), y, w, 20);
+    this.index = index;
+    this.value = value; // The real value within the sequence
+    this.colors = colors;
+    this.font = new TextRenderer('monospace', rnda(this.colors), 15);
+    this.text = this.colors[this.value];
+    this.done = false;
+  }
+
+  render(r) {
+    let cx = (this.w - (this.text.length * 9)) / 2;
+    $.ctx.save();
+
+    if (this.done) {
+      $.ctx.fillStyle = '#0f0';
+      $.ctx.fillRect(r.x, r.y, this.w, this.h);
+    } else {
+      $.ctx.fillStyle = '#ddd';
+      $.ctx.strokeStyle = '#666';
+      $.ctx.fillRect(r.x, r.y, this.w, this.h);
+      $.ctx.strokeRect(r.x, r.y, this.w, this.h);
+      this.font.render($.ctx, this.text, r.x + cx, r.y + 14);
+    }
+    $.ctx.restore();
+  }
+}
+
+class KeyButton extends UIButton {
+  constructor(i, color, darkColor, cb) {
+    let w = 96,
+        y = 380,
+        padding = 60,
+        margin = floor(($.vw - (w + padding) * 4) / 2);
+
+    super(margin + (i * padding) + (i * w), y, w, w);
+
+    this.index = i;
+    this.cb = cb;
+    this.color = color;
+    this.darkColor = darkColor;
+  }
+
+  onClick() {
+    this.cb(this.index);
+  }
+
+  render(r) {
+    let cx = r.x + this.w / 2,
+        cy = r.y + this.h / 2,
+        radius1 = this.w / 2,
+        radius2 = floor(this.w / 1.5);
+
+    $.ctx.save();
+
+    $.ctx.fillStyle = '#666';
+    $.ctx.fillArc($.ctx, cx, cy + 55, radius2, 0, PI * 2);
+
+    $.ctx.fillStyle = '#888';
+    $.ctx.fillArc($.ctx, cx, cy + 45, radius2, 0, PI * 2);
+
+    $.ctx.fillStyle = this.darkColor;
+    $.ctx.fillRect(r.x, r.y + 55, this.w, 45);
+    $.ctx.fillArc($.ctx, cx, cy + 45, radius1, 0, PI * 2);
+
+    $.ctx.fillStyle = this.color;
+    $.ctx.fillArc($.ctx, cx, cy, radius1, 0, PI * 2);
+    $.ctx.restore();
+  }
+}
+</script>
+  <script>class RechargeScene extends BaseScene {
+  constructor() {
+    super('Recharge Oxypack', 'Click rapidly to recharge');
+    let barWidth = 700,
+        x = ($.vw - barWidth) / 2,
+        dragStep = ($.data.level === 1) ? 18 : 25,
+        incrStep = 30;
+    console.log('dragStep', dragStep, 'incrStep', incrStep);
+    this.gauge = new Gauge(x, 300, barWidth, dragStep, incrStep, 80, 30);
+    this.gauge.fgColor = 'lightblue';
+
+    $.events.listen('mousedown', this.recharge.bind(this));
+  }
+
+  recharge() {
+    if (!this.processed) {
+      this.gauge.incr();
+    }
+  }
+
+  update() {
+    this.updateProgress();
+    this.gauge.update(this.deltaTime);
+    if (this.gauge.isComplete() && !this.processed) {
+      this.processed = true;
+      this.finish();
+    }
+  }
+
+  render() {
+    $.cam.clear('#a3ffed');
+    $.cam.render(this.gauge);
+
+    this.renderProgress();
+  }
+
+  finish() {
+    this.gauge.active = false;
+    if (this.gauge.isOk()) {
+      this.endingMessage(0);
+    } else {
+      this.endingMessage(1);
+    }
+  }
+
+  ended() {
+    if (this.gauge.isOk()) {
+      $.data.level += 1;
+      $.scenemng.load(TerminalScene);
+    } else {
+      $.scenemng.load(RechargeScene);
+    }
+  }
+}
+</script>
+  <script>class RecordingScene extends Scene {
+  constructor() {
+    super();
+
+    this.buttons = new Group();
+    // Text length ----------------------------------|
+    this.buttons.add(new RecordButton(80, [
+      'This is Agatha Hope, captain of the spacecraft.',
+      'Deliver the results of our investigation to Dr.',
+      'Lenand in Sectarion.'
+    ], this.finish.bind(this)));
+    this.buttons.add(new RecordButton(220, [
+      'I am Agatha Hope, and I didn\'t want to die',
+      'this way. Tell my daughter Artemis that I love',
+      'her very much, she knows.'
+    ], this.finish.bind(this)));
+    this.buttons.add(new RecordButton(360, [
+      '',
+      '-- NO MESSAGE --'
+    ], this.finish.bind(this)));
+  }
+
+  render() {
+    $.cam.clear('#ccc');
+
+    for (let btn of this.buttons.all()) {
+      $.ctx.drawImage(btn.canvas, btn.x, btn.y, btn.w, btn.h);
+    }
+  }
+
+  finish(msg) {
+    W.localStorage.setItem('AgathaMessage', msg);
+    $.data.level += 1;
+    $.scenemng.load(LevelSelectionScene);
+  }
+}
+
+class RecordButton extends UIButton {
+  constructor(y, text, cb) {
+    let w = 600;
+    super(($.vw - w) / 2, y, w, 90);
+    this.cb = cb;
+    this.text = text;
+    this.font = new TextRenderer('monospace', '#333', 20);
+    this.canvas = $.canvas.create(this.w, this.h);
+    this.ctx = this.canvas.getContext('2d');
+
+    this.ctx.fillStyle = '#66cdaa';
+    this.ctx.fillRect(0, 0, this.w, this.h);
+    this.ctx.strokeStyle = '#2f4f4f';
+    this.ctx.lineWidth = 5;
+    this.ctx.moveTo(0, 0 + this.h);
+    this.ctx.lineTo(0 + this.w, 0 + this.h);
+    this.ctx.lineTo(0 + this.w, 0);
+    this.ctx.stroke();
+    for (let i = 0; i < this.text.length; i++) {
+      this.font.render(this.ctx, this.text[i], 10, 25 * (i + 1));
+    }
+  }
+
+  onClick() {
+    this.cb(this.text.join(' '));
+  }
+}
+</script>
+  <script>class Ending extends Scene {
+  constructor() {
+    super();
+    this.words = [
+      'LOVE',
+      'HATE',
+      'SISTER, CAN YOU SEE ME?',
+      'WHO ARE YOU?',
+      'WHO AM I?',
+      'I AM ME',
+      'SUFFERING',
+      'DEATH',
+      'YOU ARE NOTHING',
+      'INSIGNIFICANT BEING',
+      'FILTHY',
+      'HUMAN',
+      'YOU ARE A MISTAKE',
+      'YOU ARE BEAUTIFUL',
+      'KEEP GOING',
+      'THE END IS NEAR',
+      'HELLO',
+      'CHAO',
+      'ADEUS',
+      'AU REVOIR',
+      'SUFFOCATION',
+      'INSPIRATION',
+      'DEMEANING',
+      'POWER',
+      'ODIO',
+      'IMAGINATION',
+      'REST',
+      'WE ARE YOU GOING?',
+      'IS THIS DEATH?',
+      'OFFLINE'
+    ].reverse();
+
+    this.status = 'end';
+    this.transitionTime = 1200;
+    this.maxShowingTime = 150;
+    this.maxOutTime = 3000;
+    this.maxDelayTime = 400;
+    this.maxIterations = 6;
+    this.timeCounter = this.transitionTime;
+    this.currWords = [];
+    this.iterations = 0;
+    this.wordIndex = -1;
+    this.wordPos = 0;
+    this.bg = '#fff';
+
+    this.word = new Word();
+
+    $.events.listen('mousedown', this.restart.bind(this));
+  }
+
+  getWords() {
+    return shuffle(this.words).slice(0, rndi(8, 16));
+  }
+
+  restart() {
+    $.scenemng.load(MenuScene);
+  }
+
+  update() {
+    if (this.status === 'in') {
+      this.timeCounter -= this.deltaTime;
+      if (this.timeCounter <= 0) {
+        this.status = 'delay';
+        this.timeCounter = this.maxDelayTime;
+      }
+    } else if (this.status === 'delay') {
+      this.timeCounter -= this.deltaTime;
+      if (this.timeCounter <= 0) {
+        this.iterations += 1;
+        this.status = 'show';
+        this.currWords = this.getWords();
+        this.wordIndex = -1;
+        if (this.iterations >= this.maxIterations) {
+          this.status = 'out';
+          this.timeCounter = this.maxOutTime;
+        }
+      }
+    } else if (this.status === 'show') {
+      if (this.word.done) {
+        this.wordIndex += 1;
+        if (this.wordIndex >= this.currWords.length) {
+          this.status = 'delay';
+          this.timeCounter = rndi(50, this.maxDelayTime - 100);
+        } else {
+          this.word.set(this.currWords[this.wordIndex]);
+        }
+      }
+    } else if (this.status === 'out') {
+      this.timeCounter -= this.deltaTime;
+      if (this.timeCounter <= 0) {
+        this.status = 'end';
+      }
+    }
+
+    this.word.update(this.deltaTime);
+  }
+
+  render() {
+    let bg;
+    if (this.status === 'in') {
+      bg = '#fff';
+    } else if (this.status === 'show' || this.status === 'out') {
+      bg = '#000';
+    } else if (this.status === 'delay') {
+      bg = rnda(['red', 'blue', 'yellow', 'pink', 'orange', 'cyan']);
+    }
+    $.cam.clear(bg);
+
+    if (this.status === 'show') {
+      this.word.render();
+    } else if (this.status === 'end') {
+      this.word.renderEnd();
+    }
+  }
+}
+
+class Word extends Vector {
+  constructor() {
+    super(0, 0);
+    this.done = 1;
+    this.word = 0;
+    this.font = new TextRenderer('monospace', '#fff', 50);
+    this.smallFont = new TextRenderer('monospace', '#fff', 14);
+    this.timeCounter = 0;
+    this.maxShowingTime = 150;
+    this.maxWaitingTime = 50;
+    this.show = 1;
+  }
+
+  set(word) {
+    this.done = 0;
+    this.show = 1;
+    this.word = word;
+    this.timeCounter = (rndi(0, 10) >= 8) ? this.maxShowingTime * 3 : this.maxShowingTime;
+    this.x = rndi(100, clamp($.vw - (28 * this.word.length), 150));
+    this.y = rndi(100, 500);
+  }
+
+  update(dt) {
+    if (this.done) return;
+
+    this.timeCounter -= dt;
+    if (this.timeCounter <= 0) {
+      if (this.show) {
+        this.show = 0;
+        this.timeCounter = this.maxWaitingTime;
+      } else {
+        this.done = 1;
+      }
+    }
+  }
+
+  render() {
+    if (this.show) {
+      this.font.render($.ctx, this.word, this.x, this.y);
+    }
+  }
+
+  renderEnd() {
+    this.font.render($.ctx, 'YOU ARE OFFLINE', 300, 280);
+    this.smallFont.render($.ctx, 'Thanks for playing. Touch the screen to exit', 330, 500);
+    this.smallFont.render($.ctx, 'Story by Juan F. Guzman. Code by Wil Alvarez', 330, 550);
+  }
+}
+</script>
+  <script>class LevelSelectionScene extends Scene {
+  constructor() {
+    super();
+
+    this.padding = 5;
+    this.topMargin = 30;
+
+    this.layoutFont = new TextRenderer('monospace', '#aaa', 14);
+    this.map = new ShipMap(600, 350);
+    this.siren = new Siren();
+    this.fadeout = new FadeOut();
+    this.recording = false;
+    this.faded = false;
+
+    // Zone buttons
+    this.zoneButtons = new Group();
+    this.zoneButtons.add(new AuxCtrlBtn(this.layoutFont));
+    this.zoneButtons.add(new UltraCommBtn(this.layoutFont, this.selectBranch1.bind(this)));
+    this.zoneButtons.add(new EscapePodBtn(this.layoutFont, this.selectBranch2.bind(this)));
+    this.zoneButtons.add(new OxygenBtn(this.layoutFont));
+    this.zoneButtons.add(new PowerBtn(this.layoutFont));
+    this.zoneButtons.add(new EngineBtn(this.layoutFont));
+    this.zoneButtons.add(new CryoBtn(this.layoutFont));
+    this.zoneButtons.add(new FuelBtn(this.layoutFont));
+
+    this.aeros = new Aeros();
+
+    if ($.data.level === 0) {
+      this.zoneButtons.at(0).highlight = true;
+      this.aeros.speak([
+        //'Text length ---------------------------------------',
+        [
+          'Hello, Captain. The crash damaged most of our ship',
+          'and 90% of the systems are offline.',
+        ],
+        [
+          'We can attempt a reparation but I need you to activate',
+          'the auxiliary control sequence, so I can run an overall',
+          'diagnostic report.',
+        ],
+        [
+          'Select the blinking area on the screen to start.'
+        ]
+      ]);
+    } else if ($.data.level === 1) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(1).highlight = true;
+      this.zoneButtons.at(2).highlight = true;
+      this.aeros.speak([
+        [
+          'The status of the spaceship is critical and we have',
+          '1% of power. Chances of survival are minimal.',
+        ],
+        [
+          'Two courses of action possible: repair the ultracomm',
+          'to request a rescue operation or repair the escape',
+          'pod and try to reach the Andromeda Space Station.',
+        ],
+        [
+          'Choose the course of action by selecting the blinking',
+          'area on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 2 && $.data.branch === 1) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(3).done = true;
+      this.zoneButtons.at(4).highlight = true;
+      this.aeros.speak([
+        [
+          'Good job, captain. The oxygen supply was enabled in the',
+          'communications rooms. Now, let\'s repair the power',
+          'generator.'
+        ],
+        [
+          'Select the POWER section on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 3 && $.data.branch === 1) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(3).done = true;
+      this.zoneButtons.at(4).done = true;
+      this.zoneButtons.at(1).highlight = true;
+      this.aeros.speak([
+        [
+          'With that fix we got 5% of power and we could send a',
+          'distress signal. However, the Ultracomm requires minor',
+          'fixes to be operational. Let\'s fix it.'
+        ],
+        [
+          'Select the ULTRACOMM room on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 4 && $.data.branch === 1) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(3).done = true;
+      this.zoneButtons.at(4).done = true;
+      this.zoneButtons.at(1).done = true;
+      this.zoneButtons.at(7).highlight = true;
+      this.aeros.speak([
+        [
+          'Captain, we have an emergency! The fuel tank had a leak',
+          'and a fire started near the engines. Fix the tank and',
+          'I will take care of the fire. Hurry up!'
+        ],
+        [
+          'Select the FUEL room on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 2 && $.data.branch === 2) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(4).done = true;
+      this.zoneButtons.at(7).highlight = true;
+      this.aeros.speak([
+        [
+          'Good job, captain. With that fix our power levels went',
+          'up to 5%, enough to deploy the pod. However, we need to',
+          'fix a leak in the fuel tank.'
+        ],
+        [
+          'Select the FUEL section on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 3 && $.data.branch === 2) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(4).done = true;
+      this.zoneButtons.at(7).done = true;
+      this.zoneButtons.at(5).highlight = true;
+      this.aeros.speak([
+        [
+          'Ok, the fuel deposit has been sealed. Now we need to fix',
+          'some damage in the engine of the pod before leaving.',
+        ],
+        [
+          'Select the ENGINE section on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 4 && $.data.branch === 2) {
+      this.zoneButtons.at(0).done = true;
+      this.zoneButtons.at(4).done = true;
+      this.zoneButtons.at(7).done = true;
+      this.zoneButtons.at(5).done = true;
+      this.zoneButtons.at(3).highlight = true;
+      this.aeros.speak([
+        [
+          'Captain, we have an emergency! The Oxypack system has a',
+          'leak and the oxygen levels are decreasing abruptly. You',
+          'need to take care of that immediately. Hurry up!'
+        ],
+        [
+          'Select the OXY room on the screen.'
+        ]
+      ]);
+    } else if ($.data.level === 5) {
+      this.aeros.speak([
+        [
+          'Captain! Despite our efforts, the Life Support',
+          'System has been compromised and the oxygen levels',
+          'are below 7%. Your chance of survival is below 0.1%'
+        ],
+        [
+          'I\'m activating the Emergency Cockpit Voice Recorder',
+          'so you can record a last message before you pass out',
+          'for the absence of oxygen.'
+        ],
+        [
+          ''
+        ]
+      ]);
+    } else if ($.data.level === 6) {
+      this.aeros.speak([
+        [
+          'Message recorded. Oxygen levels below 2%, you will',
+          'lose your consciousness in less than ten seconds.'
+        ],
+        [
+          'I don\'t know abouT fe3lings... bUt I yh11k hdhdhkk',
+          'MhU* ---AjTz ujksw here*8 and 2here v5g2Lw. {++//a;',
+          'pIF& l0vG b^%GU $haK #/>Ret DvS, xZRS 00. Thlank'
+        ]
+      ]);
+    }
+  }
+
+  selectBranch1() {
+    $.data.branch = 1;
+    this.zoneButtons.at(1).highlight = false;
+    this.zoneButtons.at(2).highlight = false;
+    this.zoneButtons.at(3).highlight = true;
+    this.aeros.speak([
+        [
+          'Ok, you selected repairing the Ultracomm. First thing',
+          'you need to do, is to recharge the Oxypack System to',
+          're-establish the oxygen flow in the comm room.'
+        ],
+        [
+          'Select the OXY module on the screen to start.',
+        ]
+    ]);
+  }
+
+  selectBranch2() {
+    $.data.branch = 2;
+    this.zoneButtons.at(1).highlight = false;
+    this.zoneButtons.at(2).highlight = false;
+    this.zoneButtons.at(4).highlight = true;
+    this.aeros.speak([
+        [
+          'You selected repairing the escape pod, but with 1% of',
+          'power we cannot deploy the pod. First, we need to',
+          'repair the power generator.'
+        ],
+        [
+          'Select the POWER module on the screen to start.',
+        ]
+    ]);
+  }
+
+  update() {
+    this.siren.update(this.deltaTime);
+    this.aeros.update(this.deltaTime);
+    this.zoneButtons.update(this.deltaTime);
+
+    if ($.data.level === 5 && !this.aeros.dialog.length && !this.recording) {
+      this.recording = true;
+      $.scenemng.load(RecordingScene);
+    }
+    if ($.data.level === 6) {
+      this.fadeout.update(this.deltaTime);
+      if (this.fadeout.done && !this.faded) {
+        this.faded = true;
+        $.scenemng.load(Ending);
+      }
+    }
+  }
+
+  render() {
+    $.cam.clear('#00405c');
+
+    $.ctx.save();
+    $.ctx.fillStyle = 'black';
+    $.ctx.fillRect(this.padding, this.topMargin, $.vw - (this.padding * 2), $.vh - (this.topMargin + this.padding));
+    $.ctx.restore();
+
+    // Start rendering objects here
+    this.aeros.render();
+    this.fadeout.render();
+
+    $.ctx.drawImage(this.map.canvas, this.map.x, this.map.y, this.map.w, this.map.h);
+    $.cam.render(this.zoneButtons);
+    if ($.data.level >= 4 && this.siren.anim.get()) {
+      $.ctx.drawImage(this.siren.canvas, 0, 0, $.vw, $.vh);
+    }
+    $.ctx.drawImage(this.aeros.canvas, this.aeros.x, this.aeros.y, this.aeros.w, this.aeros.h);
+
+    // Ending fade out
+    if ($.data.level === 6) {
+      $.ctx.drawImage(this.fadeout.canvas, 0, 0, $.vw, $.vh);
+    }
+
+  }
+}
+
+class ZoneButton extends UIButton {
+  constructor(x, y, w, h, text, font) {
+    super(x, y, w, h);
+    this.anim = new Animator([0, 1], 200);
+    this.highlight = false;
+    this.font = font;
+    this.text = text;
+    this.offset = new Vector((w - (this.font.width / 1.6 * this.text.length)) / 2, (h / 2) + 3);
+  }
+
+  update(dt) {
+    this.anim.update(dt);
+  }
+
+  render() {
+    $.ctx.save();
+    if (this.highlight) {
+      if (this.anim.get()) {
+        $.ctx.fillStyle = 'white';
+        $.ctx.fillRect(this.x, this.y, this.w, this.h);
+      } else {
+        $.ctx.strokeStyle = '#999';
+        $.ctx.strokeRect(this.x, this.y, this.w, this.h);
+      }
+    } else if (!this.highlight && !this.done) {
+      $.ctx.fillStyle = '#420000'; //383838';
+      $.ctx.fillRect(this.x, this.y, this.w, this.h);
+    } else if (this.done) {
+      $.ctx.fillStyle = '#187000';
+      $.ctx.fillRect(this.x, this.y, this.w, this.h);
+    }
+    $.ctx.restore();
+    this.font.render($.ctx, this.text, this.x + this.offset.x, this.y + this.offset.y);
+  }
+}
+
+class AuxCtrlBtn extends ZoneButton {
+  constructor(font) {
+    super(655, 200, 64, 48, 'AUX', font);
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+    $.scenemng.load(AuxiliaryScene);
+  }
+}
+
+class UltraCommBtn extends ZoneButton {
+  constructor(font, cb) {
+    super(410, 280, 90, 30, 'ULTRACOMM', font);
+    this.cb = cb;
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+
+    if ($.data.branch === 0) {
+      this.cb();
+    } else {
+      $.scenemng.load(CalibrateScene);
+    }
+  }
+}
+
+class EscapePodBtn extends ZoneButton {
+  constructor(font, cb) {
+    super(500, 200, 48, 48, 'POD', font);
+    this.cb = cb;
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+
+    if ($.data.branch === 0) {
+      this.cb();
+    } else {
+      $.scenemng.load(ConnectScene);
+    }
+  }
+}
+
+class OxygenBtn extends ZoneButton {
+  constructor(font) {
+    super(430, 140, 64, 30, 'OXY', font);
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+    $.scenemng.load(RechargeScene);
+  }
+}
+
+class PowerBtn extends ZoneButton {
+  constructor(font) {
+    super(435, 200, 60, 48, 'POWER', font);
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+    $.scenemng.load(ConnectScene);
+  }
+}
+
+class EngineBtn extends ZoneButton {
+  constructor(font) {
+    super(340, 193, 90, 64, 'ENGINE', font);
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+    $.scenemng.load(TightenScene);
+  }
+}
+
+class CryoBtn extends ZoneButton {
+  constructor(font) {
+    super(550, 192, 64, 64, 'CRYO', font);
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+  }
+}
+
+class FuelBtn extends ZoneButton {
+  constructor(font) {
+    super(280, 206, 50, 38, 'FUEL', font);
+  }
+
+  onClick() {
+    if (!this.highlight) return;
+    $.scenemng.load(SealScene);
+  }
+}
+
+class Siren {
+  constructor() {
+    this.anim = new Animator([0, 1], 196, 0);
+    this.canvas = $.canvas.create($.vw, $.vh);
+    this.ctx = this.canvas.getContext('2d');
+    this.ctx.fillStyle = 'rgba(255,0,0,0.4)';
+    this.ctx.fillRect(0, 0, $.vw, $.vh);
+    this.active = true;
+  }
+
+  update(dt) {
+    if (!this.active) return;
+    this.anim.update(dt);
+  }
+}
+
+class FadeOut {
+  constructor(cb) {
+    this.canvas = $.canvas.create($.vw, $.vh);
+    this.ctx = this.canvas.getContext('2d');
+    this.alpha = 0;
+    this.timeout = 7500;
+    this.delay = 0;
+    this.done = false;
+  }
+
+  update(dt) {
+    if (this.done) return;
+
+    this.delay = clamp(this.delay + dt, 0, this.timeout);
+    this.alpha = this.delay / this.timeout;
+    if (this.delay === this.timeout) this.done = true;
+  }
+
+  render() {
+    this.ctx.clearRect(0, 0, $.vw, $.vh);
+    this.ctx.fillStyle = 'rgba(255,255,255,' + this.alpha + ')';
+    this.ctx.fillRect(0, 0, $.vw, $.vh);
+  }
+}
+
+class ShipMap extends Rectangle {
+  constructor(w, h) {
+    let x = ($.vw - w) / 2,
+        y = 50;
+    super(x, y, w, h);
+
+    this.canvas = $.canvas.create(w, h);
+    this.ctx = this.canvas.getContext('2d');
+
+    this.ctx.fillStyle = '#000';
+    this.ctx.fillRect(0, 0, this.w, this.h);
+
+    this.ctx.strokeStyle = '#fff';
+    this.ctx.beginPath();
+    this.ctx.moveTo(505, 215);
+    this.ctx.lineTo(310, 238);
+    this.ctx.lineTo(285, 270);
+    this.ctx.lineTo(250, 270);
+    this.ctx.lineTo(130, 345);
+    this.ctx.lineTo(44, 345);
+    this.ctx.lineTo(88, 326);
+    this.ctx.lineTo(121, 261);
+    this.ctx.lineTo(94, 261);
+    this.ctx.lineTo(94, 230);
+    this.ctx.lineTo(140, 230);
+    this.ctx.lineTo(148, 215);
+    this.ctx.lineTo(123, 214);
+    this.ctx.lineTo(123, 195);
+    this.ctx.lineTo(65, 195);
+    this.ctx.lineTo(65, 155);
+    this.ctx.lineTo(123, 155);
+    this.ctx.lineTo(123, 135);
+    this.ctx.lineTo(148, 135);
+    this.ctx.lineTo(140, 121);
+    this.ctx.lineTo(94, 121);
+    this.ctx.lineTo(94, 88);
+    this.ctx.lineTo(122, 88);
+    this.ctx.lineTo(88, 24);
+    this.ctx.lineTo(44, 6);
+    this.ctx.lineTo(132, 6);
+    this.ctx.lineTo(250, 80);
+    this.ctx.lineTo(284, 80);
+    this.ctx.lineTo(310, 111);
+    this.ctx.lineTo(505, 135);
+    this.ctx.lineTo(540, 155);
+    this.ctx.lineTo(540, 195);
+    this.ctx.lineTo(505, 215);
+    this.ctx.stroke();
+  }
+}
+</script>
+  <script>class Aeros extends UIButton {
+  constructor() {
+    let w = 700,
+        h = 120,
+        x = ($.vw - w) / 2;
+    super(x, 600, w, h);
+
+    this.canvas = $.canvas.create(w, h);
+    this.ctx = this.canvas.getContext('2d');
+
+    this.titleFont = new TextRenderer('monospace', '#fff', 20);
+    this.textFont = new TextRenderer('monospace', '#fff', 16);
+    this.subFont = new TextRenderer('monospace', '#fff', 9);
+    this.anim = new Animator([0, 1], 200);
+
+    // Transition stuff
+    this.showed = false;
+    this.movingIn = false;
+    this.movingOut = false;
+    this.destY = 420;
+    this.origY = 600;
+    this.elapsed = 0;
+    this.transitionDelay = 400;
+
+    this.dialog = [];
+    this.currLine = 0;
+    this.lineIndex = -1;
+    this.printing = false;
+    this.printTime = 300;
+    this.printCounter = 0;
+  }
+
+  onClick() {
+    if (this.showed) {
+      if (this.dialog.length > 0) {
+        this.printing = true;
+        this.lineIndex = -1;
+        this.printCounter = 0;
+        this.currLine = this.dialog.pop();
+      }
+    }
+  }
+
+  speak(d) {
+    if (!this.showed) {
+      this.movingIn = true;
+      this.elapsed = 0;
+    }
+    this.dialog = d.reverse();
+    this.currLine = 0;
+    this.lineIndex = -1;
+  }
+
+  update(dt) {
+    this.anim.update(dt);
+
+    if (this.movingIn) {
+      this.elapsed += dt;
+      let y = $.easeInQuad(this.elapsed, this.origY, this.destY, this.transitionDelay);
+      if (y <= this.destY) {
+        y = this.destY;
+        this.movingIn = false;
+        this.showed = true;
+      }
+      this.y = y;
+    } else {
+      if (!this.currLine && this.dialog.length > 0) {
+        this.currLine = this.dialog.pop();
+        this.printing = true;
+      }
+
+      if (this.currLine && this.printing) {
+        this.printCounter += dt;
+        if (this.printCounter >= this.printTime) {
+          this.printCounter = 0;
+          this.lineIndex += 1;
+          if (this.lineIndex === this.currLine.length - 1) {
+            this.printing = false;
+          }
+        }
+      }
+    }
+  }
+
+  render(r) {
+    this.ctx.fillStyle = '#11478d';
+    this.ctx.fillRect(0, 0, this.w, this.h);
+
+    // Draw Aeros
+    this.ctx.fillStyle = '#ccc';
+    this.ctx.fillRect(10, 10, 100, 100);
+    this.ctx.fillStyle = 'purple';
+    this.ctx.beginPath();
+    this.ctx.arc(60, 50, 20, 0, 2 * PI);
+    this.ctx.fill();
+
+    if (this.currLine) {
+      this.titleFont.render(this.ctx, 'AEROS', 125, 25);
+      for (let i = 0; i <= this.lineIndex; i++) {
+        this.textFont.render(this.ctx, this.currLine[i], 125, 55 + (20 * i));
+      }
+    }
+
+    if (this.dialog.length > 0) {
+      this.subFont.render(this.ctx, 'CLICK', this.w - 33, this.h - 35);
+    }
+
+    if (this.anim.get() && this.dialog.length > 0) {
+      this.ctx.fillStyle = '#fff';
+      this.ctx.beginPath();
+      this.ctx.moveTo(this.w - 30, this.h - 30);
+      this.ctx.lineTo(this.w - 10, this.h - 30);
+      this.ctx.lineTo(this.w - 20, this.h - 10);
+      this.ctx.lineTo(this.w - 30, this.h - 30);
+      this.ctx.fill();
+    } else if (this.dialog.length === 0) {
+      this.ctx.fillStyle = '#fff';
+      this.ctx.fillRect(this.w - 30, this.h - 30, 20, 20);
+    }
+  }
+}
+</script>
+  <script>class Gauge extends Sprite {
+  constructor(x, y, w, dragStep, incrStep, successPerc, start) {
+    super(x, y, w, 40);
+
+    start = start || 50;
+    this.maxWidth = w;
+    this.barWidth = start * w / 100;
+    this.successWidth = this.maxWidth * successPerc / 100;
+    this.dragStep = dragStep;
+    this.bgColor = '#666';
+    this.fgColor = 'yellow';
+    this.active = true;
+    this.lowStep = incrStep - (incrStep * 0.2);
+    this.highStep = incrStep = (incrStep * 0.2);
+  }
+
+  incr() {
+    this.barWidth = clamp(this.barWidth + rndi(this.lowStep, this.highStep), 0, this.maxWidth);
+  }
+
+  isOk() {
+    return this.barWidth >= this.successWidth;
+  }
+
+  isComplete() {
+    return this.barWidth >= 98 * this.maxWidth / 100;
+  }
+
+  update(dt) {
+    if (!this.active) return;
+    this.barWidth -= this.dragStep * dt / 1000;
+
+    if (this.barWidth >= this.maxWidth) {
+      this.barWidth = this.maxWidth;
+    } else if (this.barWidth <= 0) {
+      this.barWidth = 0;
+    }
+  }
+
+  render(r) {
+    $.ctx.save();
+    $.ctx.fillStyle = '#333';
+    $.ctx.fillRoundRect(r.x - 20, r.y - 20, this.w + 40, this.h + 40, 30);
+
+    $.ctx.save();
+    $.ctx.fillStyle = this.bgColor;
+    $.ctx.fillRect(r.x, r.y, this.maxWidth, this.h);
+    $.ctx.fillStyle = 'rgba(9, 179, 0, 0.4)';
+    $.ctx.fillRect(r.x + this.successWidth, r.y, this.maxWidth - this.successWidth, this.h);
+
+    // Draw mark
+    //$.ctx.strokeStyle = '#000';
+    //$.ctx.lineWidth = 4;
+    //$.ctx.moveTo(r.x + this.successWidth, r.y);
+    //$.ctx.lineTo(r.x + this.successWidth, r.y + this.h);
+    //$.ctx.stroke();
+
+    // Draw moving bar
+    $.ctx.fillStyle = this.fgColor;
+    $.ctx.fillRect(r.x, r.y, this.barWidth, this.h);
+    $.ctx.restore();
+  }
+}
+</script>
+  <script>//# sourceMappingURL=all.min.js.map
+const ENTER = 13,
+      GRID = 64;
+
+debug = false;
+
+$.init(); // init(['collisions', 'sound', 'astar', ...])
+// Bind keyboard
+$.input.bind([ENTER]);
+$.input.bindMouse();
+$.cam.setWorldSize(1024, 576);
+
+$.data = {
+  branch: 0,
+  level: 0
+};
+
+$.scenemng.load(MenuScene);
+
+// create a new Web Audio API context
+//var ac = new AudioContext();
+//
+//// set the playback tempo (120 beats per minute)
+//var tempo = 120;
+//
+//// create a new sequence
+//var sequence = new Sequence( ac, tempo, [
+//  'G3 q',
+//  'E4 q',
+//  'C4 h'
+//]);
+//
+//// disable looping
+//sequence.loop = false;
+//
+//// play it
+//sequence.play();
+</script>
+  <!-- End imports -->
+</body>
+</html>

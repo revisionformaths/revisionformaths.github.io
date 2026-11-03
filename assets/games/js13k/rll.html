@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>RLL</title>
+        <audio id="attack_sound" src="data:audio/mpeg;base64,//NIZAAHDAFrG6CIAQcwAopZQQAAJJc5ekABBBAEIOHC71hgvgm+CEMWwTD6gQcCHLn4IfBM//Lg///ic+CYfUc/8HwffLg/9Z8uD/IAAuuOazAH4IHC599YYygJg+D4Pw/6gQOfLg/nCCpty1y2V2txypxOFtgAoBgllk+5apNmYVizVjT8hgAlXElgVtry//NIZCUM8PGJLsYYAQhwXq5RhxgAYAgZUz3+s5OZQ23VMkc9s0nAqGdH8l9zG3p4nbOUmbn718+Uzb6/S1vr9xeu1P/wVJoDcJqXxnuLGYjBlh+JxFz2sAEIKJgKIADDINoLrsf31RGSniod5R9D2f/5dt3/F3/zhmogmBKRypptwGgEAkZYkSSxqJU7zOvM//NIZBYJHFtRL+MMAAeYAmRTwQAAz2qlKMx6q3VVYGAgkDT+WiV5UNCI8o8sFR4KwaPKesFeWPfnSwcLA1BV5WWPf/lf/1AyAX6IEoa///z3ESj0FTpKHfnv9vLedlYi//+V//KnakxBTUUzLjEwMC4xqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"></audio>
+        <audio id="magic_sound" src="data:audio/mpeg;base64,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"></audio>
+        <audio id="eme_die_sound" src="data:audio/mpeg;base64,//NAxAALaAb1n0EQAOBAJStUfoActE4IBjBw5qB9/Lg+D74gd4IeXfk//P/4YOf4nyhz///xACDtYPqNtGAzUgAqTgNpKgiFeyO2Z0b6eb4bKQV64KR/AECSQm8P5PLzcmi4gBsJ6Bz/80LELR/Jwv41j1gATK1yesfNjps/olSsW3Z96SLohArljHLQtXnU14qu3y+4+/jty//PEMZ3y+IOYTLlgCeMFg8dHmDrCSmBOSW9/VBg+HiCeBQK5T13SIk/qXZ/A1U4AxLI8jSmbkH/80DECRaBXvC9yTAApzJbUGYYMTgtEqyjVlahHpkowDBHvOhwZFn280x573NRe+i02kvt+3piv5tmfxB4qHJIa0bNv10EqxNZMuWoHEDYclsTB4DoqPNHIc6hv/vtWAAMK8YQHpCxfP/zQsQKFplW8VwxhjyZ/se4KNRJWZAM6UoKfCCcPTRSKRoqLxlBMDdBJimbJayhDp/mEeFeMZ0vChoAIOqYZb8HTrMBqGDGmcPGnPLLPmQSzbnvljwKqDrwxq9n4upYSBTjvy9TRFIJg//zQMQLFpJW+XwwRagmyLuTaI006iVxKZ+ubtS11kszZaN99FkF4/dj3fM1416ytLLe9y3qN1mWy7ZeWZcpodK/FM7cFnhqCIKzvcYKqeaJFhZbEj3ssPaq/+Zk6prFGJladgisiXbt//NCxAsXaTr5nkpGcLi4TxpQcX+qNJdty0GJpXmIpKRrXcCUURqaG0qLkS761Yx2aiEA7kKD5BIZMHKEr6FweqaMiqhgVqQakQwRCq2vPEjLzymvJhIeUVZX6lLWQ3SFpKCcNkDgFElo//NAxAkTaQrxXDBHICRo1ChxtlGrJF1hcbz+kze8rGSNqFbUEJY+d5XRfuMbJFgaaJXLcW6xILoN24kMxikIeGhR4qKCwtcEyXOs3q///tppUgS4JiyZRAWkKJpiiFmqBjQiijCsMDL/80LEFhSJduC0Mgaw2tCLcmPgnEwfamuxtrTPW3NapBUENFy2Viq+94uliaHghKKgNtKNjSwqdDo9ztH8r6vou77bhy8aIlv01RMjECNCSsDrFmXactUjIogJkPIcgtIpAEEy2u4wGTf/80DEHxKY0tg0SgaIVcifMhnDYNHjs9F0ZBZpbh60Na5UywVDaiVwUFj1dmxxQl9/bXY8WpdFwEqRmQAIQTAxqQNaaz8TCUjie7QtA9Dgg828K1NVZ9pr5aLGiUiSp2xYpHnRMDjTwf/zQsQvE2CyyBQxjACDQKGUOUBSxFV7FsmqmtsFjq2HpUUh2HVu2d+nzC76EE+cahyp1aErJTpk4PkM0E+7K1MTnjoOh2cVLWrraLcy9LQhyf9oRtTAq6qqkzL8AmKgIi0O6NKxKaIiUf/zQMQ9FDE2pChgRySLceiIGrQVyxGnmU0qN0VPWey3qjCAFNV7boikiEyrPWRU0qS4i6zSyJqWolAJAYCUoDG42q7N/xm2Uo2wMBXqqTGVOrf/9DPM5TcKAgaKpJHrf/EoyEg7lSP6//NCxEcUIaKJtkjE1L5V2HdQCRXyoaoMH4InFs5xooDAxBNSSJI044sxNS5o0HBI9QuzUKpiwuKmQELCv+BT0VFBIaxb/6hdmoV/q4qKNfFRZBpYo3X/xWpMQU1FMy4xMDAuMaqqqqqq//NAxFIQUHW8FDGGUKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo="></audio>
+        <audio id="player_die_sound" src="data:audio/mpeg;base64,/+MYZAADbAMuAKCAAANYBlQBQQAAGD4fKAgsHwfPo8/wcBAoCAIA+D4Py5/g+/+D4InP///////////B8H0aPi0iowUarTjR/+MYZAoC9BlKAMMIAAbI0oQBghAALcLPQSKkl6qp8w5/8IjM+fFAzHpo/RbZ/6W/2pIIBD/f//pMEv1f9aXr2b1MvoIIMvW6/+MYZAoEqLlkAOaIAAQwtrwBwhAA9P1OpBZfMh6D6Ctg7D0zdk//////qHFiCAhmP////qfO/oRkABA9///+HuiNyAGBwAAO/+MYZAcEKMuPLAgCQ4RgAtAACIRwZiEJ16eY5ivVexi8xX3J/////lb+iixBZGPU3+q7/aggkUCIf//+d6iUmGGAmCIMbHp8/+MYZAcDxHt2ZBgiBgSICtwAGEQARJv/9f/9NPUpU4GGEE///2xEBviYEAwPf/0/wDxEaqAb///7E/YXEAYVqOZpXVKHJMsi/+MYZAkDuP92AAgFhIQgBtgAMEQA7+////Ksi+oUBKYWd9JlZh4AA/Q8NT/kv//Kpwx////khQFQqlULvjEM5ve6dKvR3zM3/+MYZA0ECQd4wAgFkgQpCv5AEApIeju7bV/2/9jDO3//+7IHRUJiA+vADCgCWX7dU90b///5gMKueIiIh1gBNkLWSYZM8v3//+MYZA8DcIOLgAQiCgRgAx8ACEQAPov+v/zgFH////1h9gq7u7Owd8qnXo632cY1npeTtltDAWLdf2/Tlru37fzyYRkX/////+MYZBUDFIGFEAgHUgPwC1MAGEQC+sHAlABAAEKACECDf5b/+0qd8rX8cfiACABhk0p3o+o8tV3+oESP////1wEQEAUAUAUG/+MYRB8C3AOnLAQiAQWQD174MEQC0Oe6Q+r/+oEQ7////8qqs+wAwRVGrdW/9dUVf6Z5bs9ThSjf///5woYHQCb////Us////+MYZCQDZHl6wBQFYAPYAuSgCIRw//rpCD0AarsBsIAoACJh5JZZkt/oAT3lf3Br///8oUEpIWQen////////QlAXWAqAG22/+MYZCwDhAGVLAwiAQMZytwAAErgwAgAP+u+sw6+pdiCAagenv///UEBLpshX///////6mAQJB1weooAu7umoAAcB3HWljl5/+MYZDYDSHOJLAAlJwORvtgAAErgdRv6MHcgNTf///E4iPD8gg4djv///KBgGoiIiAiACRkY75GcOdGnaRG9+/9EiAAgHT04/+MYZEADOG+DgAAiGAMQ2vRAAAQWAHg//dAmGyX///qBOiWon8hUSia9f95znPyegQr/+p3QhP//6qMYJmQmWmQ7G7Tiv7In/+MYZE0DLG2vgAgKUQNI0vWACAoUHO1PWj/11QOIBDHY360lX09/6kLVAJzG5f/8RZwGAw8O/9H8lQAAAKB1//////NCplUE/+MYZFkDONF8AAgCcASYB2cAAEQC2CRpRFpBDYRmHeEgqExE9kSuHmSwlBgVsQV/7Jkou1elHu/LDqdH/9//0mz0gqzUvhqz/+MYZF8DtJ9+KAgFcAMoCzJAGAQCZNy8aGWvrhRI0JCKAn4T/xKSLEQkFwzlyziexpu5Kpnk39pYUSVXYUJQktz/+ioYKnig/+MYZGcDwB9wYCQiAAN4DtwAEAAAUNjdV/YZ8NBQqoPLGuUPKnm6zpV3xGeJFQ0G1E7BIGr2s3+VTpNk0Nf5Ax0ilt//Kory/+MYRG4DXFNeYAwiMgbYvsQAMIYIaAQmbhlOnqhgNB0kJh/W4O1B2InqDv6BKQ8RHkPJb3pxLqpqiURPlj3+SWGqWCtQx4NP/+MYZGoDxDdUcBgjAgXYtqDgKAZAgqCpUYdO4LULGf/qBmIg7FDzRh/xqzBgJjxU9EVX5X+S1grqPA+oWFpMQU1FMy4xMDAu/+MYZGcDNBVAABhjAAT4BnAACIYAMaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/+MYZGwCtAMiAAAAAAUYXkgACEYAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq/+MYZHUAmACwoABjAQAAATgAAAAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"></audio>
+    </head>
+    <body>
+        <style>
+            body {
+                touch-action: manipulation;
+                overflow: hidden;
+                background-color: white;
+            }
+        </style>
+        <canvas id="main" style="height:100%;width:100%;"></canvas>
+        <script>
+            const attack_sound = document.getElementById("attack_sound")
+            const magic_sound = document.getElementById("magic_sound")
+            const enemy_die_sound = document.getElementById("eme_die_sound")
+            const player_die_sound = document.getElementById("player_die_sound")
+            var running = false
+
+            var canvas = document.getElementById("main")
+            var draw = canvas.getContext("2d")
+            var H = window.innerHeight
+            var W = window.innerWidth
+            var ground_height = H/2
+            var gravity = 1
+            var score = 0
+            var replayable = true
+            
+            var hit = []//the list for all the positions of the attack of the main character
+            var harm = []//the list of all the positions of the attack of the enemies which will hurt the main character
+
+            var dft_clr = "#000"
+            var claw = new Image()
+            claw.src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDYiIGhlaWdodD0iMjkxIiBmaWxsPSJub25lIiB4bWxuczp2PSJodHRwczovL3ZlY3RhLmlvL25hbm8iPjxwYXRoIGQ9Ik0wIDBoMjA1LjUzMXYyOTAuNTQ1SDB6Ii8+PHBhdGggZD0iTTIuNDg2IDI3LjQxM2w2My45NDggOTguNDYyYy4zODguMTQgNDkuMzM5IDEyMy45MTYgNDguOTUxIDEyMy43NzYuMzg4LjE0LTgwLjczMS0xMTkuNDQxLTgwLjczMS0xMTguNzQxTTMxLjg1NyAxLjUzOGw0OS45NjIgMTE0LjU0NSA5Mi4zMDggMTMyLjg2Ny02NS43MzQtMTM5LjE2MU05MS4yOTcgMjQuNjE1bDMzLjE3OCA4MC45NzkgNjcuMTMzIDU2LjY0My01MS4wNDktODguMTEyIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0iI2ZmZiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg=="
+            var flip_delay = 0.02
+            
+            var touch_move_root = {"oriplace":[-1,-1],"id":-1} // so player move will depend on where the finger now is compare to the place the finger was first placed.
+            var attack_touch_ori = {"oriplace":[-1,-1],"id":-1}
+            //{"oriplace":pageX;"id":touch identifer}
+            //var ongoingTouches = []
+
+            canvas.height = H-10
+            H -= 10
+            canvas.width = W
+            console.log(canvas.height)
+
+            const action = {"w":false,"a":false,"s":false,"d":false,"o":false,"p":false}
+            var cls=(clr="#fff")=>{draw.fillStyle=clr;draw.fillRect(0,0,W,H);draw.fillStyle=dft_clr}
+            var delay=async(seconds)=>{await new Promise(resolve => setTimeout(resolve, seconds*1000))}
+            var get_real_y=(y)=>{return H-ground_height-y-60}
+            var rdint=(min,max)=>{return Math.floor(Math.random()*(max-min)+min)}
+
+            draw.fillStyle = "black"
+            draw.strokeStyle = "black"
+            draw.font = "32px Arial"
+            draw.fillText("RLL - RogueLikeLike",W/2,H/2)
+            draw.fillText("Press R or Press Screen to start",W/2,H/2+30)
+
+            window.addEventListener("touchstart",(e)=>{//touch start
+                //e.preventDefault()
+                var touches = e.changedTouches
+                for(let i = 0; i< touches.length;i++){
+                    if(touches[i].pageX < W/2){
+                        touch_move_root = {"oriplace":[touches[i].pageX,touches[i].pageY],"id":touches[i].identifier}
+                    }
+                    else{
+                        action["o"] = true
+                        attack_touch_ori["id"] = touches[i].identifier
+                        attack_touch_ori["oriplace"] = [touches[i].pageX,touches[i].pageY]
+                    }
+                }
+            })
+
+            window.addEventListener("touchmove",(e)=>{//touch drag for mobile devices!!!!!!!
+                //e.preventDefault()
+                const touches = e.changedTouches
+                for (let i = 0; i<touches.length;i++){
+                    if(touches[i].identifier == touch_move_root["id"]){
+                        console.log("Move ctl moved!")
+                        if(touches[i].pageX < touch_move_root["oriplace"][0]-20){
+                            action["d"] = false
+                            action["a"] = true
+                        }else if(touches[i].pageX > touch_move_root["oriplace"][0]+20){
+                            action["d"] = true
+                            action["a"] = false
+                        }
+                        if(touches[i].pageY < touch_move_root["oriplace"][1]-25){
+                            action["w"] = true
+                        }
+                    }
+                }
+                //console.log(action,e.key)
+            })
+
+            window.addEventListener("touchend",(e)=>{//touch end for mobile devices!!!!!!!
+                //e.preventDefault()
+                console.log("touch end")
+                if(running){
+                        const touches = e.changedTouches
+                    for (let i = 0; i<touches.length;i++){
+                        if(touches[i].identifier == touch_move_root["id"]){
+                            touch_move_root = {}
+                            action["a"] = action["d"] = action["w"] = false
+                        }else if(touches[i].identifier == attack_touch_ori["id"]){
+                            if(touches[i].pageY < attack_touch_ori["oriplace"][1]-25){
+                                action["p"] = true
+                                console.log("P")
+                            }
+                            action["o"] = false
+                        }
+                    }
+                }else if(replayable){
+                    running = true
+                    replayable = false
+                    main()
+                }
+                
+                //console.log(action,e.key)
+            })
+
+
+            window.addEventListener("keydown",(e)=>{
+                var k = e.key.toLowerCase()
+                //console.log(k)
+                if(k in action){
+                    action[k] = true
+                }
+                if(k == "r" && !running && replayable){
+                    console.log("Start Main!")
+                    running = true
+                    replayable = false
+                    main()
+                }
+                //console.log(action,e.key)
+            })
+
+            window.addEventListener("keyup",(e)=>{
+                var k = e.key.toLowerCase()
+                if(k in action){
+                    action[k] = false
+                }
+                //console.log(action,e.key)
+            })
+
+            async function update_attack(mainchar){
+                hit.forEach(function(v,i){
+                    draw.fillText("<>",v[0],v[1])
+                    hit[i][0] += hit[i][3]
+                    hit[i][2] -= 1
+                    if(hit[i][2] <= 0){
+                        hit.splice(i,1)
+                    }
+                    //console.log(i)
+                })
+                harm.forEach(function(v,i){
+                    v.update()
+                    v.draw()
+                    if(Math.abs(v.x - mainchar.x)<10 && v.y - mainchar.y >= 0 && v.running){
+                        mainchar.hp.value -= 1
+                    }
+                })
+                if(a.hp.value <= 0){
+                    await game_over()
+                }
+            }
+            class enemy{
+                constructor(x,dmg,target,father,index,y){
+                    this.dmg = dmg
+                    this.x = x
+                    this.y = y
+                    this.hp = rdint(10,20)
+                    this.target = target
+                    this.father = father
+                    this.index = index
+                    this.running = true
+                    this.spd = rdint(1,5)
+                }
+                draw(){
+                    var h=get_real_y(this.y)
+                    draw.beginPath()
+                    draw.arc(this.x,h-rdint(8,12),10,0,2 * Math.PI)
+                    draw.fillRect(this.x-8,h-10,16,70)
+                    draw.fill()
+                }
+                async update(){
+                    if(this.running){
+                        if(this.hp <= 0){
+                            await this.die()
+                        }
+                        if(this.target.x > this.x){
+                            this.x += this.spd
+                        }else{
+                            this.x -= this.spd
+                        }
+                    }
+                    var tmp = this.x
+                    var tmp_y = this.y
+                    var tmp_hp = this.hp
+                    var del_hit = []
+                    hit.forEach(function(v,i){
+                        //console.log(tmp)
+                        if(Math.abs(v[0]-tmp)<10 && Math.abs(get_real_y(tmp_y) - v[1])<50){//you cannot hit enemies in the sky when you are on the gnd
+                            tmp_hp -= 5 // Hit harm decleared here
+                            del_hit.push(i)
+                        }
+                    })
+                    var tmp_hit = hit
+                    del_hit.forEach(function(v,i){
+                        tmp_hit = tmp_hit.slice(i,1);
+                    })
+                    hit = tmp_hit
+                    this.hp = tmp_hp
+                }
+                async die(){
+                    enemy_die_sound.play()
+                    this.running = false
+                    for(var i = this.index+1;i < this.father.length;i++){
+                        this.father[i].index -= 1
+                    }
+                    this.father.splice(this.index,1)
+                    console.log(this.father)
+                    score ++
+                    if(this.target.mp.value < 100){
+                        this.target.mp.value += rdint(10,20)
+                    }
+                    if(this.target.mp.value >= 100){
+                        this.target.mp.value = 100
+                        if(this.target.hp.value < 100){
+                           this.target.hp.value += 5 
+                        }
+                    }
+                    
+                    for(var i=0;i<10;i++){
+                        this.y -= 1
+                        this.draw()
+                        await delay(0.02)
+                    }
+                }
+            }
+
+            class main_char{
+                constructor(dmg){
+                    this.dmg = dmg//damage the main char makes
+                    this.x_velo = 0
+                    this.y_velo = 0
+                    this.x = W/2
+                    this.y = 0
+                    this.acc = 1 // acc is how fast the speed will increase, acceleration
+                    this.jump = 15
+                    this.face_right = true
+                    this.can_attack = true//lock down after first press, unlock after release key
+                    
+                    this.hp = new bar(100,100,0)
+                    this.mp = new bar(100,0,1)
+                }
+                draw(){
+                    var h = get_real_y(this.y)
+                    draw.beginPath()
+                    draw.arc(this.x,h,10,0,2 * Math.PI)
+                    draw.fill()
+                    draw.fillRect(this.x-5,h,10,70)
+                    draw.moveTo(this.x,h-10)
+                    if(this.face_right){
+                        draw.lineTo(this.x-10,h-20)
+                        draw.lineTo(this.x-10,h)
+                    }else{
+                        draw.lineTo(this.x+10,h-20)
+                        draw.lineTo(this.x+10,h)
+                    }
+                    draw.fill()
+                    this.hp.draw()
+                    this.mp.draw()
+                }
+                update(){
+                    if(this.y <= 50){
+                            if(action["a"]){
+                            this.x_velo -= this.acc
+                            this.face_right = false
+                        }
+                        else if(action["d"]){
+                            this.x_velo += this.acc
+                            this.face_right = true
+                        }else{
+                            this.x_velo *= 0.9
+                        }
+                    }
+                    if(this.x >= W && this.x_velo > 0){
+                        this.x_velo = -5
+                    }else if(this.x <= 0 && this.x_velo < 0){
+                        this.x_velo = 5
+                    }
+                    if(action["w"] && this.y <= 0){
+                        this.y_velo += this.jump
+                    }else if(this.y > 0){
+                        this.y_velo -= gravity
+                    }else{
+                        this.y_velo = 0
+                    }
+                    if(action["o"] && this.can_attack){
+                        hit.push([this.x,get_real_y(this.y-30),10,(this.face_right-0.5)*2*(Math.abs(this.x_velo)+20),false])//x,y,rest refresh steps,face right, if is big
+                        this.can_attack = false
+                        attack_sound.play()
+                        console.log("Attack!")
+                    }
+                    if(!action["o"]){
+                        this.can_attack = true
+                    }
+                    this.y += this.y_velo
+                    this.x += this.x_velo
+                    if(action["p"] && this.mp.value >= 100){
+                        this.big_hit()
+                    }
+                }
+                big_hit(){
+                    magic_sound.play()
+                    cls("#000")
+                    draw.drawImage(claw,(W-claw.width)/2,(H-claw.height)/2)
+                    score += harm.length
+                    harm = []
+                    action["p"] = false
+                    this.mp.value = 0
+                    flip_delay = 0.2
+                }
+            }
+            class bar{
+                constructor(full,now,at){
+                    this.full = full
+                    this.value = now
+                    this.col = at
+                }
+                draw(){
+                    draw.fillRect(10,25*this.col,W/4*(this.value/this.full),20)
+                    draw.strokeRect(10,25*this.col,W/4,20)
+                }
+            }
+            
+            var game_over=async(word="Game Over")=>{
+                player_die_sound.play()
+                running = false
+                replayable = false
+                await delay(1)
+                replayable = true
+                cls("#000")
+                draw.fillStyle = "#fff"
+                draw.fillText(word,W/2,H/2)
+                draw.fillText("Score:"+String(score),W/2,H/2+30)
+                draw.fillText("Press or R to replay",W/2,H/2+60)
+            }
+
+            var draw_ground=(gnd_height=ground_height)=>{
+                draw.fillRect(0,H-gnd_height,W,H)
+            }
+
+            async function main(){
+                score = 0
+                hurt = []
+                harm = []
+                a = new main_char(25)
+                a.draw()
+                var enemy_gen_clock = 0
+                while(running){
+                    //console.log("Refresh")
+                    enemy_gen_clock += 1
+                    if(enemy_gen_clock >= 50/(((score+1)/5)**0.1)){
+                        console.log("generate time delay:",50/(((score+1)/5)**0.1))
+                        harm.push(new enemy((rdint(0,2))*W,10,a,harm,harm.length,(!Boolean(rdint(0,5)))*60))//20% for enemy to fly
+                        enemy_gen_clock = 0
+                    }
+                    draw_ground()
+                    a.update()
+                    a.draw()
+                    update_attack(a)
+                    draw.fillText("Score:"+String(score),W/2,40)
+                    await delay(flip_delay)
+                    if(flip_delay != 0.02){
+                        flip_delay = 0.02
+                    }
+                    cls()
+                }
+            }
+            //TEST
+        </script>
+    </body>
+</html>

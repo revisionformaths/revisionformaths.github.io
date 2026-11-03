@@ -1,0 +1,2239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+    <title>PRISM HORN</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+        background: #05000c;
+        overflow: hidden;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        font-family: Impact, "Arial Black", sans-serif;
+        touch-action: none;
+        user-select: none;
+      }
+      canvas {
+        display: block;
+        width: min(100vw, 150vh);
+        height: min(100vh, 66.6667vw);
+        outline: none;
+        cursor: crosshair;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" width="960" height="640" aria-label="PRISM HORN arcade game"></canvas>
+    <script>const canvas = document.querySelector("#game"),
+  ctx = canvas.getContext("2d");
+
+const W = 960, H = 640;
+
+// 뿔 회전 중심 값
+const pivot = { x: 480, y: 478 };
+const defenseY = 558; // 데드라인
+
+// 조준 각도
+const AIM_LIMIT = 110;
+
+const BEAM_RANGE = 760;
+const GUARD_RADIUS = 155;
+const SHOT_FLASH = 0.13;
+const HIT_LIFE = 0.32;
+
+const DEBUG = false;
+
+const DPR = Math.min(2, globalThis.devicePixelRatio || 1);
+if (DPR > 1) {
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  ctx.scale(DPR, DPR);
+}
+
+const REDUCED = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
+
+const beams = [
+  { name: "RED", color: "#ff3155" },
+  { name: "YELLOW", color: "#ffe32b" },
+  { name: "GREEN", color: "#53f34d" },
+  { name: "BLUE", color: "#27b9ff" },
+  { name: "VIOLET", color: "#dc42ff" },
+];
+const shapes = ["circle", "triangle", "diamond", "square", "pentagon"];
+const LANES = [90, 220, 350, 480, 610, 740, 870];
+
+const upgradeDefs = {
+  rapid: { title: "RAPID HORN", desc: "FIRE COOLDOWN\n-12%", max: 4 },
+  wide: { title: "WIDE BEAM", desc: "HIT WIDTH\n+3 PX", max: 4 },
+  heart: { title: "FORTIFIED HEART", desc: "MAX SHIELD +1\nHEAL 1", max: 3 },
+  grace: { title: "COMBO GRACE", desc: "SAVE ONE MISS\nAFTER A HIT", max: 1 },
+  bounty: { title: "PRISM BOUNTY", desc: "MULTI-KILL BONUS\n+25", max: 4 },
+  slow: { title: "STAR SLOW", desc: "ENEMY SPEED\n-7%", max: 4 },
+  portal: { title: "PRISM PORTAL", desc: "AUTO-FIRE COLORS\nEVERY 5 SEC", max: 5 },
+  portalRate: { title: "PORTAL HASTE", desc: "PORTAL COOLDOWN\n-0.7 SEC", max: 4 },
+  split: { title: "SPLIT HORN", desc: "HORN BEAMS\n+1 BRANCH", max: 2 },
+  spectrum: { title: "SPECTRUM MIX", desc: "BEAM ATTACK COLORS\n+1 ADJACENT", max: 2 },
+};
+
+const bossDefs = {
+  omni: { title: "RAINBOW PULSE", desc: "5TH SHOT\nHITS ALL COLORS", max: 1 },
+  crown: { title: "PRISM CROWN", desc: "+2 HORN BEAMS", max: 2 },
+  warp: { title: "TIME WARP", desc: "ALL ENEMIES -15% SPEED", max: 2 },
+  fortress: { title: "HEART FORTRESS", desc: "MAX SHIELD +2 • FULL HEAL", max: 2 },
+  nova: { title: "PORTAL NOVA", desc: "PORTALS FIRE TWICE", max: 1 },
+};
+
+let state = "start", score = 0, shield = 5, maxShield = 5, time = 0, killsTotal = 0, eliteKills = 0, bossesDefeated = 0, shotsFired = 0, hitShots = 0, combo = 0, bestCombo = 0;
+let angle = 0, selected = 0, shot = 0, cooldown = 0;
+
+// 스폰 / 웨이브
+let enemies = [], spawnIn = 0.65, spawnCount = 0, lastSpawnType = -1, formationIn = 8, trainingComplete = false, survivalStart = 0;
+
+// 보스
+let boss = null, bossWave = 0, nextBossAt = 45, bossRewarding = false, bossChoices = [], bossPowers = { omni: 0, crown: 0, warp: 0, fortress: 0, nova: 0 };
+
+// 성장 / 업그레이드
+let xp = 0,
+  xpNeed = 5,
+  level = 1,
+  leveling = false,
+  upgradeChoices = [],
+  graceReady = true,
+  portalIn = 5,
+  portalShots = [],
+  upgrades = {
+    rapid: 0,
+    wide: 0,
+    heart: 0,
+    grace: 0,
+    bounty: 0,
+    slow: 0,
+    portal: 0,
+    portalRate: 0,
+    split: 0,
+    spectrum: 0,
+  };
+
+// 연출용
+let stars = [],
+  flashes = [],
+  shake = 0,
+  switchFlash = 0,
+  damageFlash = 0,
+  message = "",
+  messageTime = 0,
+  messageColor = "#fff",
+  bannerText = "",
+  bannerTime = 0;
+
+// 설정
+let audio = null,
+  muted = false,
+  paused = false,
+  portrait = false,
+  touchFire = false,
+  leftHeld = false,
+  rightHeld = false,
+  best = 0,
+  newBest = false,
+  storySeen = false,
+  last = 0,
+  musicIn = 0,
+  musicStep = 0;
+
+try {
+  best = Math.max(0, +localStorage.getItem("prismHornBest") || 0);
+  muted = localStorage.getItem("prismHornMuted") === "1";
+  storySeen = localStorage.getItem("prismHornStory") === "1";
+} catch {}
+if (!storySeen) state = "letter"; // 첫 실행이면 편지부터
+
+for (let i = 0; i < 90; i++) {
+  stars.push({
+    x: Math.random() * W,
+    y: Math.random() * H * 0.87,
+    r: Math.random() * 1.5 + 0.3,
+    a: Math.random() * 0.65 + 0.2,
+    c: ["#fff", "#ff67cf", "#54eaff", "#ffe55b"][i % 4],
+  });
+}
+
+function checkLayout() {
+  portrait = (globalThis.innerHeight || H) > (globalThis.innerWidth || W) * 1.15 && ((globalThis.navigator?.maxTouchPoints || 0) > 0 || "ontouchstart" in globalThis);
+  touchFire = false;
+}
+checkLayout();
+addEventListener("resize", checkLayout);
+addEventListener("orientationchange", checkLayout);
+
+function sound(freq, duration = 0.08, type = "sine", volume = 0.035, endFreq = freq) {
+  if (muted) return;
+  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AC) return;
+  if (!audio) audio = new AC();
+  if (audio.state === "suspended") audio.resume();
+  const now = audio.currentTime,
+    o = audio.createOscillator(),
+    g = audio.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, now);
+  o.frequency.exponentialRampToValueAtTime(
+    Math.max(30, endFreq),
+    now + duration,
+  );
+  g.gain.setValueAtTime(volume, now);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  o.connect(g).connect(audio.destination);
+  o.start(now);
+  o.stop(now + duration);
+}
+
+// BGM
+function musicTick() {
+  const notes = [262, 330, 392, 523, 440, 392, 330, 294];
+  const n = notes[musicStep % notes.length] * (boss ? 1.5 : 1);
+  sound(n, 0.2, "triangle", 0.018, n * 1.01);
+  if (musicStep % 4 === 0) {
+    sound(n / 2, 0.38, "sine", 0.012, n / 2);
+  }
+  musicStep++;
+}
+
+function reset() {
+  enemies = [];
+  flashes = [];
+  score = 0;
+  shield = 5;
+  time = 0;
+  spawnIn = 0.4;
+  angle = 0;
+  shake = 0;
+  shot = 0;
+  cooldown = 0;
+  spawnCount = 0;
+  lastSpawnType = -1;
+  switchFlash = 0;
+  shotsFired = 0;
+  hitShots = 0;
+  message = "";
+  messageTime = 0;
+  damageFlash = 0;
+  paused = false;
+  newBest = false;
+  combo = 0;
+  bestCombo = 0;
+  trainingComplete = false;
+  survivalStart = 0;
+  bannerTime = 0;
+  bannerText = "";
+  formationIn = 8;
+  leftHeld = false;
+  rightHeld = false;
+  xp = 0;
+  xpNeed = 5;
+  level = 1;
+  leveling = false;
+  upgradeChoices = [];
+  maxShield = 5;
+  graceReady = true;
+  upgrades = {
+    rapid: 0,
+    wide: 0,
+    heart: 0,
+    grace: 0,
+    bounty: 0,
+    slow: 0,
+    portal: 0,
+    portalRate: 0,
+    split: 0,
+    spectrum: 0,
+  };
+  boss = null;
+  bossWave = 0;
+  nextBossAt = 45;
+  portalIn = 5;
+  portalShots = [];
+  bossRewarding = false;
+  bossChoices = [];
+  bossPowers = { omni: 0, crown: 0, warp: 0, fortress: 0, nova: 0 };
+  killsTotal = 0;
+  eliteKills = 0;
+  bossesDefeated = 0;
+  musicIn = 0;
+  musicStep = 0;
+  selected = 0;
+  state = "play";
+}
+
+function pointer(e) {
+  const r = canvas.getBoundingClientRect(), x = ((e.clientX - r.left) * W) / r.width, y = ((e.clientY - r.top) * H) / r.height;
+  angle = Math.max(-AIM_LIMIT, Math.min(AIM_LIMIT, (Math.atan2(x - pivot.x, pivot.y - y) * 180) / Math.PI),);
+  return { x, y };
+}
+function choose(i) {
+  const next = (i + beams.length) % beams.length;
+  if (next !== selected) {
+    selected = next;
+    switchFlash = 0.18;
+    sound(260 + selected * 90, 0.055, "sine", 0.025, 360 + selected * 110);
+  }
+}
+
+function shotCooldown() {
+  return Math.max(0.14, 0.32 * (1 - upgrades.rapid * 0.12));
+}
+function beginLevelUp() {
+  const available = Object.keys(upgradeDefs).filter(
+    (id) =>
+      upgrades[id] < upgradeDefs[id].max &&
+      (id !== "portalRate" || upgrades.portal),
+  );
+  if (!available.length) return;
+  xp -= xpNeed;
+  level++;
+  xpNeed = 5 + level * 2;
+  available.sort(() => Math.random() - 0.5);
+
+  const attack = available.find(
+    (id) => !/heart|grace|bounty|slow|portalRate/.test(id),
+  );
+  upgradeChoices = available.slice(0, 3);
+  if (
+    shield < 3 &&
+    available.includes("heart") &&
+    !upgradeChoices.includes("heart")
+  )
+    upgradeChoices[0] = "heart";
+  if (attack && !upgradeChoices.includes(attack)) upgradeChoices[2] = attack;
+  leveling = true;
+  touchFire = false;
+  sound(540, 0.32, "sine", 0.04, 1080);
+}
+function gainXP(amount) {
+  xp += amount;
+  if (xp >= xpNeed && !leveling) beginLevelUp();
+}
+
+function pickUpgrade(index) {
+  if (!leveling || !upgradeChoices[index]) return;
+  const id = upgradeChoices[index];
+  upgrades[id]++;
+  if (id === "heart") {
+    maxShield++;
+    shield = Math.min(maxShield, shield + 1);
+  }
+  if (id === "grace") graceReady = true;
+  if (id === "portal") portalIn = 0.7;
+  leveling = false;
+  upgradeChoices = [];
+  message =
+    id === "spectrum"
+      ? 1 + upgrades.spectrum + " COLORS ACTIVE!"
+      : upgradeDefs[id].title;
+  messageColor = id === "spectrum" ? "#72f7ff" : "#ffe653";
+  messageTime = 0.8;
+  sound(720, 0.24, "triangle", 0.04, 1180);
+  showSynergy();
+  if (xp >= xpNeed) beginLevelUp();
+}
+
+function upgradeClick(x, y) {
+  if (y < 205 || y > 475) return false;
+  const index = Math.floor((x - 125) / 245);
+  if (index < 0 || index > 2 || x > 125 + index * 245 + 220) return false;
+  pickUpgrade(index);
+  return true;
+}
+function beginBossReward() {
+  const a = Object.keys(bossDefs).filter(
+    (id) => bossPowers[id] < bossDefs[id].max,
+  );
+  if (!a.length) {
+    gainXP(5);
+    return;
+  }
+  bossChoices = a.sort(() => Math.random() - 0.5).slice(0, 3);
+  bossRewarding = true;
+  touchFire = false;
+  sound(880, 0.45, "triangle", 0.05, 1500);
+}
+function pickBossReward(i) {
+  if (!bossRewarding || !bossChoices[i]) return;
+  const id = bossChoices[i];
+  bossPowers[id]++;
+  if (id === "fortress") {
+    maxShield += 2;
+    shield = maxShield;
+  }
+  bossRewarding = false;
+  bossChoices = [];
+  message = bossDefs[id].title + "!";
+  messageColor = "#fff36a";
+  messageTime = 1.2;
+  sound(980, 0.4, "sine", 0.055, 1800);
+  showSynergy();
+  if (xp >= xpNeed) beginLevelUp();
+}
+function bossRewardClick(x, y) {
+  if (y < 205 || y > 475) return false;
+  const i = Math.floor((x - 125) / 245);
+  if (i < 0 || i > 2 || x > 345 + i * 245) return false;
+  pickBossReward(i);
+  return true;
+}
+function dismissLetter() {
+  state = "start";
+  storySeen = true;
+  try {
+    localStorage.setItem("prismHornStory", "1");
+  } catch {}
+}
+function togglePause() {
+  if (state === "play") {
+    paused = !paused;
+    touchFire = false;
+    sound(paused ? 240 : 420, 0.07, "sine", 0.02);
+  }
+}
+function toggleMute() {
+  muted = !muted;
+  try {
+    localStorage.setItem("prismHornMuted", muted ? "1" : "0");
+  } catch {}
+  if (!muted) sound(520, 0.07, "sine", 0.02);
+}
+function muteButton(x, y) {
+  if (x >= 858 && x <= 898 && y >= 22 && y <= 62) {
+    toggleMute();
+    return true;
+  }
+  return false;
+}
+function pauseButton(x, y) {
+  if (x >= 906 && x <= 946 && y >= 22 && y <= 62) {
+    togglePause();
+    return true;
+  }
+  return false;
+}
+function colorButton(x, y) {
+  if (y < 580 || x < 24) return false;
+  const i = Math.floor((x - 24) / 52);
+  if (i > 4 || x - 24 - i * 52 > 44) return false;
+  choose(i);
+  return true;
+}
+canvas.addEventListener("pointermove", pointer);
+canvas.addEventListener("pointerdown", (e) => {
+  const p = pointer(e);
+  if (portrait) {
+    touchFire = false;
+    return;
+  }
+  if (state === "letter") {
+    dismissLetter();
+    touchFire = false;
+    return;
+  }
+  if (bossRewarding) {
+    bossRewardClick(p.x, p.y);
+    touchFire = false;
+    return;
+  }
+  if (leveling) {
+    upgradeClick(p.x, p.y);
+    touchFire = false;
+    return;
+  }
+  if (muteButton(p.x, p.y) || pauseButton(p.x, p.y)) {
+    touchFire = false;
+    return;
+  }
+  if (state === "start") {
+    if (p.y >= 365 && p.y <= 430) reset();
+    else if (p.y >= 440 && p.y <= 490) state = "letter";
+    touchFire = false;
+    return;
+  }
+  if (state === "over") {
+    if (p.y >= 472 && p.y <= 536) {
+      if (p.x >= 270 && p.x <= 470) reset();
+      else if (p.x >= 490 && p.x <= 690) state = "start";
+    }
+    touchFire = false;
+    return;
+  }
+  if (state !== "play") return;
+  if (paused) {
+    togglePause();
+    touchFire = false;
+    return;
+  }
+  if (colorButton(p.x, p.y)) {
+    touchFire = false;
+    return;
+  }
+  if (e.pointerType === "touch") {
+    touchFire = true;
+    canvas.setPointerCapture?.(e.pointerId);
+  } else fire();
+});
+canvas.addEventListener("pointerup", (e) => {
+  pointer(e);
+  if (
+    e.pointerType === "touch" &&
+    touchFire &&
+    state === "play" &&
+    !paused &&
+    !portrait
+  )
+    fire();
+  touchFire = false;
+});
+canvas.addEventListener("pointercancel", () => (touchFire = false));
+canvas.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault();
+    choose(selected + (e.deltaY > 0 ? 1 : -1));
+  },
+  { passive: false },
+);
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (state === "letter") {
+    if (e.code === "Space" || e.key === "Enter" || e.key === "Escape")
+      dismissLetter();
+    return;
+  }
+  if (k === "l" && state === "start") {
+    state = "letter";
+    return;
+  }
+  if (bossRewarding) {
+    if (e.key >= "1" && e.key <= "3") pickBossReward(+e.key - 1);
+    return;
+  }
+  if (leveling) {
+    if (e.key >= "1" && e.key <= "3") pickUpgrade(+e.key - 1);
+    return;
+  }
+  if (k === "arrowleft" || k === "a") {
+    leftHeld = true;
+    e.preventDefault();
+  } else if (k === "arrowright" || k === "d") {
+    rightHeld = true;
+    e.preventDefault();
+  } else if (k === "m") {
+    toggleMute();
+  } else if (k === "p" || e.key === "Escape") {
+    e.preventDefault();
+    togglePause();
+  } else if (paused) return;
+  else if (e.key >= "1" && e.key <= "5") choose(+e.key - 1);
+  else if (k === "q") choose(selected - 1);
+  else if (k === "e") choose(selected + 1);
+  else if (e.code === "Space" || e.key === "Enter") {
+    e.preventDefault();
+    if (state === "play") fire();
+    else if (state === "start") reset();
+    else if (state === "over") state = "start";
+  }
+});
+addEventListener("keyup", (e) => {
+  const k = e.key.toLowerCase();
+  if (k === "arrowleft" || k === "a") leftHeld = false;
+  if (k === "arrowright" || k === "d") rightHeld = false;
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state === "play") {
+    paused = true;
+    touchFire = false;
+  }
+});
+
+function openLane() {
+  const open = LANES.filter(
+    (x) => !enemies.some((e) => e.y < 135 && Math.abs(e.x - x) < 76),
+  );
+  const pool = open.length ? open : LANES;
+  return (
+    pool[Math.floor(Math.random() * pool.length)] + (Math.random() - 0.5) * 28
+  );
+}
+
+function spawn() {
+  const lesson = [
+    { type: 0, x: 480 },
+    { type: 2, x: 280 },
+    { type: 3, x: 680 },
+    { type: 1, x: 150 },
+    { type: 4, x: 810 },
+  ];
+  let type, x, speed;
+  if (spawnCount < lesson.length) {
+    ({ type, x } = lesson[spawnCount]);
+    speed = 32;
+  } else {
+    type = Math.floor(Math.random() * beams.length);
+    if (type === lastSpawnType && Math.random() < 0.7) {
+      type = (type + 1 + Math.floor(Math.random() * 4)) % 5;
+    }
+    x = openLane();
+    const survivalTime = Math.max(0, time - survivalStart);
+    speed = 28 + Math.random() * 14 + survivalTime * 0.18;
+  }
+
+  const isLesson = spawnCount < lesson.length,
+    survivalTime = Math.max(0, time - survivalStart),
+    elite =
+      !isLesson &&
+      trainingComplete &&
+      survivalTime > 20 &&
+      Math.random() < Math.min(0.22, 0.08 + survivalTime * 0.00055);
+  enemies.push({
+    x,
+    y: -25,
+    r: elite ? 23 : 16,
+    color: beams[type].color,
+    type,
+    speed: elite ? speed * 0.82 : speed,
+    spin: Math.random() * 6,
+    lesson: isLesson,
+    elite,
+    hp: elite ? 3 : 1,
+    maxHp: elite ? 3 : 1,
+  });
+  if (elite) {
+    bannerText = "ELITE INVADER!";
+    bannerTime = 1.1;
+    sound(180, 0.2, "square", 0.03, 320);
+  }
+  lastSpawnType = type;
+  spawnCount++;
+}
+
+function addPatternEnemy(type, x, y, speed) {
+  enemies.push({
+    x,
+    y,
+    r: 16,
+    color: beams[type].color,
+    type,
+    speed,
+    spin: Math.random() * 6,
+    pattern: true,
+  });
+}
+function spawnFormation(kind = Math.floor(Math.random() * 3)) {
+  const survivalTime = Math.max(0, time - survivalStart),
+    speed = 32 + Math.min(25, survivalTime * 0.18),
+    start = Math.floor(Math.random() * 5);
+  if (kind === 0) {
+    const type = start;
+    for (let i = 0; i < 3; i++) addPatternEnemy(type, 480, 80 - i * 52, speed);
+    bannerText = "TRIPLE LINE!";
+  } else if (kind === 1) {
+    for (let i = 0; i < 5; i++)
+      addPatternEnemy((start + i) % 5, 240 + i * 120, 35, speed);
+    bannerText = "COLOR PARADE!";
+  } else {
+    const flip = Math.random() < 0.5 ? -1 : 1;
+    for (let i = 0; i < 4; i++)
+      addPatternEnemy(
+        (start + i) % 5,
+        480 + flip * (i - 1.5) * 105,
+        80 - i * 45,
+        speed,
+      );
+    bannerText = "PRISM STAIRS!";
+  }
+  bannerTime = 1.35;
+  sound(460, 0.22, "triangle", 0.03, 760);
+}
+
+function spawnBoss() {
+  bossWave++;
+  const length = bossWave === 1 ? 6 : Math.min(14, 6 + bossWave * 2),
+    start = Math.floor(Math.random() * 5),
+    sequence = [],
+    kind = bossWave % 2 ? "tyrant" : "devourer";
+  for (let i = 0; i < length; i++) sequence.push((start + i * 2) % 5);
+  boss = {
+    x: 480,
+    y: -85,
+    r: 58,
+    speed: bossWave === 1 ? 15 : 21 + bossWave * 3,
+    sequence,
+    stage: 0,
+    escortIn: 5,
+    age: 0,
+    kind,
+  };
+  enemies = [];
+  bannerText =
+    bossWave === 1
+      ? "MATCH EACH SHIELD COLOR!"
+      : (kind === "devourer" ? "CHROMA DEVOURER" : "PRISM TYRANT") +
+        " WAVE " +
+        bossWave +
+        "!";
+  bannerTime = 2.2;
+  shake = 7;
+  sound(95, 0.7, "sawtooth", 0.05, 190);
+}
+
+function bossEscaped() {
+  shield = Math.max(0, shield - 2);
+  boss = null;
+  nextBossAt = Math.max(0, time - survivalStart) + 35;
+  combo = 0;
+  shake = 14;
+  damageFlash = 0.65;
+  message = "BOSS BREACHED! -2 SHIELD";
+  messageColor = "#ff477e";
+  messageTime = 1.2;
+  sound(75, 0.65, "square", 0.06, 38);
+  if (shield === 0) endGame();
+}
+
+function shotAngle() {
+  return ((angle - 90) * Math.PI) / 180;
+}
+function hornTip() {
+  const a = ((angle - 90) * Math.PI) / 180;
+  return { x: pivot.x + Math.cos(a) * 100, y: pivot.y + Math.sin(a) * 100 };
+}
+function attackTypes() {
+  if (bossPowers.omni && shot > 0 && shotsFired % 5 === 0)
+    return [0, 1, 2, 3, 4];
+  const a = [selected];
+  if (upgrades.spectrum) a.push((selected + 1) % 5);
+  if (upgrades.spectrum > 1) a.push((selected + 4) % 5);
+  return a;
+}
+function synergies() {
+  const a = [];
+  if (upgrades.portal && upgrades.spectrum) a.push("PORTAL SPECTRUM");
+  if (upgrades.split && upgrades.rapid) a.push("RAPID FAN");
+  if (upgrades.slow && bossPowers.warp) a.push("PRISM FREEZE");
+  if (bossPowers.omni && bossPowers.crown) a.push("RAINBOW CROWN");
+  return a;
+}
+function showSynergy() {
+  const a = synergies();
+  if (a.length) {
+    bannerText = a[a.length - 1] + " SYNERGY!";
+    bannerTime = 2;
+  }
+}
+function colorMatches(type) {
+  return attackTypes().includes(type);
+}
+function rayAngles() {
+  const a = shotAngle(),
+    n = 1 + upgrades.split + bossPowers.crown * 2,
+    spread = 0.075 * (upgrades.split && upgrades.rapid ? 1.5 : 1);
+  return Array.from({ length: n }, (_, i) => a + (i - (n - 1) / 2) * spread);
+}
+function portalPoint(type) {
+  return { x: [240, 315, 645, 720, 795][type], y: 505 };
+}
+
+function portalFire() {
+  let fired = 0, kills = 0, xpEarned = 0;
+  for (let type = 0; type < upgrades.portal; type++) {
+    let target = null;
+    let index = -1;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.type === type || (upgrades.spectrum && ((e.type - type + 5) % 5 === 1 || (upgrades.spectrum > 1 && (e.type - type + 5) % 5 === 4)) && (!target || e.y > target.y))) {
+        target = e;
+        index = i;
+      }
+    }
+    if (!target) continue;
+    const p = portalPoint(type);
+    portalShots.push({
+      x1: p.x,
+      y1: p.y,
+      x2: target.x,
+      y2: target.y,
+      t: 0.28,
+      color: beams[type].color,
+    });
+    target.hp = (target.hp || 1) - 1;
+    fired++;
+    if (target.hp <= 0) {
+      kills++;
+      killsTotal++;
+      eliteKills += target.elite ? 1 : 0;
+      xpEarned += target.elite ? 3 : 1;
+      score += target.elite ? 300 : 100;
+      flashes.push({
+        x: target.x,
+        y: target.y,
+        t: HIT_LIFE,
+        color: target.color,
+        points: target.elite ? 300 : 100,
+      });
+      enemies.splice(index, 1);
+    } else
+      flashes.push({
+        x: target.x,
+        y: target.y,
+        t: HIT_LIFE,
+        color: target.color,
+        text: target.hp + " HP",
+      });
+  }
+  if (xpEarned) gainXP(xpEarned);
+  if (fired) {
+    message = kills > 1 ? kills + "x PORTAL BURST!" : "PORTAL FIRE!";
+    messageColor = "#72f7ff";
+    messageTime = 0.55;
+    sound(740, 0.18, "sine", 0.035, 1120);
+  }
+}
+
+function hitRay(e, a) {
+  if(colorMatches(e.type) && e.y > pivot.y - 8 && e.y < defenseY + e.r && Math.abs(e.x - pivot.x) < GUARD_RADIUS)
+    return true;
+
+  const tip = hornTip(),
+    dx = Math.cos(a),
+    dy = Math.sin(a),
+    ex = e.x - tip.x,
+    ey = e.y - tip.y,
+    t = ex * dx + ey * dy;
+  if (t < 0 || t > BEAM_RANGE) return false;
+  const dangerAssist = e.y > 390 ? Math.min(8, (e.y - 390) / 18) : 0;
+  return (
+    Math.hypot(ex - dx * t, ey - dy * t) <
+    e.r + 11 + dangerAssist + upgrades.wide * 3
+  );
+}
+function fire() {
+  if (cooldown > 0 || paused || leveling || bossRewarding) return;
+  shot = SHOT_FLASH;
+  cooldown = shotCooldown();
+  shotsFired++;
+  let hits = 0,
+    kills = 0,
+    wrong = 0,
+    xpEarned = 0,
+    baseScore = 0,
+    eliteHit = null,
+    eliteDown = false,
+    bossDown = false;
+  sound(190 + selected * 80, 0.11, "sawtooth", 0.035, 420 + selected * 120);
+  if (boss && rayAngles().some((a) => hitRay(boss, a))) {
+    const wanted = boss.sequence[boss.stage];
+    if (colorMatches(wanted)) {
+      hits++;
+      boss.stage++;
+      flashes.push({
+        x: boss.x,
+        y: boss.y,
+        t: 0.4,
+        color: beams[selected].color,
+        text: boss.sequence.length - boss.stage + " SHIELDS",
+      });
+      shake = 4;
+      if (boss.stage >= boss.sequence.length) {
+        bossDown = true;
+        kills++;
+        bossesDefeated++;
+        xpEarned += 5 + bossWave;
+        baseScore += 2000 * bossWave;
+        shield = Math.min(maxShield, shield + 1);
+        nextBossAt = Math.max(0, time - survivalStart) + 55;
+        boss = null;
+        enemies = [];
+        spawnIn = 2.8;
+        formationIn = Math.max(formationIn, 7);
+        sound(980, 0.7, "sine", 0.06, 1600);
+      }
+    } else wrong++;
+  }
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    if (rayAngles().some((a) => hitRay(e, a))) {
+      if (colorMatches(e.type)) {
+        hits++;
+        e.hp = (e.hp || 1) - 1;
+        if (e.hp <= 0) {
+          kills++;
+          killsTotal++;
+          eliteKills += e.elite ? 1 : 0;
+          xpEarned += e.elite ? 3 : 1;
+          baseScore += e.elite ? 300 : 100;
+          eliteDown ||= e.elite;
+          flashes.push({
+            x: e.x,
+            y: e.y,
+            t: HIT_LIFE,
+            color: e.color,
+            points: e.elite ? 300 : 100,
+          });
+          enemies.splice(i, 1);
+        } else {
+          eliteHit = e;
+          flashes.push({
+            x: e.x,
+            y: e.y,
+            t: HIT_LIFE,
+            color: e.color,
+            text: `${e.hp} HP`,
+          });
+        }
+      } else wrong++;
+    }
+  }
+
+  if (hits) {
+    combo++;
+    graceReady = true;
+    bestCombo = Math.max(bestCombo, combo);
+    score +=
+      baseScore +
+      kills * Math.min(9, combo - 1) * 10 +
+      Math.max(0, kills - 1) * (50 + upgrades.bounty * 25);
+    hitShots++;
+    if (xpEarned) {
+      if (bossDown) xp += xpEarned;
+      else gainXP(xpEarned);
+    }
+    if (bossDown) beginBossReward();
+
+    if (bossDown) message = "PRISM TYRANT DOWN!";
+    else if (eliteDown) message = "ELITE DOWN!";
+    else if (eliteHit) message = `ELITE ${eliteHit.hp} HP`;
+    else if (kills > 1) message = `${kills}x PRISM HIT!`;
+    else message = "COLOR HIT!";
+    messageColor = beams[selected].color;
+    sound(
+      eliteDown ? 820 : 620 + selected * 90,
+      0.12,
+      "sine",
+      0.045,
+      eliteDown ? 1320 : 980 + selected * 100,
+    );
+  } else {
+    const saved = upgrades.grace && graceReady && combo > 0;
+    if (saved) {
+      graceReady = false;
+      message = "COMBO SAVED!";
+      messageColor = "#ffe653";
+    } else {
+      combo = 0;
+      message = wrong ? "WRONG COLOR" : "MISS";
+      messageColor = wrong ? "#ff5c9d" : "#9d8aad";
+    }
+    sound(
+      wrong ? 145 : 110,
+      wrong ? 0.14 : 0.06,
+      wrong ? "square" : "triangle",
+      wrong ? 0.025 : 0.012,
+      wrong ? 85 : 80,
+    );
+  }
+  messageTime = 0.42;
+}
+
+function endGame() {
+  state = "over";
+  if (score > best) {
+    best = score;
+    newBest = true;
+    try {
+      localStorage.setItem("prismHornBest", best);
+    } catch {}
+  }
+  sound(180, 0.65, "sawtooth", 0.035, 42);
+}
+
+function update(dt) {
+  if (state !== "play" || paused || portrait || leveling || bossRewarding)
+    return;
+  time += dt;
+  musicIn -= dt;
+  if (musicIn <= 0) {
+    musicTick();
+    musicIn = boss ? 0.18 : 0.29;
+  }
+  if (upgrades.portal) {
+    portalIn -= dt;
+    if (portalIn <= 0) {
+      portalFire();
+      if (bossPowers.nova) portalFire();
+      portalIn = Math.max(1.8, 5 - upgrades.portalRate * 0.7);
+    }
+  }
+  angle = Math.max(-AIM_LIMIT, Math.min(AIM_LIMIT, angle + (rightHeld - leftHeld) * 105 * dt),);
+  spawnIn -= dt;
+  if (trainingComplete) formationIn -= dt;
+  shot = Math.max(0, shot - dt);
+  cooldown = Math.max(0, cooldown - dt);
+  switchFlash = Math.max(0, switchFlash - dt);
+  messageTime = Math.max(0, messageTime - dt);
+  damageFlash = Math.max(0, damageFlash - dt);
+  bannerTime = Math.max(0, bannerTime - dt);
+  if (!trainingComplete && spawnCount >= 5 && !enemies.some((e) => e.lesson)) {
+    trainingComplete = true;
+    survivalStart = time;
+    spawnIn = 1.2;
+    formationIn = 7;
+    bannerText = "SURVIVAL START!";
+    bannerTime = 1.8;
+    sound(520, 0.3, "sine", 0.035, 920);
+  }
+  const survivalTime = Math.max(0, time - survivalStart);
+  if (trainingComplete && !boss && survivalTime >= nextBossAt) spawnBoss();
+  if (boss) {
+    boss.age += dt;
+    boss.y += boss.speed * dt;
+    if (boss.kind === "devourer") {
+      boss.x = 480 + Math.sin(boss.age * 1.25) * 285;
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (e.type === boss.sequence[boss.stage] && Math.hypot(e.x - boss.x, e.y - boss.y) < 78) {
+          enemies.splice(i, 1);
+          boss.stage = Math.max(0, boss.stage - 1);
+          flashes.push({
+            x: boss.x,
+            y: boss.y,
+            t: 0.4,
+            color: e.color,
+            text: "SHIELD ABSORBED",
+          });
+          sound(120, 0.25, "sawtooth", 0.04, 260);
+        }
+      }
+    }
+    boss.escortIn -= dt;
+    if (boss.escortIn <= 0 && enemies.length <= 5) {
+      spawnFormation(Math.floor(Math.random() * 3));
+      if (boss.kind === "devourer") {
+        addPatternEnemy(boss.sequence[boss.stage], boss.x, -20, 48);
+      }
+      boss.escortIn = Math.max(3.2, 6 - bossWave * 0.35);
+    }
+    if (boss.y + boss.r > defenseY) bossEscaped();
+  }
+  if (trainingComplete && !boss && formationIn <= 0 && enemies.length <= 4) {
+    spawnFormation();
+    formationIn = Math.max(7, 12 - survivalTime * 0.008) + Math.random() * 4;
+    spawnIn = 1.8;
+  }
+
+  if (!boss && spawnIn <= 0 && (trainingComplete || enemies.length === 0) && enemies.length < Math.min(10, 6 + Math.floor(survivalTime / 90))) {
+    spawn();
+    const survivalTime = Math.max(0, time - survivalStart);
+    spawnIn = trainingComplete ? Math.max(0.48, 1.4 - survivalTime * 0.0065) * (0.88 + Math.random() * 0.35) : 1.1;
+  }
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    e.y += e.speed * (1 - upgrades.slow * 0.07) * (1 - bossPowers.warp * 0.15) * (bossPowers.warp && upgrades.slow ? 0.85 : 1) * dt;
+    e.spin += dt;
+    if (e.y > defenseY) {
+      enemies.splice(i, 1);
+      shield = Math.max(0, shield - 1);
+      combo = 0;
+      graceReady = true;
+      shake = 8;
+      damageFlash = 0.35;
+      sound(95, 0.22, "square", 0.045, 45);
+      message = "SHIELD HIT!";
+      messageColor = "#ff477e";
+      messageTime = 0.5;
+      if (shield === 0) {
+        endGame();
+        break;
+      }
+    }
+  }
+  for (const f of flashes) f.t -= dt;
+  for (const p of portalShots) p.t -= dt;
+  portalShots = portalShots.filter((p) => p.t > 0);
+  flashes = flashes.filter((f) => f.t > 0);
+  shake = Math.max(0, shake - dt * 30);
+}
+
+function polygon(x, y, r, n, rot) {
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = rot + (i * Math.PI * 2) / n, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function neonText(text, x, y, size, color, align = "left") {
+  ctx.save();
+  ctx.font = `${size}px Impact, Arial Black, sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(3, size / 10);
+  ctx.strokeStyle = "#21002f";
+  ctx.strokeText(text, x, y);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawBackground() {
+  const g = ctx.createRadialGradient(480, 480, 80, 480, 300, 600);
+  g.addColorStop(0, "#20003b");
+  g.addColorStop(1, "#06000f");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    ctx.globalAlpha = s.a * (0.75 + 0.25 * Math.sin(time * 2 + s.x));
+    ctx.fillStyle = s.c;
+    ctx.fillRect(s.x, s.y, s.r, s.r);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// 생존 시간
+function drawTimeWatermark() {
+  const m = Math.floor(time / 60),
+    s = Math.floor(time % 60);
+  ctx.save();
+  ctx.globalAlpha = 0.13;
+  ctx.font = "82px Impact, Arial Black, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#75eaff";
+  ctx.shadowColor = "#3edfff";
+  ctx.shadowBlur = 18;
+  ctx.fillText(`${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`, 480, 76,);
+  ctx.restore();
+}
+
+function drawDefense() {
+  ctx.save();
+  ctx.setLineDash([10, 12]);
+  ctx.strokeStyle = damageFlash > 0 ? "#fff" : "#ff3c9c88";
+  ctx.shadowColor = "#ff2b91";
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 2 + damageFlash * 12;
+  ctx.beginPath();
+  ctx.moveTo(18, defenseY);
+  ctx.lineTo(W - 18, defenseY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  neonText(
+    "DEFENSE LINE",
+    W - 25,
+    defenseY - 13,
+    12,
+    damageFlash > 0 ? "#fff" : "#ff68bd",
+    "right",
+  );
+
+  // 근접 자동판정 범위 표시
+  const danger = enemies.some((e) => e.y > pivot.y - 8 && Math.abs(e.x - pivot.x) < GUARD_RADIUS,);
+  ctx.setLineDash([4, 8]);
+  ctx.strokeStyle = beams[selected].color + (danger ? "cc" : "33");
+  ctx.lineWidth = danger ? 4 : 2;
+  ctx.beginPath();
+  ctx.arc(pivot.x, pivot.y, GUARD_RADIUS, 0, Math.PI);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (danger) {
+    neonText("CLOSE GUARD!", 480, 540, 13, beams[selected].color, "center");
+  }
+  ctx.restore();
+}
+function drawBeams() {
+  const tip = hornTip(), a = shotAngle(), x = tip.x + Math.cos(a) * BEAM_RANGE, y = tip.y + Math.sin(a) * BEAM_RANGE,
+      b = beams[selected];
+  ctx.save();
+  if (upgrades.spectrum) {
+    const mix = attackTypes(),
+        px = -Math.sin(a),
+        py = Math.cos(a);
+    ctx.setLineDash([8, 12]);
+    for (let j = 0; j < mix.length; j++) {
+      const off = (j - (mix.length - 1) / 2) * 7;
+      ctx.beginPath();
+      ctx.moveTo(tip.x + px * off, tip.y + py * off);
+      ctx.lineTo(x + px * off, y + py * off);
+      ctx.strokeStyle = beams[mix[j]].color + "99";
+      ctx.shadowColor = beams[mix[j]].color;
+      ctx.shadowBlur = 9;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.beginPath();
+    ctx.setLineDash([8, 12]);
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = b.color + "70";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const sight = 235, rx = tip.x + Math.cos(a) * sight, ry = tip.y + Math.sin(a) * sight,
+        beat = REDUCED ? 1 : 1 + Math.sin(time * 6) * 0.08;
+    ctx.save();
+    ctx.translate(rx, ry);
+    ctx.scale(beat, beat);
+    ctx.strokeStyle = b.color;
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 17, 0, 7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-28, 0);
+    ctx.lineTo(-13, 0);
+    ctx.moveTo(28, 0);
+    ctx.lineTo(13, 0);
+    ctx.moveTo(0, -28);
+    ctx.lineTo(0, -13);
+    ctx.moveTo(0, 28);
+    ctx.lineTo(0, 13);
+    ctx.stroke();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = b.color;
+
+    if (selected === 0) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, 7);
+    } else if (selected === 1) {
+      polygon(0, 1, 7, 3, -Math.PI / 2);
+    } else if (selected === 2) {
+      polygon(0, 0, 7, 4, Math.PI / 4);
+    } else if (selected === 3) {
+      ctx.beginPath();
+      ctx.rect(-6, -6, 12, 12);
+    } else {
+      polygon(0, 0, 7, 5, -Math.PI / 2);
+    }
+    ctx.fill();
+    ctx.restore();
+    if (upgrades.spectrum) {
+      const mix = attackTypes();
+      for (let i = 0; i < mix.length; i++) {
+        const da = (i * Math.PI * 2) / mix.length;
+        ctx.fillStyle = beams[mix[i]].color;
+        ctx.shadowColor = beams[mix[i]].color;
+        ctx.beginPath();
+        ctx.arc(rx + Math.cos(da) * 35, ry + Math.sin(da) * 35, 5, 0, 7);
+        ctx.fill();
+      }
+    }
+    if (shot > 0 && (upgrades.split || upgrades.spectrum)) {
+      const colors = attackTypes();
+      for (const ra of rayAngles()) {
+        const sx = tip.x + Math.cos(ra) * BEAM_RANGE,
+            sy = tip.y + Math.sin(ra) * BEAM_RANGE,
+            px = -Math.sin(ra),
+            py = Math.cos(ra);
+        for (let j = 0; j < colors.length; j++) {
+          const off = (j - (colors.length - 1) / 2) * 8;
+          ctx.beginPath();
+          ctx.moveTo(tip.x + px * off, tip.y + py * off);
+          ctx.lineTo(sx + px * off, sy + py * off);
+          ctx.strokeStyle = beams[colors[j]].color;
+          ctx.shadowColor = beams[colors[j]].color;
+          ctx.shadowBlur = 16;
+          ctx.lineWidth = 6;
+          ctx.stroke();
+        }
+      }
+      ctx.shadowBlur = 0;
+    }
+    if (shot > 0) {
+      const blast = shot / SHOT_FLASH;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = b.color + "55";
+      ctx.lineWidth = 18;
+      ctx.stroke();
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(tip.x, tip.y);
+      ctx.rotate(time * 8);
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 18;
+      polygon(0, 0, 11 + blast * 12, 8, Math.PI / 8);
+      ctx.fill();
+      ctx.fillStyle = b.color;
+      polygon(0, 0, 6 + blast * 7, 8, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+}
+
+  function drawPortals() {
+    for (let i = 0; i < upgrades.portal; i++) {
+      const p = portalPoint(i), c = beams[i].color,
+          charge = 1 - Math.min(1, portalIn / Math.max(1.8, 5 - upgrades.portalRate * 0.7));
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = "#25002f";
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(-23, 12, 46, 31, 10);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = c + "66";
+      ctx.beginPath();
+      ctx.arc(0, 0, 24, 0, 7);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge);
+      ctx.stroke();
+      ctx.rotate(time * 2 + i);
+      ctx.fillStyle = c;
+
+      if (i === 0) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, 7);
+      } else if (i === 1) {
+        polygon(0, 1, 14, 3, -Math.PI / 2);
+      } else if (i === 2) {
+        polygon(0, 0, 13, 4, Math.PI / 4);
+      } else if (i === 3) {
+        ctx.beginPath();
+        ctx.rect(-11, -11, 22, 22);
+      } else {
+        polygon(0, 0, 14, 5, -Math.PI / 2);
+      }
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+      neonText("AUTO " + beams[i].name, p.x, p.y - 39, 12, c, "center");
+    }
+    for (const p of portalShots) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.min(1, p.t / 0.12);
+      ctx.strokeStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 24;
+      ctx.lineWidth = 13;
+      ctx.beginPath();
+      ctx.moveTo(p.x1, p.y1);
+      ctx.lineTo(p.x2, p.y2);
+      ctx.stroke();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawBoss() {
+    if (!boss) return;
+    const b = boss,
+        wanted = b.sequence[b.stage],
+        c = beams[wanted].color,
+        n = b.kind === "devourer" ? 6 : 8;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(REDUCED ? 0 : Math.sin(time) * 0.06);
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = "#26002f";
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 7;
+    polygon(0, 0, b.r, n, Math.PI / 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#8f28bd";
+    polygon(0, 0, b.r - 13, n, 0);
+    ctx.fill();
+    ctx.fillStyle = "#17001f";
+    ctx.beginPath();
+    ctx.ellipse(-20, -7, 11, 16, -0.2, 0, 7);
+    ctx.ellipse(20, -7, 11, 16, 0.2, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(-20, -6, 4, 0, 7);
+    ctx.arc(20, -6, 4, 0, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#ff75c9";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 23, 20, Math.PI + 0.25, Math.PI * 2 - 0.25);
+    ctx.stroke();
+    ctx.restore();
+    neonText((b.kind === "devourer" ? "DEVOURER " : "TYRANT ") + b.stage + "/" + b.sequence.length, b.x, b.y - b.r - 25, 18, c, "center",);
+    for (let i = b.stage; i < b.sequence.length; i++) {
+      ctx.fillStyle = beams[b.sequence[i]].color;
+      ctx.beginPath();
+      ctx.arc(b.x + (i - b.stage - (b.sequence.length - b.stage - 1) / 2) * 17, b.y + b.r + 18, 6, 0, 7,);
+      ctx.fill();
+    }
+  }
+
+// 적
+  function drawEnemy(e) {
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    const danger = Math.max(0, (e.y - 400) / (defenseY - 400));
+    const pulse = REDUCED ? 1 : 1 + danger * (0.08 + 0.05 * Math.sin(time * 12));
+    ctx.rotate(REDUCED ? 0 : Math.sin(e.spin * 2) * 0.07);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 7, -e.r + 2);
+      ctx.lineTo(i * 5, -e.r - 16 - (REDUCED ? 0 : Math.sin(e.spin * 4 + i) * 7));
+      ctx.strokeStyle = e.color + (i ? "55" : "99");
+      ctx.lineWidth = i ? 3 : 5;
+      ctx.shadowColor = e.color;
+      ctx.shadowBlur = 9;
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = e.color;
+    ctx.shadowBlur = 13;
+    ctx.fillStyle = e.color;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    if (e.type === 0) {
+      ctx.beginPath();
+      ctx.arc(0, 0, e.r, 0, Math.PI * 2);
+    } else if (e.type === 1) {
+      polygon(0, 2, e.r + 2, 3, -Math.PI / 2);
+    } else if (e.type === 2) {
+      polygon(0, 0, e.r + 2, 4, Math.PI / 4);
+    } else if (e.type === 3) {
+      (ctx.beginPath(), ctx.rect(-e.r, -e.r, e.r * 2, e.r * 2));
+    } else {
+      polygon(0, 0, e.r + 2, 5, -Math.PI / 2);
+    }
+
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    if (e.elite) {
+      ctx.strokeStyle = e.color;
+      ctx.shadowColor = e.color;
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, 0, e.r + 8, 0, 7);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      for (let i = 0; i < e.maxHp; i++) {
+        ctx.fillStyle = i < e.hp ? e.color : "#3b1748";
+        ctx.strokeStyle = i < e.hp ? "#fff" : e.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc((i - 1) * 10, -e.r - 12, 4, 0, 7);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = "#26002e";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-11, -7);
+    ctx.lineTo(-3, -2);
+    ctx.moveTo(11, -7);
+    ctx.lineTo(3, -2);
+    ctx.stroke();
+    ctx.fillStyle = "#16001e";
+    ctx.beginPath();
+    ctx.ellipse(-5, 1, 3, 4, 0, 0, 7);
+    ctx.ellipse(5, 1, 3, 4, 0, 0, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#4b1249";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 10, 6, Math.PI + 0.35, Math.PI * 2 - 0.35);
+    ctx.stroke();
+    if (e.lesson) {
+      neonText(`${e.type + 1}  ${beams[e.type].name} ${shapes[e.type].toUpperCase()}`, 0, -e.r - 39, 13, "#fff", "center",);
+    } else if (e.elite) {
+      neonText(`ELITE ${beams[e.type].name}`, 0, -e.r - 34, 13, e.color, "center",
+      );
+    } else if (danger > 0.55) {
+      ctx.globalAlpha = REDUCED ? 1 : 0.65 + 0.35 * Math.sin(time * 14);
+      neonText("!", 0, -e.r - 35, 18, "#ff477c", "center");
+    }
+    ctx.restore();
+  }
+
+// 유니콘 기지
+  function drawBase() {
+    ctx.save();
+    ctx.translate(480, 570);
+    ctx.fillStyle = "#d66bea";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(-145, -18, 290, 72, 22);
+    ctx.fill();
+    ctx.stroke();
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(side * 116, -28);
+      ctx.fillStyle = "#b857df";
+      ctx.beginPath();
+      ctx.roundRect(-25, -24, 50, 70, 13);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#ff5fbd";
+      polygon(0, -34, 32, 5, -Math.PI / 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#ffe84c";
+      polygon(0, -34, 10, 5, -Math.PI / 2);
+      ctx.fill();
+      ctx.fillStyle = "#27113f";
+      ctx.beginPath();
+      ctx.arc(0, 8, 9, 0, 7);
+      ctx.fill();
+      ctx.strokeStyle = "#5eeeff";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    for (const [side, colors] of [[-1, ["#ff3fad", "#ff9d2e", "#ffe340"]], [1, ["#43ef70", "#35bfff", "#a64cff"]],]) {
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(side * (42 + i * 3), -84 + i * 13);
+        ctx.bezierCurveTo(side * (82 + i * 7), -76 + i * 8, side * (92 - i * 3), -30 + i * 14, side * (63 - i * 2), 2 + i * 5,);
+        ctx.strokeStyle = colors[i];
+        ctx.shadowColor = colors[i];
+        ctx.shadowBlur = 9;
+        ctx.lineWidth = 15 - i * 2;
+        ctx.stroke();
+      }
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff2fa";
+    polygon(-47, -103, 27, 3, -Math.PI / 2);
+    ctx.fill();
+    ctx.stroke();
+    polygon(47, -103, 27, 3, -Math.PI / 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#ff9ad4";
+    polygon(-47, -100, 13, 3, -Math.PI / 2);
+    ctx.fill();
+    polygon(47, -100, 13, 3, -Math.PI / 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff2fa";
+    ctx.beginPath();
+    ctx.ellipse(0, -48, 62, 70, 0, 0, 7);
+    ctx.fill();
+    ctx.stroke();
+    const blinking = time % 4.4 > 4.22,
+        eyeY = damageFlash > 0 ? 3 : blinking ? 1.5 : shot > 0 ? 9 : 11;
+    ctx.fillStyle = "#1a0625";
+    ctx.beginPath();
+    ctx.ellipse(-25, -60, 8, eyeY, 0, 0, 7);
+    ctx.ellipse(25, -60, 8, eyeY, 0, 0, 7);
+    ctx.fill();
+    if (eyeY > 5) {
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(-28, -65, 3, 0, 7);
+      ctx.arc(22, -65, 3, 0, 7);
+      ctx.arc(-23, -57, 1.5, 0, 7);
+      ctx.arc(27, -57, 1.5, 0, 7);
+      ctx.fill();
+    }
+    ctx.strokeStyle = "#8d3c91";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    if (damageFlash > 0) {
+      ctx.moveTo(-37, -76);
+      ctx.lineTo(-15, -69);
+      ctx.moveTo(37, -76);
+      ctx.lineTo(15, -69);
+    } else {
+      ctx.moveTo(-36, -71);
+      ctx.quadraticCurveTo(-25, -79, -14, -71);
+      ctx.moveTo(14, -71);
+      ctx.quadraticCurveTo(25, -79, 36, -71);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#ffd4e8";
+    ctx.beginPath();
+    ctx.ellipse(0, -18, 35, 25, 0, 0, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#e58bb9";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#5b214a";
+    ctx.beginPath();
+    ctx.ellipse(-12, -22, 3.5, 5, 0, 0, 7);
+    ctx.ellipse(12, -22, 3.5, 5, 0, 0, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#4a164b";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    if (damageFlash > 0) {
+      ctx.moveTo(-13, -9);
+      ctx.quadraticCurveTo(0, -20, 13, -9);
+    } else if (shot > 0) {
+      ctx.arc(0, -11, 8, 0, 7);
+    } else {
+      ctx.arc(0, -15, 13, 0.25, Math.PI - 0.25);
+    }
+    ctx.stroke();
+    const arches = ["#ff48ad", "#ff9d35", "#ffe63c", "#4bed72", "#45c7ff", "#a753ff",];
+    for (let i = 0; i < 6; i++) {
+      ctx.strokeStyle = arches[i];
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, 34, 28 - i * 4, Math.PI, 0);
+      ctx.lineTo(28 - i * 4, 51);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#56106f";
+    ctx.beginPath();
+    ctx.roundRect(-16, 28, 32, 27, 14);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#ffe84c";
+    polygon(0, 39, 7, 5, -Math.PI / 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(pivot.x, pivot.y);
+    const ready = cooldown <= 0,charge = 1 - Math.min(1, cooldown / 0.42);
+    ctx.shadowColor = beams[selected].color;
+    ctx.shadowBlur = ready ? (REDUCED ? 18 : 18 + Math.sin(time * 8) * 6) : 7;
+    ctx.fillStyle = "#59106f";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 0.35 + charge * 0.65;
+    ctx.fillStyle = beams[selected].color;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#ffd8ff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = beams[selected].color;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 27, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge);
+    ctx.stroke();
+    if (bossPowers.omni) {
+      const n = shotsFired % 5 || (shot && 5);
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = i < n ? beams[i].color : "#40134f";
+        polygon((i - 2) * 11, 34, 4, 5, 0);
+        ctx.fill();
+      }
+    }
+    if (ready) {
+      ctx.fillStyle = "#fff";
+      polygon(0, 0, REDUCED ? 7 : 7 + Math.sin(time * 8) * 2, 4, Math.PI / 4);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.translate(pivot.x, pivot.y);
+    ctx.rotate((angle * Math.PI) / 180);
+    const recoil = REDUCED ? 0 : shot / SHOT_FLASH;
+    ctx.translate(0, recoil * 4);
+    ctx.scale(1, 1 + recoil * 0.05);
+    ctx.shadowColor = beams[selected].color;
+    ctx.shadowBlur = 13;
+    const cols = [
+      "#ff3cae",
+      "#a947ff",
+      "#2d9fff",
+      "#3ce879",
+      "#ffe53c",
+      "#ff8438",
+      "#ff4770",
+    ];
+    for (let i = 0; i < 7; i++) {
+      const y = -6 - i * 14,
+          w = 15 - i * 1.9,
+          nw = 15 - (i + 1) * 1.9;
+      ctx.fillStyle = cols[i];
+      ctx.beginPath();
+      ctx.moveTo(-w, y);
+      ctx.quadraticCurveTo(2, y - 6, w, y - 2);
+      ctx.lineTo(nw, -6 - (i + 1) * 14);
+      ctx.quadraticCurveTo(-2, -12 - (i + 1) * 14, -nw, -6 - (i + 1) * 14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff99";
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+    }
+    ctx.fillStyle = beams[selected].color;
+    ctx.beginPath();
+    ctx.ellipse(0, -3, 16, 10, 0, 0, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-15, -5);
+    ctx.quadraticCurveTo(-9, -60, 0, -104);
+    ctx.quadraticCurveTo(9, -60, 15, -5);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffffaa";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-7, -14);
+    ctx.quadraticCurveTo(-3, -55, 0, -91);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(0, -103, 2.7, 0, 7);
+    ctx.fill();
+    ctx.restore();
+  }
+
+// HUD
+  function hudPanel(x, y, w, h, c) {
+    ctx.fillStyle = "#08000ddd";
+    ctx.strokeStyle = c + "88";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function drawHUD() {
+    hudPanel(14, 12, 250, 104, "#ff55bd");
+    hudPanel(14, 574, 280, 54, beams[selected].color);
+
+    neonText("SCORE " + String(score).padStart(7, "0"), 28, 30, 20, "#ffe22d");
+    neonText(`LV ${level}`, 28, 59, 12, "#b7ff5e");
+    ctx.fillStyle = "#241038";
+    ctx.fillRect(80, 57, 166, 6);
+    ctx.fillStyle = "#7dff55";
+    ctx.fillRect(80, 57, 166 * Math.min(1, xp / xpNeed), 6);
+    neonText("SHIELD", 28, 88, 12, "#ff55bd");
+    neonText("♥".repeat(shield), 98, 88, 20, "#ff3a8d");
+
+    const syn = synergies();
+    if (combo > 1)
+      neonText(
+          `COMBO ×${combo}`,
+          480,
+          91,
+          17 + Math.min(combo, 8),
+          "#ffe64f",
+          "center",
+      );
+    if (boss)
+      neonText(
+          "BOSS: " +
+          beams[boss.sequence[boss.stage]].name +
+          " " +
+          shapes[boss.sequence[boss.stage]].toUpperCase(),
+          480,
+          118,
+          18,
+          beams[boss.sequence[boss.stage]].color,
+          "center",
+      );
+    else if (trainingComplete) {
+      const eta = Math.max(0, Math.ceil(nextBossAt - (time - survivalStart)));
+      neonText("BOSS IN " + eta + "s", 480, 108, 12, "#ff8bd8", "center");
+    }
+    if (syn.length)
+      neonText("SYNERGY ×" + syn.length, 480, 136, 12, "#fff36a", "center");
+
+    neonText(
+        upgrades.spectrum
+            ? attackTypes()
+                .map((i) => beams[i].name)
+                .join(" + ")
+            : beams[selected].name + " • " + shapes[selected].toUpperCase(),
+        154,
+        561,
+        13 + switchFlash * 12,
+        beams[selected].color,
+        "center",
+    );
+    for (let i = 0; i < 5; i++) {
+      const x = 24 + i * 52,
+          mixed = attackTypes().includes(i);
+      ctx.fillStyle = "#100018dd";
+      ctx.strokeStyle =
+          i === selected ? "#fff" : mixed ? "#72f7ff" : beams[i].color;
+      ctx.lineWidth = i === selected ? 4 + switchFlash * 14 : mixed ? 4 : 2;
+      ctx.beginPath();
+      ctx.roundRect(x, 584, 44, 34, 9);
+      ctx.fill();
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(x + 22, 601);
+      ctx.fillStyle = beams[i].color;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      if (i === 0) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, 7);
+      } else if (i === 1) polygon(0, 1, 10, 3, -Math.PI / 2);
+      else if (i === 2) polygon(0, 0, 9, 4, Math.PI / 4);
+      else if (i === 3) {
+        ctx.beginPath();
+        ctx.rect(-8, -8, 16, 16);
+      } else polygon(0, 0, 10, 5, -Math.PI / 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      neonText(String(i + 1), x + 35, 589, 8, "#fff", "center");
+    }
+    if (cooldown > 0) {
+      ctx.fillStyle = "#ffffff55";
+      ctx.fillRect(24, 622, (260 * cooldown) / shotCooldown(), 3);
+    }
+
+    if (!trainingComplete) {
+      neonText(
+          "←→ AIM • 1-5 COLOR • SPACE FIRE",
+          936,
+          598,
+          13,
+          "#9defff",
+          "right",
+      );
+      neonText("TOUCH: DRAG • RELEASE", 936, 619, 11, "#ff9ee2", "right");
+      const lesson = enemies.find((e) => e.lesson);
+      if (lesson)
+        neonText(
+            `${lesson.type + 1} ${beams[lesson.type].name} • AIM • FIRE`,
+            936,
+            92,
+            12,
+            "#fff47a",
+            "right",
+        );
+    }
+
+    ctx.fillStyle = "#170024cc";
+    ctx.strokeStyle = muted ? "#fff" : "#65efff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(858, 22, 40, 40, 9);
+    ctx.fill();
+    ctx.stroke();
+    neonText(
+        muted ? "×" : "♪",
+        878,
+        43,
+        19,
+        muted ? "#ff77ad" : "#65efff",
+        "center",
+    );
+
+    ctx.fillStyle = "#170024cc";
+    ctx.strokeStyle = paused ? "#fff" : "#ff70ce";
+    ctx.beginPath();
+    ctx.roundRect(906, 22, 40, 40, 9);
+    ctx.fill();
+    ctx.stroke();
+    neonText(
+        paused ? "▶" : "Ⅱ",
+        926,
+        43,
+        18,
+        paused ? "#70f6ff" : "#ff75ce",
+        "center",
+    );
+
+    if (messageTime > 0) {
+      ctx.globalAlpha = Math.min(1, messageTime / 0.16);
+      neonText(message, 480, 164, 20 + messageTime * 12, messageColor, "center");
+      ctx.globalAlpha = 1;
+    }
+    if (bannerTime > 0) {
+      ctx.globalAlpha = Math.min(1, bannerTime / 0.35);
+      neonText(bannerText, 480, 204, 31 + bannerTime * 4, "#ffe94f", "center");
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawSkillIcon(id, x, y, c) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = c;
+    ctx.fillStyle = c;
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    if (id === "heart" || id === "fortress") {
+      ctx.beginPath();
+      ctx.moveTo(0, 18);
+      ctx.bezierCurveTo(-30, 0, -22, -24, 0, -8);
+      ctx.bezierCurveTo(22, -24, 30, 0, 0, 18);
+      ctx.fill();
+    } else if (id === "slow") {
+      for (let i = 0; i < 3; i++) {
+        ctx.rotate(Math.PI / 3);
+        ctx.beginPath();
+        ctx.moveTo(-23, 0);
+        ctx.lineTo(23, 0);
+        ctx.stroke();
+      }
+    } else if (id === "portal" || id === "nova") {
+      ctx.beginPath();
+      ctx.arc(id === "nova" ? -10 : 0, 0, 19, 0, 7);
+      ctx.stroke();
+      if (id === "nova") {
+        ctx.beginPath();
+        ctx.arc(12, 0, 19, 0, 7);
+        ctx.stroke();
+      }
+    } else if (id === "rapid") {
+      for (let i = -1; i < 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-25 + i * 8, -15);
+        ctx.lineTo(-5 + i * 8, 0);
+        ctx.lineTo(-25 + i * 8, 15);
+        ctx.stroke();
+      }
+    } else if (id === "warp" || id === "portalRate") {
+      ctx.beginPath();
+      ctx.arc(0, 0, 22, 0, 7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -14);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(12, 7);
+      ctx.stroke();
+    } else if (id === "split" || id === "crown" || id === "wide") {
+      const n = id === "crown" ? 5 : id === "split" ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        const a = (i - (n - 1) / 2) * 0.3 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 18);
+        ctx.lineTo(Math.cos(a) * 34, 18 + Math.sin(a) * 34);
+        ctx.stroke();
+      }
+    } else if (id === "spectrum" || id === "omni") {
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = beams[i].color;
+        ctx.beginPath();
+        ctx.arc((i - 2) * 12, 0, 7, 0, 7);
+        ctx.fill();
+      }
+    } else if (id === "grace") {
+      ctx.beginPath();
+      ctx.arc(0, -3, 22, 0, Math.PI);
+      ctx.lineTo(0, 25);
+      ctx.closePath();
+      ctx.stroke();
+    } else (polygon(0, 0, 24, 5, -Math.PI / 2), ctx.fill());
+    ctx.restore();
+  }
+
+  function drawLevelUp() {
+    neonText("LEVEL " + level + "!", 480, 130, 55, "#ffe64f", "center");
+    neonText("CHOOSE ONE PRISM UPGRADE", 480, 175, 22, "#70efff", "center");
+    for (let i = 0; i < upgradeChoices.length; i++) {
+      const id = upgradeChoices[i],
+          u = upgradeDefs[id],
+          x = 125 + i * 245,
+          special = id === "spectrum",
+          color = special ? "#72f7ff" : beams[(i + level) % 5].color,
+          g = special ? ctx.createLinearGradient(x, 0, x + 220, 0) : color;
+      if (special) {
+        for (let j = 0; j < 5; j++) g.addColorStop(j / 4, beams[j].color);
+      }
+      ctx.fillStyle = "#13001fe8";
+      ctx.strokeStyle = g;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = special ? 25 : 14;
+      ctx.lineWidth = special ? 8 : 4;
+      ctx.beginPath();
+      ctx.roundRect(x, 205, 220, 270, 18);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      neonText(String(i + 1), x + 110, 238, 26, "#fff", "center");
+      neonText(u.title, x + 110, 285, 22, special ? "#fff" : color, "center");
+      if (!special) drawSkillIcon(id, x + 110, 335, color);
+      if (special) {
+        for (let j = 0; j < 3; j++) {
+          ctx.strokeStyle = beams[(selected + j) % 5].color;
+          ctx.shadowColor = ctx.strokeStyle;
+          ctx.shadowBlur = 10;
+          ctx.lineWidth = 7 - j * 2;
+          ctx.beginPath();
+          ctx.moveTo(x + 45, 332 + j * 18);
+          ctx.lineTo(x + 175, 332 + j * 18);
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        neonText(
+            upgrades.spectrum ? "UNLOCK 3-COLOR BEAM" : "UNLOCK 2-COLOR BEAM",
+            x + 110,
+            400,
+            16,
+            "#72f7ff",
+            "center",
+        );
+      } else {
+        const lines = u.desc.split("\n");
+        for (let j = 0; j < lines.length; j++)
+          neonText(lines[j], x + 110, 390 + j * 24, 15, "#fff", "center");
+      }
+      neonText(
+          "STACK " + upgrades[id] + "/" + u.max,
+          x + 110,
+          435,
+          15,
+          "#ffe56a",
+          "center",
+      );
+    }
+    neonText("CLICK • 1-3", 480, 515, 18, "#ff92d8", "center");
+  }
+
+  function drawBossReward() {
+    neonText("BOSS DEFEATED!", 480, 125, 50, "#fff36a", "center");
+    neonText("CHOOSE A LEGENDARY POWER", 480, 174, 22, "#ff75dc", "center");
+    for (let i = 0; i < bossChoices.length; i++) {
+      const id = bossChoices[i],
+          u = bossDefs[id],
+          x = 125 + i * 245,
+          g = ctx.createLinearGradient(x, 0, x + 220, 0);
+      for (let j = 0; j < 5; j++) g.addColorStop(j / 4, beams[j].color);
+      ctx.fillStyle = "#1c0029ee";
+      ctx.strokeStyle = g;
+      ctx.shadowColor = "#fff36a";
+      ctx.shadowBlur = 24;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.roundRect(x, 205, 220, 270, 18);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      neonText(String(i + 1), x + 110, 238, 26, "#fff", "center");
+      neonText(u.title, x + 110, 292, 21, "#fff36a", "center");
+      drawSkillIcon(id, x + 110, 340, "#fff36a");
+      const lines = u.desc.split(" • ");
+      for (let j = 0; j < lines.length; j++)
+        neonText(lines[j], x + 110, 390 + j * 25, 15, "#fff", "center");
+      neonText(
+          "LEGENDARY " + (bossPowers[id] + 1) + "/" + u.max,
+          x + 110,
+          435,
+          14,
+          "#72f7ff",
+          "center",
+      );
+    }
+    neonText("CLICK • 1-3", 480, 515, 18, "#ff92d8", "center");
+  }
+
+// 인트로 편지
+  function drawLetter() {
+    const g = ctx.createLinearGradient(220, 0, 740, 0);
+    for (let i = 0; i < 5; i++) g.addColorStop(i / 4, beams[i].color);
+    ctx.save();
+    ctx.shadowColor = "#ff75dc";
+    ctx.shadowBlur = 28;
+    ctx.fillStyle = "#fff8e8";
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.roundRect(205, 92, 550, 450, 20);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#6b315f";
+    ctx.font = "20px Georgia,serif";
+    ctx.textAlign = "left";
+    ctx.fillText("To the Last Prism Keeper,", 260, 165);
+    ctx.font = "18px Georgia,serif";
+    const lines = ["The color stars are fading.", "Shadows fall toward our final rainbow.", "Turn your horn to their light.", "Match every color. Hold the defense line.", "If the rainbow survives, so will we.",];
+    for (let i = 0; i < lines.length; i++)
+      ctx.fillText(lines[i], 260, 225 + i * 43);
+    ctx.font = "italic 19px Georgia,serif";
+    ctx.textAlign = "right";
+    ctx.fillText("— The Moon Queen", 700, 468);
+    ctx.fillStyle = "#ff3c91";
+    ctx.beginPath();
+    ctx.arc(480, 505, 24, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = "#ffe75b";
+    polygon(480, 505, 10, 5, -Math.PI / 2);
+    ctx.fill();
+    ctx.restore();
+    neonText("CLICK • SPACE • ENTER", 480, 578, 18, "#72efff", "center");
+  }
+
+  function overlay() {
+    if (state === "play" && !paused && !leveling && !bossRewarding)
+      return;
+
+    ctx.fillStyle = "#090010bb";
+    ctx.fillRect(0, 0, W, H);
+    if (state === "letter") {
+      drawLetter();
+    } else if (bossRewarding) {
+      drawBossReward();
+    } else if (leveling) {
+      drawLevelUp();
+    } else if (paused) {
+      neonText("PAUSED", 480, 270, 66, "#72efff", "center");
+      neonText("TAP / CLICK • P / ESC TO RESUME", 480, 345, 22, "#fff", "center");
+    } else if (state === "start") {
+      neonText("PRISM HORN", 480, 220, 74, "#ff4cc7", "center");
+      neonText("AIM • MATCH COLOR + SHAPE • FIRE", 480, 300, 25, "#55eaff", "center",);
+      neonText("← → / A D AIM    1-5 COLOR    SPACE FIRE", 480, 350, 20, "#fff", "center",);
+      hudPanel(345, 365, 270, 65, "#ffe33b");
+      neonText("START RUN", 480, 398, 28, "#ffe33b", "center");
+      hudPanel(390, 440, 180, 50, "#ff91d8");
+      neonText("READ LETTER", 480, 465, 15, "#ff91d8", "center");
+    } else {
+      const accuracy = shotsFired ? Math.round((hitShots / shotsFired) * 100) : 0, syn = synergies(),
+          beamCount = 1 + upgrades.split + bossPowers.crown * 2, colorCount = 1 + upgrades.spectrum;
+
+      neonText("RUN COMPLETE", 480, 155, 58, "#ff4c7b", "center");
+      neonText("SCORE " + score, 480, 220, 30, "#ffe33b", "center");
+      neonText("TIME " + Math.floor(time / 60) + ":" + String(Math.floor(time % 60)).padStart(2, "0") + "  •  LEVEL " + level, 480, 260, 22, "#55eaff", "center",);
+      neonText("KILLS " + killsTotal + "  •  ELITES " + eliteKills + "  •  BOSSES " + bossesDefeated, 480, 298, 20, "#fff", "center",);
+      neonText("ACCURACY " + accuracy + "%  •  BEST COMBO ×" + bestCombo, 480, 334, 20, "#ff79cf", "center",);
+      neonText("BUILD  PORTALS " + upgrades.portal + "  •  BEAMS " + beamCount + "  •  COLORS " + colorCount, 480, 374, 18, "#72f7ff", "center",);
+      neonText(syn.length ? syn.join(" • ") : "NO SYNERGY YET", 480, 410, 16, syn.length ? "#fff36a" : "#9d8aad", "center",);
+
+      if (newBest) {
+        neonText("NEW HIGH SCORE!", 480, 446, 22, "#75f8ff", "center");
+      }
+
+      hudPanel(270, 472, 200, 64, "#ffe33b");
+      neonText("RETRY", 370, 504, 23, "#ffe33b", "center");
+      hudPanel(490, 472, 200, 64, "#72efff");
+      neonText("MAIN MENU", 590, 504, 20, "#72efff", "center");
+    }
+  }
+
+// 세로 화면 안내
+  function drawOrientation() {
+    if (!portrait) return;
+    ctx.fillStyle = "#07000bef";
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(480, 235);
+    ctx.rotate(Math.PI / 2);
+    ctx.strokeStyle = "#65efff";
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.roundRect(-55, -90, 110, 180, 18);
+    ctx.stroke();
+    ctx.restore();
+    neonText("ROTATE YOUR DEVICE", 480, 405, 38, "#65efff", "center");
+    neonText("PRISM HORN PLAYS IN LANDSCAPE", 480, 454, 20, "#ff8bd8", "center");
+  }
+
+  function draw() {
+    ctx.save();
+    if (shake && !REDUCED)
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    drawBackground();
+    drawTimeWatermark();
+    drawDefense();
+    drawBeams();
+    drawBoss();
+    for (const e of enemies) drawEnemy(e);
+    for (const f of flashes) {
+      ctx.globalAlpha = Math.min(1, f.t / 0.18);
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 34 * (1 - f.t / HIT_LIFE) + 12, 0, 7);
+      ctx.stroke();
+      neonText(f.text || "+" + f.points, f.x, f.y - 28 - (0.32 - f.t) * 35, 16, "#fff", "center",);
+    }
+    ctx.globalAlpha = 1;
+    drawBase();
+    drawPortals();
+    drawHUD();
+    ctx.restore();
+    if (damageFlash > 0) {
+      const g = ctx.createRadialGradient(480, 320, 150, 480, 320, 560);
+      g.addColorStop(0, "#ff174400");
+      g.addColorStop(1, `rgba(255,20,80,${damageFlash * 0.8})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+    overlay();
+    drawOrientation();
+  }
+
+  function loop(t) {
+    const dt = Math.min(0.033, (t - last) / 1000 || 0);
+    last = t;
+    update(dt);
+    draw();
+    if (DEBUG) drawDebug();
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+
+</script>
+  </body>
+</html>

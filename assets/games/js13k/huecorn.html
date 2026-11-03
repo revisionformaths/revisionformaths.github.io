@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>UniCorn</title>
+  <script type="application/javascript">
+    version = Math.floor(Math.random() * 1000);
+    var files = ["keys", "utility", "tile", "song", "sound", "level", "entity", "particles", "hero", "camera", "game"];
+    for (f of files) {
+      document.write("<script type='application/javascript' src='" + f + ".js?" + version + "'\><\/script>");
+    }
+  </script>
+  <style>html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #111;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#c {
+  display: block;
+  width: min(100vw, 166.6667vh);
+  height: min(100vh, 60vw);
+  width: min(100vw, 166.6667dvh);
+  height: min(100dvh, 60vw);
+  background: #7ec0ee;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+#mobile-controls {
+  display: none;
+}
+
+body.title-screen #mobile-controls {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #mobile-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: block;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .control-button {
+    position: absolute;
+    box-sizing: border-box;
+    width: 80px;
+    height: 80px;
+    padding: 0;
+    border: 2px solid rgba(255, 255, 255, 0.65);
+    border-radius: 14px;
+    background: rgba(20, 24, 32, 0.42);
+    color: rgba(255, 255, 255, 0.85);
+    font: bold 30px/1 system-ui, sans-serif;
+    touch-action: none;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .control-button.active {
+    background: rgba(255, 255, 255, 0.42);
+    transform: scale(0.94);
+  }
+
+  .d-pad {
+    position: absolute;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: max(20px, env(safe-area-inset-left));
+    width: 170px;
+    height: 80px;
+  }
+
+  .d-left { left: 0; top: 0; }
+  .d-right { right: 0; top: 0; }
+
+  .jump-button {
+    right: max(28px, env(safe-area-inset-right));
+    bottom: max(40px, calc(env(safe-area-inset-bottom) + 20px));
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    font-size: 16px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (max-height: 420px) {
+  .d-pad {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  .jump-button {
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(24px, calc(env(safe-area-inset-bottom) + 10px));
+    width: 74px;
+    height: 74px;
+  }
+}
+</style>
+</head>
+<body class="title-screen" onload="startGame()">
+  <canvas id="c"></canvas>
+  <div id="mobile-controls" aria-label="Touch controls">
+    <div class="d-pad" aria-label="Direction pad">
+      <button class="control-button d-left" data-key="ArrowLeft" aria-label="Move left">&#9664;</button>
+      <button class="control-button d-right" data-key="ArrowRight" aria-label="Move right">&#9654;</button>
+    </div>
+    <button class="control-button jump-button" data-key="Space" aria-label="Jump">JUMP</button>
+  </div>
+</body>
+</html>

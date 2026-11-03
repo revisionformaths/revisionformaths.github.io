@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>Explorer Camp | Mracv Games</title>
+	<style>body{
+	margin:0px;
+	padding:0px;
+	background:#222222;
+}
+
+#canvas{
+	background:#ffffff;
+	position:absolute;
+	top:50%;
+	left:50%;
+	margin-left:-384px;
+	margin-top:-256px;
+}</style>
+</head>
+<body>
+	<canvas id="canvas" width="768" height="512"></canvas>
+	<script type="text/javascript">(function (window, undefined) {
+    'use strict';
+
+    var KEY_ENTER = 13, KEY_LEFT = 37, KEY_UP = 38, KEY_RIGHT = 39, KEY_DOWN = 40, KEY_PAUSE = 80, KEY_M = 77, KEY_ESC = 27;
+
+    var canvas = null;
+    var ctx = null;
+	
+    var blockSize  = 32;
+    var worldWidth = 0;
+    var worldHeight = 0;
+    var mapWidth = 0;
+    var mapHeight = 0;
+    var miniMapScale = 3;
+	var mazeW = 16;
+	var mazeH = 16;
+	
+	var lastUpdate = 0;
+    var FPS = 0;
+    var frames = 0;
+    var acumDelta = 0;
+    var gTime = 0;
+    var elapsedTime = 0;
+    var timeLimit = 5;
+
+    var lastKeyPress = null;
+    var pressing = [];
+    var pause = true;
+    var gameover = false;
+    var start = true;
+    var end = false;
+    var moving = false;
+	
+	var mazeMap;
+	var cam = null;
+    var wall = [];
+    var terrain = [];
+    var water = [];
+    var box = null;
+    var flipper = null;
+    var snorkel = null;
+    var player = null;
+    var dir = 0;
+	
+	var iPlayer = new Image();
+    var iHedge = new Image();
+    var iTerrain = new Image();
+    var iWater = new Image();
+    var iBox = new Image();
+    var iFlipper = new Image();
+    var iSnorkel = new Image();
+	
+	var hasMiniMap = false;
+    var hasFlipper = false;
+    var hasSnorkel = false;
+    var showMiniMap = true;
+    var endTimePopUp = 0;
+    var popUpTitle;
+    var popUpMessage;
+    var gameoverMsg;
+    var endTimeInformation = 0;
+
+    function convertTime(time){
+        var seconds = Math.floor(time%60);
+        var minutes = Math.floor((time/60)%60);
+           
+        minutes = (minutes < 10) ? "0" + minutes : minutes;
+        seconds = (seconds < 10) ? "0" + seconds : seconds;
+
+        return minutes + ":" + seconds;
+    }
+
+    function getRandomInt(min, max) {
+		return Math.floor(Math.random() * (max - min + 1)) + min;
+	}
+
+    function fillTextMultiLine(ctx, text, x, y) {
+        var lineHeight = 16;
+        var lines = text.split("\n");
+        
+        for (var i = 0; i < lines.length; ++i) {
+            ctx.fillText(lines[i], x, y);
+            y += lineHeight;
+        }
+    }
+
+	function Maze(w, h, nextCell, startX, startY) {
+		this.w = (isNaN(w) || w < 5 || w > 999 ? 20 : w);
+		this.h = (isNaN(h) || h < 5 || h > 999 ? 20 : h);
+		this.map = [];
+		
+		for(var mh = 0; mh < h; ++mh) { 
+			this.map[mh] = []; 
+			for(var mw = 0; mw < w; ++mw) { 
+				this.map[mh][mw] = {'N':0,'S':0,'E':0,'W':0,'V':0}; 
+			} 
+		}
+
+		this.nextCell = (typeof nextCell === 'undefined' || (nextCell != 'first' && nextCell != 'last' && nextCell != 'random') ? 'random' : nextCell);
+
+		this.startX = (isNaN(startX) || startX < 0 || startX >= w ? 0 : startX);
+		this.startY = (isNaN(startY) || startY < 0 || startY >= h ? 0 : startY);
+
+		this.build();
+	}
+
+	Maze.prototype.toGrid = function() {
+		var grid = [];
+		
+		for(var mh = 0; mh < (this.h * 3 + 1); ++mh) { 
+			grid[mh] = []; 
+			
+			for(var mw = 0; mw < (this.w * 3 + 1); ++mw) { 
+				grid[mh][mw] = 0; 
+			} 
+		}
+
+		for(var y = 0; y < this.h; ++y){
+			var py = (y * 3) + 1;
+
+			for(var x = 0; x < this.w; ++x){
+				var px = (x * 3) + 1;
+
+				grid[py][px] = 1;
+				grid[py][px+1] = 1;
+				grid[py+1][px] = 1;
+				grid[py+1][px+1] = 1;
+				
+				if(this.map[y][x].N === 1) { grid[(py-1)][px] = 1; grid[(py-1)][px+1] = 1;}
+				if(this.map[y][x].S === 1) { grid[(py+1)][px] = 1; grid[(py+1)][px+1] = 1;}
+				if(this.map[y][x].E === 1) { grid[py][(px+1)] = 1; grid[py+1][(px+1)] = 1;}
+				if(this.map[y][x].W === 1) { grid[py][(px-1)] = 1; grid[py+1][(px-1)] = 1;}
+			}
+		}
+
+		this.gridMap = grid;
+		this.gridW	= grid.length;
+		this.gridH	= grid[0].length;
+	};
+
+	Maze.prototype.build = function(dir) {
+		var cells = [];
+		cells.push({x: this.startX, y: this.startY});
+		this.map[this.startY][this.startX].V = 1;
+
+		var modDir = {
+			'N' : { y : -1, x : 0, 	o : 'S' },
+			'S' : { y : 1, 	x : 0, 	o : 'N' },
+			'W' : { y : 0, 	x : -1, o : 'E' },
+			'E' : { y : 0, 	x : 1, 	o : 'W' }
+		};
+
+		while(cells.length > 0){
+			var i = (this.nextCell=='first' ? 0 : (this.nextCell=='last' ? cells.length-1 : Math.floor((Math.random()*10000)%cells.length)));
+			var cell = cells[i];
+
+			// Check for neighbours
+			var n = [];
+			
+			if(cell.x>0 && this.map[cell.y][(cell.x-1)].V === 0) { 
+				n.push('W');
+			}		
+			if(cell.x<(this.w-1) && this.map[cell.y][(cell.x+1)].V === 0) { 
+				n.push('E');
+			}
+			if(cell.y>0 && this.map[(cell.y-1)][cell.x].V === 0) {
+				n.push('N');
+			}
+			if(cell.y<(this.h-1) && this.map[(cell.y+1)][cell.x].V === 0) {
+				n.push('S'); 
+			}
+
+			if(n.length === 0) { 
+				cells.splice(i, 1); 
+				continue;
+			}
+
+			var direction = n[Math.floor((Math.random()*10000)%n.length)];
+
+			var destX = (cell.x + modDir[direction].x);
+			var destY = (cell.y + modDir[direction].y);
+
+			this.map[cell.y][cell.x][direction] = 1;
+			this.map[destY][destX][modDir[direction].o] = 1;
+			this.map[destY][destX].V = 1;
+			cells.push({x:destX, y:destY});
+		}
+
+		this.toGrid();
+	};
+	
+	function Camera() {
+        this.x = 0;
+        this.y = 0;
+    }
+
+    Camera.prototype = {
+        constructor: Camera,
+        
+        focus: function (x, y) {
+            this.x = x - canvas.width / 2;
+            this.y = y - canvas.height / 2;
+
+            if (this.x < 0) {
+                this.x = 0;
+            } else if (this.x > worldWidth - canvas.width) {
+                this.x = worldWidth - canvas.width;
+            }
+            if (this.y < 0) {
+                this.y = 0;
+            } else if (this.y > worldHeight - canvas.height) {
+                this.y = worldHeight - canvas.height;
+            }
+        }
+    };
+    
+    function Rect(x, y, width, height, createFromTopLeft, type) {
+        this.width = (width === undefined) ? 0 : width;
+        this.height = (height === undefined) ? this.width : height;
+        if (createFromTopLeft) {
+            this.left = (x === undefined) ? 0 : x;
+            this.top = (y === undefined) ? 0 : y;
+        } else {
+            this.x = (x === undefined) ? 0 : x;
+            this.y = (y === undefined) ? 0 : y;
+        }
+        this.t = (type === undefined) ? -1 : type;
+    }
+    
+    Rect.prototype = {
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        
+        get x() {
+            return this.left + this.width / 2;
+        },
+        set x(value) {
+            this.left = value - this.width / 2;
+        },
+        
+        get y() {
+            return this.top + this.height / 2;
+        },
+        set y(value) {
+            this.top = value - this.height / 2;
+        },
+        
+        get right() {
+            return this.left + this.width;
+        },
+        set right(value) {
+            this.left = value - this.width;
+        },
+        
+        get bottom() {
+            return this.top + this.height;
+        },
+        set bottom(value) {
+            this.top = value - this.height;
+        },
+        
+        intersects: function (rect) {
+            if (rect !== undefined) {
+                return (this.left < rect.right &&
+                    this.right > rect.left &&
+                    this.top < rect.bottom &&
+                    this.bottom > rect.top);
+            }
+        },
+    };
+
+    function checkRowColLimits(row, col) {
+        return (col > 1 && col < mazeMap.gridH-1 && row > 1 && row < mazeMap.gridW-1);
+    }
+	
+	function setMap() {
+		var type;
+        var col = 0, row = 0;
+        
+		for(col = 0; col < mazeMap.gridH; ++col){
+			for(row = 0; row < mazeMap.gridW; ++row){
+                if(mazeMap.gridMap[col][row] === 1) { 
+                    terrain.push(new Rect(col * blockSize, row * blockSize, blockSize, blockSize, true));
+                }
+                else{
+					if((row === 0 && col === 0) || (checkRowColLimits(row,col) && mazeMap.gridMap[col-1][row] === 1 && mazeMap.gridMap[col+1][row] === 0 && mazeMap.gridMap[col][row-1] === 1 && mazeMap.gridMap[col][row+1] === 0 )){
+						type = 2;
+					}
+					else if((row === 0 && col === mazeMap.gridH-1) || (checkRowColLimits(row,col) && mazeMap.gridMap[col-1][row] === 0 && mazeMap.gridMap[col+1][row] === 1 && mazeMap.gridMap[col][row-1] === 1 && mazeMap.gridMap[col][row+1] === 0 )){
+						type = 3;
+					}
+					else if((row === mazeMap.gridW-1 && col === mazeMap.gridH-1) || (checkRowColLimits(row,col) && mazeMap.gridMap[col-1][row] === 0 && mazeMap.gridMap[col+1][row] === 1 && mazeMap.gridMap[col][row-1] === 0 && mazeMap.gridMap[col][row+1] === 1 )){
+						type = 4;
+					}
+					else if((row === mazeMap.gridW-1 && col === 0) || (checkRowColLimits(row,col) && mazeMap.gridMap[col-1][row] === 1 && mazeMap.gridMap[col+1][row] === 0 && mazeMap.gridMap[col][row-1] === 0 && mazeMap.gridMap[col][row+1] === 1 )){
+						type = 5;
+					}
+					else if(row > 1 && row < mazeMap.gridW-1 && mazeMap.gridMap[col][row-1] === 1 && mazeMap.gridMap[col][row+1] === 0 && mazeMap.gridMap[col-1][row] === 1 && mazeMap.gridMap[col+1][row] === 1){
+						type = 6;
+					}
+					else if(row > 1 && row < mazeMap.gridW-1 && mazeMap.gridMap[col][row-1] === 0 && mazeMap.gridMap[col][row+1] === 1 && mazeMap.gridMap[col-1][row] === 1 && mazeMap.gridMap[col+1][row] === 1){
+						type = 7;
+					}
+					else if(col > 1 && col < mazeMap.gridH-1 && mazeMap.gridMap[col-1][row] === 0 && mazeMap.gridMap[col+1][row] === 1 && mazeMap.gridMap[col][row+1] === 1 && mazeMap.gridMap[col][row-1] === 1) {
+						type = 8;
+					}
+					else if(col > 1 && col < mazeMap.gridH-1 && mazeMap.gridMap[col-1][row] === 1 && mazeMap.gridMap[col+1][row] === 0 && mazeMap.gridMap[col][row+1] === 1 && mazeMap.gridMap[col][row-1] === 1) {
+						type = 9;
+					}
+					else if(row === 0 || row === mazeMap.gridW-1 || (row > 1 && row < mazeMap.gridW-1 && mazeMap.gridMap[col][row-1] === 1 && mazeMap.gridMap[col][row+1] === 1) || (checkRowColLimits(row,col) && mazeMap.gridMap[col-1][row] === 0 && mazeMap.gridMap[col+1][row] === 0)){
+						type = 1;
+					}				
+					else{
+						type = 0;
+					}
+                    wall.push(new Rect(col * blockSize, row * blockSize, blockSize, blockSize, true, type));
+                }
+            }
+        }
+
+        water.push(new Rect((col-2) * blockSize, (row-2) * blockSize, blockSize, blockSize, true, 1));
+        water.push(new Rect((col-2) * blockSize, (row-3) * blockSize, blockSize, blockSize, true, 3));
+        water.push(new Rect((col-3) * blockSize, (row-2) * blockSize, blockSize, blockSize, true, 0));
+        water.push(new Rect((col-3) * blockSize, (row-3) * blockSize, blockSize, blockSize, true, 2));
+    
+        worldWidth = mazeMap.gridH * blockSize;
+        worldHeight = mazeMap.gridW * blockSize;
+    }
+
+    // A utility function to reset styles
+    function resetStyles(){
+        // Reset styles
+        ctx.textAlign = 'left';
+        ctx.font = "10px Verdana";
+        ctx.fillStyle = '#FFF';
+    }
+
+    // A utility function to draw a rectangle with rounded corners.
+    function roundedRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x, y + radius);
+        ctx.lineTo(x, y + height - radius);
+        ctx.arcTo(x, y + height, x + radius, y + height, radius);
+        ctx.lineTo(x + width - radius, y + height);
+        ctx.arcTo(x + width, y + height, x + width, y + height-radius, radius);
+        ctx.lineTo(x + width, y + radius);
+        ctx.arcTo(x + width, y, x + width - radius, y, radius);
+        ctx.lineTo(x + radius, y);
+        ctx.arcTo(x, y, x, y + radius, radius);
+        ctx.stroke();
+    }
+	
+	function drawStart(){
+        ctx.fillStyle = '#A22C29';
+        ctx.fillRect(canvas.width/2-150, canvas.height/2-50, 290, 100);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.font = "32px Impact";
+        ctx.fillText('Explorer Camp', canvas.width/2, canvas.height/2); 
+        if((~~(gTime*3)%2) === 1){
+            ctx.font = "12px Verdana";
+            ctx.fillText("Press 'Enter' to start the game", canvas.width/2, canvas.height/2+20); 
+        }
+        resetStyles();
+    }
+
+    function drawEnd(){
+        ctx.fillStyle = '#A22C29';
+        ctx.fillRect(canvas.width/2-150, canvas.height/2-60, 300, 120);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.font = "20px Impact";
+        ctx.fillText('WIN', canvas.width/2, canvas.height/2-30);
+        ctx.font = "10px Verdana";
+        ctx.fillText("Congratulations, you have become an Explorer!", canvas.width/2, canvas.height/2-10); 
+        if((~~(gTime*3)%2) === 1){
+            ctx.font = "12px Verdana";
+            ctx.fillText("Press 'ESC' to restart the game", canvas.width/2, canvas.height/2+20); 
+        }
+        resetStyles();
+    }
+
+    function drawPause(){
+        ctx.fillStyle = '#A22C29';
+        ctx.fillRect(canvas.width/2-150, canvas.height/2-50, 290, 100);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.font = "20px Impact";
+        ctx.fillText('PAUSE', canvas.width/2, canvas.height/2); 
+        if((~~(gTime*3)%2) === 1){
+            ctx.font = "12px Verdana";
+            ctx.fillText("Press 'P' to pause/resume the game", canvas.width/2, canvas.height/2+20); 
+        }
+        resetStyles();
+    }
+
+    function drawGameOver(){
+        ctx.fillStyle = '#A22C29';
+        ctx.fillRect(canvas.width/2-150, canvas.height/2-60, 300, 120);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.font = "20px Impact";
+        ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2-30);
+        ctx.font = "10px Verdana";
+        ctx.fillText(gameoverMsg, canvas.width/2, canvas.height/2-10); 
+        if((~~(gTime*3)%2) === 1){
+            ctx.font = "12px Verdana";
+            ctx.fillText("Press 'ESC' to restart the game", canvas.width/2, canvas.height/2+20); 
+        }
+    }
+
+    function drawPopUp(){
+        ctx.fillStyle = '#80A1C1';
+        ctx.fillRect(canvas.width/2-145, 75, 290, 120);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.font = "16px Verdana";
+        ctx.fillText(popUpTitle, canvas.width/2, 100); 
+
+        ctx.font = "12px Verdana";
+        fillTextMultiLine(ctx, popUpMessage, canvas.width/2, 130);
+        //ctx.fillText(popUpMessage, canvas.width/2, 130); 
+
+        resetStyles();
+    }
+
+    function drawInformation(){
+        ctx.fillStyle = '#80A1C1';
+        ctx.fillRect(canvas.width/2-200, 75, 400, 350);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.font = "16px Verdana";
+        ctx.fillText('Instrucctions', canvas.width/2, 100); 
+
+        ctx.textAlign = 'left';
+        ctx.font = "12px Verdana";
+        ctx.fillText('To become an explorer you should find the exit of the maze,', canvas.width/2-185, 140); 
+        ctx.fillText('but before you should search some objects that will help', canvas.width/2-185, 157);
+        ctx.fillText('you to escape.', canvas.width/2-185, 174); 
+
+        ctx.fillText('Be careful! You are lost in a big maze and have a limited', canvas.width/2-185, 208);
+        ctx.fillText('time to escape.', canvas.width/2-185, 225); 
+       
+        ctx.fillText("Use arrow keys to move around, and press 'P' to pause.", canvas.width/2-185, 260); 
+
+        //ctx.fillText("To show/hide instrucctions press 'I'", canvas.width/2-190, 400); 
+
+        ctx.textAlign = 'center';
+        ctx.font = "10px Verdana";
+        ctx.strokeStyle="#FFF";
+        
+        ctx.fillText('Up', canvas.width/2, 305); 
+        roundedRect(ctx, canvas.width/2-22.5, 280, 45, 45, 10);
+
+        ctx.fillText('Left', canvas.width/2-50, 356);
+        roundedRect(ctx, canvas.width/2-72.5, 330, 45, 45, 10);
+        
+        ctx.fillText('Down', canvas.width/2, 356);
+        roundedRect(ctx, canvas.width/2-22.5, 330, 45, 45, 10);
+
+        ctx.fillText('Right', canvas.width/2+50, 356);        
+        roundedRect(ctx, canvas.width/2+27.5, 330, 45, 45, 10);
+
+        resetStyles();
+    }
+
+    function drawGrid(){
+
+        // Vertical lines
+        for (var x = 0; x < canvas.width; x += blockSize) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.strokeStyle = '#000';
+            ctx.stroke();
+        }
+
+        // Horitzontal lines
+        for (var y = 0; y < canvas.height; y += blockSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.strokeStyle = '#000';
+            ctx.stroke();
+        }
+    }
+	
+	function drawMaze() {
+        var i = 0, l = 0;
+
+		for (i = 0, l = wall.length; i < l; ++i) {
+            ctx.drawImage(iHedge, blockSize*(wall[i].t), 0, blockSize, blockSize, wall[i].left - cam.x, wall[i].top - cam.y, blockSize, blockSize);
+        }
+
+        for (i = 0, l = terrain.length; i < l; ++i) {
+            ctx.drawImage(iTerrain, terrain[i].left-cam.x, terrain[i].top-cam.y);
+        }
+
+        for (i = 0, l = water.length; i < l; ++i) {
+            ctx.drawImage(iWater, blockSize*(water[i].t), 0, blockSize, blockSize, water[i].left - cam.x, water[i].top - cam.y, blockSize, blockSize);
+        }
+	}
+	
+	function drawMiniMap(){
+		var miniMapBorder = 5;
+		var miniMapLeft = 10;
+		var miniMapTop = canvas.height-mazeMap.gridW*miniMapScale-10-miniMapBorder; 
+		
+		ctx.fillStyle="white";
+		ctx.fillRect(miniMapLeft, miniMapTop, mazeMap.gridH * miniMapScale+10, mazeMap.gridW*miniMapScale+10);
+
+        ctx.fillStyle="#E8E0A0";
+        ctx.fillRect(miniMapLeft+miniMapBorder, miniMapTop+miniMapBorder, mazeMap.gridH * miniMapScale, mazeMap.gridW*miniMapScale);
+		
+		ctx.fillStyle="black";
+		for (var i = 0, l = wall.length; i < l; i += 1) {
+            ctx.fillRect((wall[i].left/blockSize)*miniMapScale+miniMapLeft+miniMapBorder, (wall[i].top/blockSize)*miniMapScale+miniMapTop+miniMapBorder, miniMapScale, miniMapScale);
+        }
+		
+        // Player
+        ctx.fillStyle="red";
+		ctx.beginPath();
+		ctx.arc((player.left/blockSize)*miniMapScale+miniMapLeft+miniMapBorder+1, (player.top/blockSize)*miniMapScale+miniMapTop+miniMapBorder+1,2,0,2*Math.PI);
+		ctx.fill();
+
+        // Snorkel
+        ctx.fillStyle="green";
+        ctx.beginPath();
+        ctx.arc((snorkel.left/blockSize)*miniMapScale+miniMapLeft+miniMapBorder+1, (snorkel.top/blockSize)*miniMapScale+miniMapTop+miniMapBorder+1,2,0,2*Math.PI);
+        ctx.fill();
+
+        // Flipper
+        ctx.beginPath();
+        ctx.arc((flipper.left/blockSize)*miniMapScale+miniMapLeft+miniMapBorder+1, (flipper.top/blockSize)*miniMapScale+miniMapTop+miniMapBorder+1,2,0,2*Math.PI);
+        ctx.fill();
+		
+		ctx.fillStyle="#FFF";
+	}
+
+    function drawElapsedTime(){
+        ctx.fillStyle="black";
+        ctx.fillRect(canvas.width/2-37, 5, 74, 42);
+        ctx.fillStyle="white";
+        ctx.fillRect(canvas.width/2-32, 10, 64, 32);
+        ctx.fillStyle='black';
+        ctx.textAlign='center';
+        ctx.font='20px arial';
+        ctx.fillText(convertTime(elapsedTime), canvas.width/2, 32);
+
+        resetStyles();
+    }
+	
+	function draw() {
+        // Draw background canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Terrain
+        drawMaze();
+
+        // Draw Player
+        if(moving){
+            ctx.drawImage(iPlayer, blockSize*dir, (~~(elapsedTime*10)%3)*48, blockSize, 48, player.left - cam.x, player.top - cam.y, blockSize, 48);
+        }
+        else{
+            ctx.drawImage(iPlayer, blockSize*dir, 96, blockSize, 48, player.left - cam.x, player.top - cam.y, blockSize, 48);
+        }
+        
+
+        // Draw box
+        if(!hasMiniMap){
+            ctx.drawImage(iBox, box.left-cam.x, box.top-cam.y);
+        }
+        
+        // Draw snorkel
+        if(!hasSnorkel && hasMiniMap){
+            ctx.drawImage(iSnorkel, snorkel.left-cam.x, snorkel.top-cam.y);
+        }
+        
+        // Draw flipper
+        if(!hasFlipper && hasMiniMap){
+            ctx.drawImage(iFlipper, flipper.left-cam.x, flipper.top-cam.y);
+        }
+
+        // Draw Information
+        if(endTimeInformation > elapsedTime){
+            drawInformation();
+        }
+        
+        // Draw Pop Up Messages
+        if(endTimePopUp > elapsedTime){
+            drawPopUp();
+        }
+
+        // Draw mini Map
+        if(hasMiniMap && showMiniMap){
+           drawMiniMap();
+        }
+
+        // Draw start/pause/gameover
+        if (pause) {
+            ctx.textAlign = 'center';
+            if(start){
+                drawStart();
+            }
+            else if(end){
+                drawEnd();
+            }
+            else if (gameover) {
+                drawGameOver();
+            } else {
+                drawPause();
+            }
+            ctx.textAlign = 'left';
+        }
+
+        drawElapsedTime();
+
+        /*
+        // FOR DEBUG
+        // Draw FPS
+        ctx.fillStyle = '#FFF';
+        ctx.fillText('FPS: ' + FPS, 10, 15);
+
+        // Draw lastKeyPress
+        ctx.fillStyle = '#FFF';
+        ctx.fillText('LastKeyPress: ' + lastKeyPress, 10, 30);
+
+        // Draw player position
+        ctx.fillText('Player: (' + player.left +", "+ player.top + ")", 10, 45);
+               
+        drawGrid();
+        */
+    }
+	
+	function intersectsWall(object) {
+		for (var i = 0, l = wall.length; i < l; i += 1) {
+            if (object.intersects(wall[i])) {
+                return true;
+            }
+        }
+		return false;
+	}
+	
+	function boxIntersects(){
+            triggerPopUp("Well, Mini Map found!", "You can show/hide the Map pressing 'M' \n \n Now, you should search a snorkel and a flipper", 3);
+            hasMiniMap = true;
+    }
+
+    function snorkelIntersects(){
+            var msg = "Now, you should search the exit, a small lake.";
+            if(!hasFlipper){
+                msg = "Now, you should search a flipper.";
+            }
+            triggerPopUp("Well, Snorkel found!", msg, 3);
+            hasSnorkel = true;
+    }
+
+    function flipperIntersects(){
+            var msg = "Now, you should search the exit, a small lake.";
+            if(!hasSnorkel){
+                 msg = "Now, you should search a snorkel.";
+            }
+
+            triggerPopUp("Well, Flipper found!", msg, 3);
+            hasFlipper = true;
+    }
+
+    function waterIntersects() {
+        if (player.intersects(water[0])) {
+            if(hasSnorkel && hasFlipper){
+                end = true;
+                pause = true;
+            }
+            else{
+                gameover = true;
+                gameoverMsg = "You need a snorkel and a flipper, to become an Explorer!";
+                pause = true;
+
+            }
+        }
+    }
+
+    function triggerInformation(time){
+        endTimeInformation = elapsedTime + time;  //seconds
+    }
+	
+	function triggerPopUp(title, message, time){
+        endTimePopUp = elapsedTime + time;  //seconds
+        popUpTitle = title;
+        popUpMessage = message;
+    }
+	
+	function act(deltaTime) {
+        var i = 0, l = 0;
+
+        gTime += deltaTime;
+
+        if (!pause) {
+            if(elapsedTime > timeLimit * 60){
+                gameover = true;
+                gameoverMsg = "You have run out of time!";
+                pause = true;
+            }
+
+            // Increment elapsedTime
+            elapsedTime += deltaTime;
+            
+            // Move Player
+            if (pressing[KEY_UP]) {
+                dir = 2;
+                moving = true;
+                player.top -= 120 * deltaTime;
+                
+                for (i = 0, l = wall.length; i < l; i += 1) {
+                    if (player.intersects(wall[i])) {
+                        player.top = wall[i].bottom;
+                    }
+                }
+                                
+                if (!hasMiniMap && player.intersects(box)) {
+                    boxIntersects();
+                    player.top = box.bottom;
+                }
+
+                if (!hasSnorkel && hasMiniMap && player.intersects(snorkel)) {
+                    snorkelIntersects();
+                    player.top = snorkel.bottom;
+                }
+
+                if (!hasFlipper && hasMiniMap && player.intersects(flipper)) {
+                    flipperIntersects();
+                    player.top = flipper.bottom;
+                }
+				
+                waterIntersects();
+            }
+            if (pressing[KEY_RIGHT]) {
+                dir = 1;
+                moving = true;
+                player.left += 120 * deltaTime;
+                
+                for (i = 0, l = wall.length; i < l; i += 1) {
+                    if (player.intersects(wall[i])) {
+                        player.right = wall[i].left;
+                    }
+                }
+				
+                if (!hasMiniMap && player.intersects(box)) {
+                    boxIntersects();
+                    player.right = box.left;
+                }
+
+                if (!hasSnorkel && hasMiniMap && player.intersects(snorkel)) {
+                    snorkelIntersects();
+                    player.right = snorkel.left;
+                }
+
+                if (!hasFlipper && hasMiniMap && player.intersects(flipper)) {
+                    flipperIntersects();
+                    player.right = flipper.left;
+                }
+				
+                waterIntersects();
+            }
+            if (pressing[KEY_DOWN]) {
+                dir = 0;
+                moving = true;
+                player.top += 120 * deltaTime;
+                
+                for (i = 0, l = wall.length; i < l; i += 1) {
+                    if (player.intersects(wall[i])) {
+                        player.bottom = wall[i].top;
+                    }
+                }
+				
+                if (!hasMiniMap && player.intersects(box)) {
+                    boxIntersects();
+                    player.bottom = box.top;
+                }
+
+                if (!hasSnorkel && hasMiniMap && player.intersects(snorkel)) {
+                    snorkelIntersects();
+                    player.bottom = snorkel.top;
+                }
+
+                if (!hasFlipper && hasMiniMap && player.intersects(flipper)) {
+                    flipperIntersects();
+                    player.bottom = flipper.top;
+                }
+
+			    waterIntersects();			
+            }
+            if (pressing[KEY_LEFT]) {
+                dir = 3;
+                moving = true;
+                player.left -= 120 * deltaTime;
+                
+                for (i = 0, l = wall.length; i < l; i += 1) {
+                    if (player.intersects(wall[i])) {
+                        player.left = wall[i].right;
+                    }
+                }
+			
+                if (!hasMiniMap && player.intersects(box)) {
+                    boxIntersects();
+                    player.left = box.right;
+                }
+
+                if (!hasSnorkel && hasMiniMap && player.intersects(snorkel)) {
+                    snorkelIntersects();
+                    player.left = snorkel.right;
+                }
+
+                if (!hasFlipper && hasMiniMap && player.intersects(flipper)) {
+                    flipperIntersects();
+                    player.left = flipper.right;
+                }
+				
+                waterIntersects();
+            }
+
+            // Focus player
+            cam.focus(player.left, player.top);
+        }
+        
+        // Pause/Unpause
+        if (!start && lastKeyPress === KEY_PAUSE) {
+            pause = !pause;
+            lastKeyPress = null;
+        }
+
+        // Start
+        if (lastKeyPress === KEY_ENTER) {
+            pause = false;
+            start = false;
+            triggerInformation(1);
+        }
+
+        // Restart
+        if (lastKeyPress === KEY_ESC && (end || gameover)) {
+            reset();
+        }
+
+        // Show/hide Map
+        if (lastKeyPress === KEY_M) {
+            showMiniMap = !showMiniMap;
+            lastKeyPress = null;
+        }
+    }
+
+    function run() {
+        window.requestAnimationFrame(run);
+
+        var now = Date.now();
+        var deltaTime = (now - lastUpdate) / 1000;
+       
+	   if (deltaTime > 1) {
+            deltaTime = 0;
+        }
+      
+        lastUpdate = now;
+
+        frames += 1;
+        acumDelta += deltaTime;
+      
+        if (acumDelta > 1) {
+            FPS = frames;
+            frames = 0;
+            acumDelta -= 1;
+        }
+
+        act(deltaTime);
+        draw(ctx);
+    }
+
+    function init() {
+        // Get canvas and context
+        canvas = document.getElementById('canvas');
+        ctx = canvas.getContext('2d');
+	
+		// Create maze
+		mazeMap = new Maze(mazeW, mazeH, 'random', 1, 1);
+
+        // Create player
+        player = new Rect(32, 32, 32, 48, true);
+
+        // Create camera
+        cam = new Camera();
+        
+        // Load assets
+        iPlayer.src="data:image/png;base64,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";
+        iHedge.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAAgBAMAAACRPbx3AAAAG1BMVEVjoQhCaDFOgS5DTzTs4Z5+oWVShimrwZuduIuWuGvCAAABb0lEQVRYw+2W0W3DMAxEvQJX4IcXYDcoVxDaCbL/CLVNsTTPkPSTj8gJgURg7k73voQsRLz8DxMVGN0n1ouU80Ik+T6LRyDrQnAh1v2+OuDPBZCPldnPI8Cxx8lWyD1ApqOPzV+ugDUe+sn/WFfmFwZc18djU4WW05AsMKqy38H4O1d65pzP9zHXvH1EtdXnOvbdAFBKmBGyqMYWgJgPvzQAQ3f/jQBLMgBPGQKWQsnf7jN977sXIBG3AZloBIjPWLePaRueDBAfTmSQLuC4QDKgIDDeJx/AtwfEPwV4Ie7uq6s4QStveqyj/IyAacaAPkYjYszNvOvu7+dnAMSH0yqJ/ES94feUSE2280QBP87PCJhmCAjuUqSfz7oUcKsm/Q0BVQeAWRf9AGbzXiB9QJXEg3ybPhng5SEVa/ITH3LY3W9jBTaNvBnCnvJ6TMrPB2jmOEeA5rPvLyv4jl+ueSMInnNe65zzTwHEgmcC/gH6RX76kijJGgAAAABJRU5ErkJggg==";
+        iTerrain.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAABlBMVEXo4KDg0IjxduBXAAAAGUlEQVQI12PADpjhhP0HGIEANhACE1DfNADTmwW5FdeXSQAAAABJRU5ErkJggg==";
+        iBox.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAclBMVEV9a1aTgWmEc12IdVx3Z1KNemObiXFtXkxmWUd1ZlViVUWij3egi3KZhmyumHySf2e5o4e0noKlkXenkHJ/bliMeWJmWUZvX0yGc1t5aVSciXJiVEN0ZVCYgmbCq469p4pbTz9USTpANy3HsJJJPjHSuZmJIsQ7AAAADHRSTlPy8vLy8vLy8vLl5fL9zNouAAACIElEQVQ4y13Ti3LaQAwFUJPSvKrHriztw15jQ9L//8VqbVrS3AHGC2euZAaG99PL8PQvw+O6v/369DZYsLiGntifMayefqR4CQw4vBoSUfRPBOIeZ36mIBiFz8M5iCamSQRxmhAAPVMP1gzhNAwfePtstd6u/tI0bS031ZpTbdu8gwvkXBbUq8rEsc4jEBlwIZwxkoMQSl4QRtuQJJoShWBuAyTu4HyJPkt5HHVDIWQSCki4gxAdrMHby4wurkzAAvIFHCOuW7G0jGPdwIE3TF/BJWjyjkV9D03mIAYhth2EO7A8N+ybllnJARH3Bou071CSZv7MiC4sI3mDAEZvEHgeBge9uOa27GJGbzgAinQQHYAUzHnpU+oNL3IsiTIdDTOPoIJZkQ0o3yQeS8JUfvmS1BKPWH1u1t5BdZuild5AfcSHpOygiRDPut8LzwDWwfE9RD0aiMRawQVcZNt3iDu47wBEIJDq0oXedIXEDwBSOsBoV/WOccxXIAf0HdCks8LCfUrJTHeQOuApAkRm3BTMXKQNiR47WLEwOTDCpMAARa+PEb2a2RsIi8iUFYFY62MEEjaYSCA6APR7QRyxHSPW1WbznRAIkUwFjHhrC5eMoYMPyHNqec61tlzzXFvVmm65tlSm6OD35LfOPfb3gf2MrNn8F/VCYDj+F1SkHmChYcgZ1uineE//27KE/XIVs+H9afjxLafn0889p/P57Q+3tkPvjEz4SgAAAABJRU5ErkJggg==";
+        iWater.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAAAgBAMAAAAoDG0WAAAALVBMVEXs4Z5s1ON71+Zd0OKD2+iS3+tEy95QzeCh5O/n0YWu6PK17PXM7/UxxtsAwdcbSYTpAAAC8UlEQVRIx42VP2/TQBiH038wsPQudjIh9c52oVvOTuyqU+LYadQJOzkRUSHVdXFgo3VJxEZKI1VlAiHRbm3USkgsCKkLbExd+RJ8DkrP5m1pLeXdHj3JT+/d67vL5XLTnFLKHczJjkQlR1GBZ3Pj1JSDkL5bqQ2LvwnBhBnAc2MF3EHyaNXc8PLbx1iijzcKwGN2wLTv573YkU/PvSZbehoDPxqvA50v/rSsQN1FnVGgKybw9YDDawQ8kXejvGGEHjMXCbr/qgZcgl//768ETHbrYSGONR8VYoOU6zbw639d3vQLhxclAnSzR62+S9x2FCBWoMAv0v/f5hfSgBmKmlzpuzWJFwKE8i5wOoXbfdreNEKrbUr5fGi4BpF4G7ia7NLtfi0dIyZOZyi3l61I82LsKsDJh5Tl0wDJbqunsdTqx7hY9iUFeFa0mOVfJkugqmPahUCJLdRbGrkOsAiYzPKlZIx2QONNJaxvFcm6Jw10YLGEbJ9skbLtrRNi1CpICYnRCoBFQLZPhhzQelfFxNJxRILKKAIW+5ztc6Iwyvd0RvMS+nzGJC8EFpuc7Y9EACLmpvzAoG12yihFCFgsMdsnAUSytaEXohbtMcx9GVh8qdk+meNU4O8jx2kOh4b3jNfkespvRIBg8MDJHD8Fvsao2tzXvmGNK7yY8pwIEAwe+GtyMZSdiCHk7Px6MlDbez8aKQt9TzB44MsL5+JQfihGm6S8dxwtemqRN99iwUci/kAweOBSEnBoGlgp28RiqsMIU7ngpL/3gsEDl3JwIJHW2DIdJKtKRN36X66mt4lg8MDVXFqTBiU26aN82c5vDIIiNehc6qYFgwe+PGzJvcQKkmOF+EQlHS88wV24ew8u+YoHXoMAqBv80W28W+6iLsGBS/jD2i5wNTdO3ZUbz89M1lJ0/UtNUzvLwEfjPTwRs8rIrxsy91dUb2UeeLyXayKkhRD73ahCiYNqlQHweI/vDKZEpYRh5EtctSkHvpjCHwc2btRPk0r2AAAAAElFTkSuQmCC";
+        iSnorkel.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAABCFBMVEUAAAAmrOEpqOHwUnF5h7QpqeFHteUrqODwUm8pquFTlskpqeLuT3EAa6zpVnXaJS3wU3E9suXwUnHCaIw8odajdJyJgKvxU3EAbKwAbKzyUXIflM3wU3Etp98zpdu8aY7p9/ySfKZ8aZGf2fK44/YpquLwUnDwUnAAa6wAbKzwU3HwU3EpqeIAa6rgICrgICbiWXgqqOAVZJ4nXpQAbKw0WozOLjk/mMqDze0gaKTH6Pdlj8BLZJuKb5pkaJrUKDIAbKydUmoAbK3gISbKLzxgf6g1Zp+9XIDwU3EoquEAba3VKjEpqeLwU3EoquLfICaOXHnuVXMpqN/fICUpqeEAbKzgICbwU3FwKS4MAAAAVHRSTlMAJ5DAwPXk18zGwbga9fTv7evi18zJw7OPJyUP+d/VzcvEwsG/qKJwYVlSTEo5DPjw6+Le0M/LycfGwL+/v7q5tquhlZGPj46IeHNzcWZgVz08ODDDQJuyAAABB0lEQVQ4y+2R15KCQBBFW9chCyxRMa3umlc355xzbuD//2QpFCwphjffPE89dU913eoBCuMt7w4yeTj6zhbymFsKKcJHZyXG7jpJQeLkhmkVJlhN3e8mBFuv4YxjNOSfOUHyDZyxvrHKmJyiKH+xMKxOM1IP8zVGUD3P+4oFx6+HudE6v9hhghwt7aZ1P4YYzSRBLpy4bvGSPWWQ3X6eLzmo6mdC49ENKD41hYKsSYk7DDm140ApyEcw4FRbolyyXyov9rPC/a89unC7X4a+O6ILleu9g91eZoerw7fskp+4GY0iQgo5FKOJ8JBGG/OVMGejXcmePBJeFFnEF6DwzhPEWvs3ev8DYewxqtqdaN0AAAAASUVORK5CYII=";
+        iFlipper.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAABC1BMVEUAAAAmp98oqeInqeEjpOAnp+AAa6woqeErqt8pqeIoquElo9wqquP72xLf1S1IscEpqeEpqeEoquGLwIEpquElod4rreL83BH62xOUw3UdmdMOgb4wq9rv2B382xE0rNcEb607rtCzyliuyV7Y0zT82xEoqeDR0TxXtLTKz0O+zU52vJUpquEpqeIAbKwoquL83BAoqOIAa6z93RL/3A0AbK0pqeHIz0Zit6nu2B9xuprs1yCrx2Bel3YXj8rt2CD93BH/2xBGr8VUs7Ufm9QIebb92xEaeJxlt6ZOsrwAbKyvyFtluKZEr8YpfZLDxTwKe7gMcqba1DTCzEZwnWf/4xwpqeH82xEAbKz5HmpzAAAAVnRSTlMAiZ9mCFT27uWpfS0b+uXGRfXQw3M3EuvgwsHB9/Hl1dLNzcrFxcPDwsHAv7iPdl5dPDspE+nb1dPRzcLArKiGch/d2tbT0sLAsK+tqZl8e3pnWVA5CY69nyUAAAHeSURBVDjLZZN5Q+JADMUpvaHlqJRTVkRwUVhURPdwXd379jbD9/8kvmQG1Pr+yUvym8y00+ZEaWiFe9q6tYPcCxULDjo2XH1SSd28kwXyxel0OgvhrCjnzNxaFigcLSALC8PZH2/hWVnAWrA+1eE8cWkG2BagXcQsAb6HGSDRAI5vd8Rm90ilegV30BZ7nQHupHrB1hb78/Nz4FKqp+J7bHsnz4FBx/O8XuuQ/Sn6R+3++dP+YYlYa2ec7HQ634hGsdBG5wb4wUkzYB+o4RNgaADFR3s1kqSk9lf9uepWCdpCDUCfvd9Vf1fAjVJb5XJ5HKszBuJN2hiXVIPc1U38Ulo728gaSsWcvKZkCYQYzmqu+8h+v9X0LlFleVVUXpYcxlt6HNHEAMfkS+kDEd8nVUt6C05FeAQeG68Tn6tCtMnAAMAb6dfhxqi8R8S3FiG0TBoIUIQbmZkWch8NM5BS5DxTTrlrZk4Q+8jfyQJoj/SuHw1g8QKTHzNgw2yg0ELMI3cRq12lTgiKBNCbrhkg0henGhwrZosqvwYBoERGNhtfEW3zFNTcH/KhCgwUCBrcz//JBMiHuc3NvyC48mK48B97JYGl/0yixJEQIEA1mfUox7YjCTUEvcTP15fdB3OwkuY53kDZAAAAAElFTkSuQmCC";
+
+        // Set initial map
+        setMap();
+		
+		 // Create box
+        var x = getRandomInt(64, canvas.width-blockSize);
+        var y = getRandomInt(96, canvas.height-blockSize);
+        box = new Rect(x, y, blockSize, blockSize, true);
+        
+        while(x%blockSize !== 0 || y%blockSize !== 0 || intersectsWall(box)){
+            x = getRandomInt(64, canvas.width-blockSize);
+            y = getRandomInt(96, canvas.height-blockSize);
+            box = new Rect(x, y, blockSize, blockSize, true);
+        }
+
+        // Create equipment
+        x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+        y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+        snorkel = new Rect(x, y, blockSize, blockSize, true);
+
+        while(x%blockSize !== 0 || y%blockSize !== 0 || intersectsWall(snorkel) || snorkel.intersects(box)){
+            x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+            y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+            snorkel = new Rect(x, y, blockSize, blockSize, true);
+        }
+
+        x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+        y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+        flipper = new Rect(x, y, blockSize, blockSize, true);
+
+        while(x%blockSize !== 0 || y%blockSize !== 0 || intersectsWall(flipper) || flipper.intersects(box) || flipper.intersects(snorkel)){
+            x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+            y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+            flipper = new Rect(x, y, blockSize, blockSize, true);
+        }
+				        
+        // Start game
+        run();
+    }
+	
+    function reset(){
+        // Reset Variables
+        lastUpdate = 0;
+        FPS = 0;
+        frames = 0;
+        acumDelta = 0;
+        gTime = 0;
+        elapsedTime=0;
+
+        lastKeyPress = null;
+        pressing = [];
+        pause = true;
+        gameover = false;
+        start = true;
+        end = false;
+        moving = false;
+    
+        mazeMap = null;
+        cam = null;
+        wall = [];
+        terrain = [];
+        water = [];
+        box = null;
+        flipper = null;
+        snorkel = null;
+        player = null;
+        dir = 0;
+        
+        hasMiniMap = false;
+        hasFlipper = false;
+        hasSnorkel = false;
+        showMiniMap = true;
+        endTimePopUp = 0;
+        popUpTitle  = '';
+        popUpMessage = '';
+        endTimeInformation = 0;
+
+        // Create maze
+        mazeMap = new Maze(mazeW, mazeH, 'random', 1, 1);
+
+        // Create player
+        player = new Rect(32, 32, 32, 48, true);
+
+        // Create camera
+        cam = new Camera();
+    
+        // Set initial map
+        setMap();
+        
+         // Create box
+        var x = getRandomInt(64, canvas.width-blockSize);
+        var y = getRandomInt(96, canvas.height-blockSize);
+        box = new Rect(x, y, blockSize, blockSize, true);
+        
+        while(x%blockSize !== 0 || y%blockSize !== 0 || intersectsWall(box)){
+            x = getRandomInt(64, canvas.width-blockSize);
+            y = getRandomInt(96, canvas.height-blockSize);
+            box = new Rect(x, y, blockSize, blockSize, true);
+        }
+
+        // Create equipment
+        x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+        y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+        snorkel = new Rect(x, y, blockSize, blockSize, true);
+
+        while(x%blockSize !== 0 || y%blockSize !== 0 || intersectsWall(snorkel) || snorkel.intersects(box)){
+            x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+            y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+            snorkel = new Rect(x, y, blockSize, blockSize, true);
+        }
+
+        x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+        y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+        flipper = new Rect(x, y, blockSize, blockSize, true);
+
+        while(x%blockSize !== 0 || y%blockSize !== 0 || intersectsWall(flipper) || flipper.intersects(box) || flipper.intersects(snorkel)){
+            x = getRandomInt(64, (mazeMap.gridH-4) * blockSize);
+            y = getRandomInt(96, (mazeMap.gridW-4) * blockSize);
+            flipper = new Rect(x, y, blockSize, blockSize, true);
+        }
+    }
+
+    window.addEventListener('load', init, false);
+
+	window.requestAnimationFrame = (function () {
+        return window.requestAnimationFrame ||
+            window.webkitRequestAnimationFrame ||
+            window.mozRequestAnimationFrame ||
+            function (callback) {
+                window.setTimeout(callback, 17);
+            };
+    }());
+	
+    document.addEventListener('keydown', function (evt) {
+        lastKeyPress = evt.which;
+        pressing[evt.which] = true;
+    }, false);
+
+    document.addEventListener('keyup', function (evt) {
+        pressing[evt.which] = false; moving = false;
+    }, false);
+
+}(window));</script>
+</body>
+</html>
+	

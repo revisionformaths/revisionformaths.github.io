@@ -222,6 +222,9 @@ function titles(document) {
     const { window } = local;
     const { document: page } = window;
     const cards = Array.from(page.querySelectorAll(".file-card"));
+    // Captured before any search runs: a search deliberately builds the rest.
+    const firstBatch = cards.length;
+    const moreWasVisible = page.querySelector("[data-files-more]").hidden === false;
 
     check("the local page is a Classroom tab", page.title === "Classroom");
 
@@ -241,7 +244,7 @@ function titles(document) {
       "local search only returns local HTML games",
       Array.from(page.querySelectorAll(".file-card"))
         .filter((card) => !card.hidden)
-        .every((card) => /^assets\/games\/[A-Za-z0-9._-]+\.html?$/.test(card.getAttribute("data-file")))
+        .every((card) => /^assets\/games\/(?:js13k\/)?[A-Za-z0-9._-]+\.html?$/.test(card.getAttribute("data-file")))
     );
     check("local search finds the new basketball game", page.querySelector('[data-file="assets/games/basket-random.html"]').hidden === false);
     type(window, page.querySelector("#fq"), "minecraft");
@@ -251,9 +254,18 @@ function titles(document) {
     );
     type(window, page.querySelector("#fq"), "");
     check(
+      "the first batch of cards paints immediately",
+      firstBatch > 0 && firstBatch <= 120 && moreWasVisible,
+      String(firstBatch)
+    );
+    // "Show more" until the whole library is on the page.
+    for (let guard = 0; guard < 200 && !page.querySelector("[data-files-more]").hidden; guard += 1) {
+      click(window, page.querySelector("[data-files-more]"));
+    }
+    check(
       "every local title gets a card",
-      cards.length === 129 && cards.length === page.querySelectorAll("[data-open-file]").length,
-      String(cards.length)
+      page.querySelectorAll("[data-open-file]").length === window.LOCAL_GAMES.length,
+      page.querySelectorAll("[data-open-file]").length + " of " + window.LOCAL_GAMES.length
     );
     check(
       "the cards name their games",
@@ -262,7 +274,7 @@ function titles(document) {
     check(
       "a card plays a file in the folder",
       Array.from(page.querySelectorAll("[data-open-file]")).every((b) =>
-        /^assets\/games\/[A-Za-z0-9._-]+\.html?$/.test(b.getAttribute("data-open-file"))
+        /^assets\/games\/(?:js13k\/)?[A-Za-z0-9._-]+\.html?$/.test(b.getAttribute("data-open-file"))
       )
     );
     check(

@@ -1,0 +1,2036 @@
+<!DOCTYPE HTML>
+<html lang="en">
+	<head>
+		<title>Rogue-19</title>
+		<meta charset="UTF-8" />
+		<style>html,body,canvas {
+	margin: 0;
+	padding: 0;
+	cursor: none;
+	height: 100%;
+	overflow: hidden;
+}
+
+body {
+	background-color: #111;
+	color: #eee;
+	font-family: Segoe UI;
+	font-size: 1.5em;
+	width: 100%;
+}
+
+canvas {
+	width: 100%;
+}
+</style>
+		
+	</head>
+	<body>
+		<canvas></canvas>
+		<script>const Nucleus = {};
+
+Nucleus.Model = (() => {
+	function isFunction(obj) {
+		return typeof(obj) === 'function';
+	}
+
+	function getEmptyArray(size) {
+		let arr = [];
+		arr.length = size;
+		return arr;
+	}
+
+	function getEmptyArray2d(sizeX, sizeY) {
+		let arr = getEmptyArray(sizeX);
+		for (let i = 0; i < arr.length; i++) {
+			arr[i] = getEmptyArray(sizeY);
+		}
+
+		return arr;
+	}
+
+	function getEmptyArray3d(sizeX, sizeY, sizeZ) {
+		let arr = getEmptyArray(sizeX);
+		for (let i = 0; i < arr.length; i++) {
+			arr[i] = getEmptyArray(sizeY);
+			for (let j = 0; j < arr[i].length; j++) {
+				arr[i][j] = getEmptyArray(sizeZ);
+			}
+		}
+
+		return arr;
+	}
+
+	function getBit(value, index) {
+		return (value >> index & 1) == 1;
+	}
+
+	return {
+		isFunction,
+		getEmptyArray,
+		getEmptyArray2d,
+		getEmptyArray3d,
+		getBit
+	};
+})();
+
+Nucleus.Clock = (() => {
+	const DEFAULT_FRAME_RATE = 30;
+	let active = false;
+	const instant = {
+		frame: 0,
+		tick: 0,
+		lastTick: 0,
+		elapsed() {
+			return this.tick - this.lastTick;
+		},
+		fps() {
+			const e = this.elapsed();
+			return e > 0 ? (1000 / e) : 60;
+		}
+	};
+	let hook = undefined;
+
+	function raf(e) {
+		const func = window.requestAnimationFrame ||
+			window.mozRequestAnimationFrame ||
+			window.webkitRequestAnimationFrame ||
+			window.msRequestAnimationFrame ||
+			function(e) {
+				return setTimeout(e, parseInt(1000 / DEFAULT_FRAME_RATE));
+			};
+		return func(e);
+	}
+
+	function start(callback) {
+		if (!active) {
+			active = true;
+			if (callback) {
+				if (Nucleus.Model.isFunction(callback)) {
+					hook = callback;
+				} else {
+					hook = undefined;
+					console.warn('Callback Must Be A Function:', callback);
+				}
+			} else {
+				hook = undefined;
+			}
+
+			instant.lastTick = instant.tick;
+			instant.frame = raf(loop);
+			console.log('Clock Started');
+		} else {
+			console.warn('Clock Is Already Started');
+		}
+	}
+
+	function stop() {
+		if (active) {
+			active = false;
+			console.log('Clock Stopped');
+		} else {
+			console.warn('Clock Is Already Stopped');
+		}
+	}
+
+	function loop(tick) {
+		if (active) {
+			instant.lastTick = instant.tick;
+			instant.tick = tick;
+			instant.frame = raf(loop);
+			if (hook) {
+				hook(instant);
+			}
+		}
+	}
+
+	function isActive() {
+		return active;
+	}
+
+	function getInstant() {
+		return instant;
+	}
+
+	return {
+		start,
+		stop,
+		isActive,
+		getInstant
+	};
+})();
+
+Nucleus.Keys = (() => {
+	let keyBindings = null;
+
+	function handleKeyDown(e) {
+		keyBindings[e.keyCode] = e;
+	}
+
+	function handleKeyUp(e) {
+		keyBindings[e.keyCode] = undefined;
+	}
+
+	function start() {
+		keyBindings = Nucleus.Model.getEmptyArray(256);
+		window.addEventListener('keydown', handleKeyDown);
+		window.addEventListener('keyup', handleKeyUp);
+	}
+
+	function stop() {
+		window.removeEventListener('keydown', handleKeyDown);
+		window.removeEventListener('keyup', handleKeyUp);
+		keyBindings = null;
+	}
+
+	function checkCode(keyCode) {
+		return keyBindings[keyCode] != undefined;
+	}
+
+	function checkKey(key) {
+		return !!keyBindings.find(el => {
+			return el && (el.key.toLowerCase() === key.toLowerCase());
+		});
+	}
+
+	function isShift() {
+		return checkCode(16);
+	}
+
+	function isControl() {
+		return checkCode(17);
+	}
+
+	function isAlt() {
+		return checkCode(18);
+	}
+
+	return {
+		start,
+		stop,
+		checkCode,
+		checkKey,
+		isShift,
+		isControl,
+		isAlt
+	};
+})();
+
+Nucleus.Cryo = class {
+	constructor() {
+	}
+
+	static getAll(namespace = '', persist = true) {
+		const prefix = namespace ? namespace + '.' : '';
+		const storage = Nucleus.Cryo.#getStorage(persist);
+		const all = {};
+		for (let i = 0; i < storage.length; i++) {
+			const key = storage.key(i);
+			if (key.startsWith(prefix)) {
+				const value = storage.getItem(key);
+				const model = JSON.parse(value);
+				all[key] = model;
+			}
+		}
+
+		return all;
+	}
+
+	static get(key, namespace = '', persist = true) {
+		const keyToUse = Nucleus.Cryo.#getKey(key, namespace);
+		const storage = Nucleus.Cryo.#getStorage(persist);
+		const value = storage.getItem(keyToUse);
+		return JSON.parse(value);
+	}
+
+	static set(key, model, namespace = '', persist = true) {
+		const keyToUse = Nucleus.Cryo.#getKey(key, namespace);
+		const storage = Nucleus.Cryo.#getStorage(persist);
+		const value = JSON.stringify(model);
+		storage.setItem(keyToUse, value);
+	}
+
+	static remove(key, namespace = '', persist = true) {
+		const keyToUse = Nucleus.Cryo.#getKey(key, namespace);
+		const storage = Nucleus.Cryo.#getStorage(persist);
+		storage.removeItem(keyToUse);
+	}
+
+	static removeByNamespace(namespace = '', persist = true) {
+		const prefix = namespace ? namespace + '.' : '';
+		const storage = Nucleus.Cryo.#getStorage(persist);
+		for (let i = storage.length - 1; i >= 0; i--) {
+			const key = storage.key(i);
+			if (key.startsWith(prefix)) {
+				storage.removeItem(key);
+			}
+		}
+	}
+
+	static removeAll(persist = true) {
+		const storage = Nucleus.Cryo.#getStorage(persist);
+		storage.clear();
+	}
+
+	static #getStorage(persist = true) {
+		return persist ? localStorage : sessionStorage;
+	}
+
+	static #getKey(key, namespace = '') {
+		const prefix = namespace ? namespace + '.' : '';
+		return prefix + key;
+	}
+};
+</script>
+		<script>// URGE (Update Render Game Engine)
+const Urge = (() => {
+	const ABSTRACT_ERROR = 'Abstract Class Cannot Be Instantiated';
+
+	function $(s) {
+		return document.querySelector(s);
+	}
+
+	class Dimension {
+		#width;
+		#height;
+
+		constructor(width, height) {
+			this.#width = width;
+			this.#height = height;
+		}
+
+		getWidth() {
+			return this.#width;
+		}
+
+		getHeight() {
+			return this.#height;
+		}
+	}
+
+	class BoundingBox extends Dimension {
+		#x;
+		#y;
+
+		constructor(x, y, width, height) {
+			super(width, height);
+			this.#x = x;
+			this.#y = y;
+		}
+
+		getX() {
+			return this.#x;
+		}
+
+		getY() {
+			return this.#y;
+		}
+
+		getLeft() {
+			return this.getX();
+		}
+
+		getRight() {
+			return this.getX() + this.getWidth();
+		}
+
+		getTop() {
+			return this.getY();
+		}
+
+		getBottom() {
+			return this.getY() + this.getHeight();
+		}
+
+		getCenter() {
+			return [this.getX() + (this.getWidth() / 2), this.getY() + (this.getHeight() / 2)];
+		}
+
+		getTopLeft() {
+			return [this.getLeft(), this.getTop()];
+		}
+
+		getTopRight() {
+			return [this.getRight(), this.getTop()];
+		}
+
+		getBottomLeft() {
+			return [this.getLeft(), this.getBottom()];
+		}
+
+		getBottomRight() {
+			return [this.getRight(), this.getBottom()];
+		}
+
+		getCorners() {
+			return [
+				this.getTopLeft(),
+				this.getTopRight(),
+				this.getBottomLeft(),
+				this.getBottomRight()
+			];
+		}
+
+		intersects(box) {
+			if (this.getRight() < box.getLeft()) {
+				return false;
+			}
+
+			if (this.getLeft() > box.getRight()) {
+				return false;
+			}
+
+			if (this.getBottom() < box.getTop()) {
+				return false;
+			}
+
+			if (this.getTop() > box.getBottom()) {
+				return false;
+			}
+
+			const corners = this.getCorners();
+			const valid = corners.some(c => {
+				const validLeft = c[0] >= box.getLeft();
+				const validRight = c[0] <= box.getRight();
+				const validTop = c[1] >= box.getTop();
+				const validBottom = c[1] <= box.getBottom();
+				//console.log(c, validLeft, validRight, validTop, validBottom);
+				return validLeft && validRight && validTop && validBottom;
+			});
+
+			return valid;
+		}
+	}
+
+	class Component {
+		#context;
+
+		constructor(context) {
+			this.#context = context;
+			if (this.constructor == Component) {
+				throw new Error(ABSTRACT_ERROR);
+			}
+		}
+
+		getContext() {
+			return this.#context;
+		}
+
+		setContext(context) {
+			this.#context = context;
+		}
+
+		getCanvas() {
+			const selector = this.#context.canvas?.id ? '#' + this.#context.canvas.id : 'canvas';
+			const canvasById = $(selector);
+			const canvas = $('canvas');
+			return (canvasById ?? canvas) ?? this.#context.canvas;
+		}
+
+		isPortrait() {
+			const canvas = this.getCanvas();
+			return canvas.height > canvas.width;
+		}
+
+		update(instant) {
+		}
+
+		debug(instant, ...models) {
+			if (instant.frame % 60 == 0) {
+				console.log('*** DEBUG ***', performance.now(), ...models);
+			}
+		}
+	}
+
+	class RenderComponent extends Component {
+		constructor(context) {
+			super(context);
+			if (this.constructor == RenderComponent) {
+				throw new Error(ABSTRACT_ERROR);
+			}
+		}
+
+		render(instant) {
+			RenderComponent.clear(this.getContext());
+		}
+
+		updateAndRender(instant) {
+			this.update(instant);
+			this.render(instant);
+		}
+
+		static clear(ctx, color = 'black', width = 0, height = 0) {
+			const w = width > 0 ? width : ctx.canvas.width;
+			const h = height > 0 ? height : ctx.canvas.height;
+			ctx.fillStyle = color;
+			ctx.fillRect(0, 0, w, h);
+		}
+	}
+
+	class Sprite extends RenderComponent {
+		#x = 0;
+		#y = 0;
+		#width = 0;
+		#height = 0;
+
+		constructor(context, x, y, width, height) {
+			super(context);
+			if (this.constructor == Sprite) {
+				throw new Error(ABSTRACT_ERROR);
+			}
+
+			this.#x = x;
+			this.#y = y;
+			this.#width = width;
+			this.#height = height;
+		}
+
+		getX() {
+			return this.#x;
+		}
+
+		setX(x) {
+			this.#x = x;
+		}
+
+		offsetX(delta) {
+			this.#x += delta;
+		}
+
+		getY() {
+			return this.#y;
+		}
+
+		setY(y) {
+			this.#y = y;
+		}
+
+		offsetY(delta) {
+			this.#y += delta;
+		}
+
+		getWidth() {
+			return this.#width;
+		}
+
+		getHeight() {
+			return this.#height;
+		}
+
+		getBoundingBox() {
+			return new BoundingBox(this.#x, this.#y, this.#width, this.#height);
+		}
+
+		moveTo(x, y) {
+			this.setX(x);
+			this.setY(y);
+		}
+
+		moveBy(deltaX, deltaY) {
+			this.offsetX(deltaX);
+			this.offsetY(deltaY);
+		}
+	}
+
+	class ComponentStore extends Component {
+		#map = null;
+
+		constructor(context) {
+			super(context);
+			this.#map = new Map();
+		}
+
+		put(...components) {
+			const arr = [];
+			for (let component of components) {
+				if (!(component instanceof Component)) {
+					throw new Error('Not A Component');
+				}
+
+				const id = this.#getUniqueId();
+				this.#map.set(id, component);
+				arr.push(id);
+			}
+
+			return arr;
+		}
+
+		get(id) {
+			return this.#map.get(id);
+		}
+
+		remove(id) {
+			this.#map.delete(id);
+		}
+
+		clear() {
+			this.#map.clear();
+		}
+
+		keys() {
+			return this.#map.keys();
+		}
+
+		values() {
+			return this.#map.values();
+		}
+
+		entries() {
+			return this.#map.entries();
+		}
+
+		entriesByType(type) {
+			const arr = [];
+			for (let e of this.entries()) {
+				if (e[1] instanceof type) {
+					arr.push(e);
+				}
+			}
+
+			return arr;
+		}
+
+		forEach(callback) {
+			this.#map.forEach(callback);
+		}
+
+		count() {
+			return this.#map.size;
+		}
+
+		update(instant) {
+			this.#map.forEach(c => {
+				if (c instanceof Component) {
+					c.update(instant);
+				}
+			});
+		}
+
+		updateByTypes(instant, ...types) {
+			types.forEach(type => {
+				this.#map.forEach(c => {
+					if (c instanceof Component && c instanceof type) {
+						c.update(instant);
+					}
+				});
+			});
+		}
+
+		render(instant) {
+			this.#map.forEach(c => {
+				if (c instanceof RenderComponent) {
+					c.render(instant);
+				}
+			});
+		}
+
+		renderByTypes(instant, ...types) {
+			types.forEach(type => {
+				this.#map.forEach(c => {
+					if (c instanceof RenderComponent && c instanceof type) {
+						c.render(instant);
+					}
+				});
+			});
+		}
+
+		#getUniqueId() {
+			const now = performance.now();
+			const r = parseInt(Math.random() * 100000000);
+			return now.toString() + '_' + r.toString();
+		}
+	}
+
+	const ScreenState = {
+		INACTIVE: 0,
+		INITIALIZING: 1,
+		ACTIVE: 2,
+		TERMINATING: 3
+	};
+	Object.freeze(ScreenState);
+
+	class Screen extends RenderComponent {
+		#store;
+		#game;
+		#state;
+		#screenState;
+		#canvas;
+
+		constructor(game, state) {
+			const canvas = document.createElement('canvas');
+			const context = canvas.getContext('2d');
+			super(context);
+			this.#canvas = canvas;
+			if (this.constructor == Screen) {
+				throw new Error(ABSTRACT_ERROR);
+			}
+
+			this.#store = new ComponentStore(context);
+			this.#game = game;
+			this.#state = state;
+			this.#screenState = ScreenState.INACTIVE;
+		}
+
+		getCanvas() {
+			return this.#canvas;
+		}
+
+		updateCanvas(width, height) {
+			this.#canvas.width = width;
+			this.#canvas.height = height;
+		}
+
+		getStore() {
+			return this.#store;
+		}
+
+		getState() {
+			return this.#state;
+		}
+
+		getScreenState() {
+			return this.#screenState;
+		}
+
+		init() {
+			console.log(performance.now(), 'Screen Initialization');
+			this.#screenState = ScreenState.INITIALIZING;
+		}
+
+		activate() {
+			console.log(performance.now(), 'Screen Activation');
+			this.#screenState = ScreenState.ACTIVE;
+		}
+
+		term() {
+			console.log(performance.now(), 'Screen Termination');
+			this.#screenState = ScreenState.TERMINATING;
+		}
+
+		deactivate() {
+			console.log(performance.now(), 'Screen Deactivation');
+			this.getStore().clear();
+			this.#screenState = ScreenState.INACTIVE;
+		}
+
+		navigate(screenType) {
+			this.#game.navigate(screenType);
+		}
+	}
+
+	class Game extends RenderComponent {
+		#selector;
+		#screenTypes;
+		#screens = {};
+		#currentScreenType = null;
+		#incomingScreenType = null;
+		#navigationElapsed = -1;
+		#transitionDuration = 2000;
+
+		constructor(screenTypes, selector = 'canvas') {
+			const canvas = $(selector);
+			if (!canvas) {
+				throw new Error('Canvas Not Found: ' + selector);
+			}
+
+			super(canvas.getContext('2d'));
+			if (this.constructor == Game) {
+				throw new Error(ABSTRACT_ERROR);
+			}
+
+			this.#selector = selector;
+			this.#screenTypes = screenTypes;
+		}
+
+		getCanvas() {
+			return $(this.#selector);
+		}
+
+		updateScreens(width, height) {
+			this.forEachScreen(screen => screen.updateCanvas(width, height));
+		}
+
+		async init() {
+		}
+
+		async start(startScreenType) {
+			console.log('Starting...');
+			return this.init().then(s => {
+				console.log('Game State:', s);
+				for (let t of this.#screenTypes) {
+					if (t.prototype instanceof Screen) {
+						const screen = new t(this, s);
+						this.#screens[t.name] = screen;
+					} else {
+						console.warn('Invalid Screen: ' + t.name);
+					}
+				}
+
+				console.log('Game Screens:', this.#screens);
+				const initialScreen = this.#screens[startScreenType.name];
+				if (initialScreen) {
+					this.navigate(startScreenType);
+				}
+
+				Nucleus.Clock.start(instant => this.updateAndRender(instant));
+				return s;
+			}).catch(f => {
+				console.error(f);
+				return f;
+			}).finally(() => {
+				console.log('Started');
+			});
+		}
+
+		// TODO: may need a message based system as individual screens will flag when to navigate
+		navigate(screenType) {
+			if (this.#navigationElapsed < 0) {
+				this.#navigationElapsed = 0;
+				if (this.#currentScreenType) {
+					const currentName = this.#currentScreenType.name;
+					const current = this.#screens[currentName];
+					if (current) {
+						current.term();
+					}
+				}
+
+				const name = screenType?.name ?? '';
+				const screen = this.#screens[name];
+				if (screen) {
+					screen.init();
+				}
+
+				this.#incomingScreenType = screenType;
+			} else {
+				console.warn('Currently Navigating... Please Wait...');
+			}
+		}
+
+		#endNavigation() {
+			if (this.#navigationElapsed >= 0) {
+				if (this.#currentScreenType) {
+					const currentName = this.#currentScreenType.name;
+					const current = this.#screens[currentName];
+					if (current) {
+						current.deactivate();
+					}
+				}
+
+				const name = this.#incomingScreenType.name;
+				const screen = this.#screens[name];
+				if (screen) {
+					screen.activate();
+				}
+
+				this.#currentScreenType = this.#incomingScreenType;
+				this.#incomingScreenType = null;
+				this.#navigationElapsed = -1;
+			} else {
+				console.warn('Not Currently Navigating... Unable To End Navigation...');
+			}
+		}
+
+		forEachScreen(screenFunc) {
+			for (let screenType in this.#screens) {
+				const screen = this.#screens[screenType];
+				if (screenFunc) {
+					screenFunc(screen);
+				}
+			}
+		}
+
+		update(instant) {
+			super.update(instant);
+
+			// TODO: only update current and incoming screens?
+			this.forEachScreen(screen => {
+				if (screen.getScreenState() != ScreenState.INACTIVE) {
+					screen.update(instant);
+				}
+			});
+
+			if (this.#navigationElapsed >= 0) {
+				this.#navigationElapsed += instant.elapsed();
+				if (this.#navigationElapsed > this.#transitionDuration) {
+					this.#endNavigation();
+				}
+			}
+		}
+
+		// TODO: handle transition rendering
+		render(instant) {
+			super.render(instant);
+			const canvas = this.getCanvas();
+			const ctx = this.getContext();
+
+			const navigating = this.#navigationElapsed >= 0;
+			const incomingRatio = this.#navigationElapsed / this.#transitionDuration;
+			const currentScreenRatio = navigating ? (1 - incomingRatio) : 1;
+			const incomingScreenRatio = navigating ? incomingRatio : 0;
+			//this.debug(instant, 'FPS', instant.fps());
+
+			// TODO: only update current and incoming screens?
+			this.forEachScreen(screen => {
+				if (screen.getScreenState() != ScreenState.INACTIVE) {
+					screen.render(instant);
+
+					// TODO: perform ratio updates to screen canvases here
+					const canvas = screen.getCanvas();
+					const context = screen.getContext();
+					const width = canvas.width;
+					const height = canvas.height;
+
+					if (this.#currentScreenType && screen instanceof this.#currentScreenType) {
+						ctx.globalAlpha = currentScreenRatio;
+						ctx.drawImage(screen.getCanvas(), 0, 0, canvas.width, canvas.height);
+					}
+
+					if (this.#incomingScreenType && screen instanceof this.#incomingScreenType) {
+						ctx.globalAlpha = incomingScreenRatio;
+						ctx.drawImage(screen.getCanvas(), 0, 0, canvas.width, canvas.height);
+					}
+
+					ctx.globalAlpha = 1;
+				}
+			});
+		}
+
+		generateCanvas(f, w = 256, h = 256) {
+			const c = document.createElement('canvas');
+			c.width = w;
+			c.height = h;
+			const x = c.getContext('2d');
+			if (f) {
+				f(x);
+			}
+
+			return c;
+		}
+
+		async generateImage(func, type = 'image/png', quality = 0.92, width, height) {
+			const c = this.generateCanvas(func, width, height);
+			const i = new Image();
+			i.src = c.toDataURL(type, quality);
+			await i.decode();
+			return i;
+		}
+	}
+
+	class WatchValue {
+		#value;
+		#previousValue;
+
+		constructor(value) {
+			this.#value = value;
+			this.#previousValue = value;
+		}
+
+		get() {
+			return this.#value;
+		}
+
+		set(value) {
+			this.#previousValue = this.#value;
+			this.#value = value;
+		}
+
+		hasChanged() {
+			return this.#value != this.#previousValue;
+		}
+	}
+
+	return {
+		Dimension,
+		BoundingBox,
+		Component,
+		RenderComponent,
+		Sprite,
+		ComponentStore,
+		ScreenState,
+		Screen,
+		Game,
+		WatchValue
+	};
+})();
+</script>
+		<script>class SpaceButton extends Urge.Sprite {
+	#totalElapsed = 0;
+	#delay = 1000;
+	#duration = 5000;
+
+	constructor(context) {
+		super(context);
+	}
+
+	update(instant) {
+		this.#totalElapsed += instant.elapsed();
+	}
+
+	render(instant) {
+		if (this.#totalElapsed > this.#delay) {
+			const portrait = this.isPortrait();
+			const canvas = this.getCanvas();
+			const ctx = this.getContext();
+			const width = portrait ? canvas.width / 2 : canvas.width / 3;
+			const height = portrait ? width / 3 : width / 3;
+			const x = (canvas.width - width) / 2;
+			const y = (canvas.height - height) / 2;
+			const fontName = 'sans-serif';
+			const fontSize = parseInt(height * 2 / 3);
+			const text = 'Rogue-19';
+
+			const ratio = Math.min(1, (this.#totalElapsed - this.#delay) / this.#duration);
+
+			ctx.globalAlpha = ratio;
+			ctx.lineWidth = 10;
+			ctx.strokeStyle = 'white';
+			ctx.fillStyle = 'black';
+			ctx.strokeRect(x, y, width, height);
+			ctx.fillRect(x, y, width, height);
+
+			// TODO: handle alignment better
+			ctx.lineWidth = 5;
+			ctx.strokeStyle = 'white';
+			ctx.font = fontSize + 'px ' + fontName;
+			const textSize = ctx.measureText(text);
+			const offsetX = (width - textSize.width) / 2
+			const offsetY = fontSize + ((height - fontSize) / 2);
+			ctx.strokeText(text, x + offsetX, y + offsetY);
+			ctx.globalAlpha = 1;
+		}
+	}
+}
+
+// TODO: use underlying x/y from Sprite
+class StarField extends Urge.RenderComponent {
+	constructor(context, options) {
+		super(context);
+		this.x = 0;
+		this.y = 0;
+		this.image = options.image;
+		this.scrollSeconds = options?.scrollSeconds ?? 10;
+	}
+
+	update(instant) {
+		const portrait = super.isPortrait();
+		const pixelCount = parseFloat((portrait ? super.getCanvas().height : super.getCanvas().width) / this.scrollSeconds);
+		const pixelsToMove = pixelCount * instant.elapsed() / 1000;
+		if (portrait) {
+			this.x = 0;
+			this.y += pixelsToMove;
+		} else {
+			this.y = 0;
+			this.x -= pixelsToMove;
+		}
+
+		while (this.x < -super.getCanvas().width) {
+			this.x += super.getCanvas().width;
+		}
+
+		while (this.y > super.getCanvas().height) {
+			this.y -= super.getCanvas().height;
+		}
+	}
+
+	render(instant) {
+		super.getContext().drawImage(this.image, this.x, this.y, super.getCanvas().width, super.getCanvas().height);
+		if (super.isPortrait()) {
+			super.getContext().drawImage(this.image, this.x, this.y - super.getCanvas().height, super.getCanvas().width, super.getCanvas().height);
+		} else {
+			super.getContext().drawImage(this.image, this.x + super.getCanvas().width, this.y, super.getCanvas().width, super.getCanvas().height);
+		}
+	}
+}
+
+class Slogan extends Urge.Sprite {
+	#text;
+	#delay;
+	#totalElapsed = 0;
+
+	constructor(context, x, y, width, height, text, delay) {
+		super(context, x, y, width, height);
+		this.#text = text;
+		this.#delay = delay;
+	}
+
+	update(instant) {
+		super.update(instant);
+		if (this.#totalElapsed > this.#delay) {
+			const velocity = -0.25;
+			const delta = this.getHeight() * velocity * (instant.elapsed() / 1000);
+			this.offsetY(delta);
+		}
+
+		this.#totalElapsed += instant.elapsed();
+	}
+
+	render(instant) {
+		if (this.#totalElapsed > this.#delay) {
+			const ctx = this.getContext();
+			const canvas = this.getCanvas();
+			const halfHeight = canvas.height;
+			const ratio = Math.min(1, Math.max(0, (this.getY() / halfHeight)));
+
+			ctx.save();
+			ctx.globalAlpha = ratio;
+			ctx.scale(1, ratio);
+			ctx.strokeStyle = 'darkgray';
+			ctx.fillStyle = 'white';
+			const fontSize = Math.max(10, (this.isPortrait() ? 40 : 48) * ratio);
+			ctx.font = fontSize + 'px sans-serif';
+			ctx.textAlign = 'center';
+			ctx.fillText(this.#text, this.getX(), this.getY());
+			ctx.restore();
+		}
+	}
+}
+
+class Ship extends Urge.Sprite {
+	#active = false;
+	#skills = null;
+	#id = 1;
+	#health = 0;
+	#damage = 0;
+	#score = 0;
+	#screen = null;
+	#lastSpacePressed = false;
+
+	constructor(context, x, y, size, skills, screen) {
+		super(context, x, y, size, size);
+		this.#skills = skills;
+		this.#id = skills.id;
+		this.#health = skills.health;
+		this.#damage = skills.damage;
+		this.#screen = screen;
+	}
+
+	isActive() {
+		return this.#active;
+	}
+
+	getId() {
+		return this.#id;
+	}
+
+	getHealth() {
+		return this.#health;
+	}
+
+	getDamage() {
+		return this.#damage;
+	}
+
+	reduceHealth(damage) {
+		this.#health -= Math.abs(damage);
+		this.#health = Math.max(0, this.#health);
+	}
+
+	getScore() {
+		return this.#score;
+	}
+
+	increaseScore(score) {
+		this.#score += score;
+	}
+
+	isAlive() {
+		return this.getHealth() > 0;
+	}
+
+	update(instant) {
+		const delta = this.getWidth() * 4 * instant.elapsed() / 1000;
+		const canvas = this.getCanvas();
+		if (this.#active) {
+			if (Nucleus.Keys.checkKey('w')) {
+				this.offsetY(-delta);
+			}
+
+			if (Nucleus.Keys.checkKey('s')) {
+				this.offsetY(delta);
+			}
+
+			if (Nucleus.Keys.checkKey('a')) {
+				this.offsetX(-delta);
+			}
+
+			if (Nucleus.Keys.checkKey('d')) {
+				this.offsetX(delta);
+			}
+
+			const sideLimit = 10;
+			const canvas = this.getCanvas();
+			if (super.isPortrait()) {
+				this.setX(Math.min((canvas.width) - this.getWidth() - sideLimit, Math.max(sideLimit, this.getX())));
+				this.setY(Math.max((canvas.height * 0.6), Math.min(canvas.height - this.getWidth() - sideLimit, this.getY())));
+			} else {
+				this.setX(Math.min((canvas.width * 0.4) - this.getWidth(), Math.max(sideLimit, this.getX())));
+				this.setY(Math.min(canvas.height - this.getWidth() - sideLimit, Math.max(sideLimit, this.getY())));
+			}
+
+			const spacePressed = Nucleus.Keys.checkKey(' ');
+			if (spacePressed && !this.#lastSpacePressed) {
+				this.#screen.post(MessageType.PLAYER_BULLET);
+			}
+
+			this.#lastSpacePressed = spacePressed;
+		} else {
+			const size = this.getWidth();
+			const slow = delta / 5;
+			if (this.isPortrait()) {
+				this.offsetY(-slow);
+				const startY = this.isPortrait() ? canvas.height - (size * 3) : (canvas.height - size) / 2;
+				if (this.getY() <= startY) {
+					this.setY(startY);
+					this.#active = true;
+				}
+			} else {
+				this.offsetX(slow);
+				const startX = this.isPortrait() ? (canvas.width - size) / 2 : size * 2;
+				if (this.getX() >= startX) {
+					this.setX(startX);
+					this.#active = true;
+				}
+			}
+		}
+	}
+
+	render(instant) {
+		const points = super.isPortrait() ? [
+			[this.getX() + this.getWidth(), this.getY() + this.getWidth()],
+			[this.getX() + (this.getWidth() / 2), this.getY() + (this.getWidth() * 2 / 3)],
+			[this.getX(), this.getY() + this.getWidth()],
+			[this.getX() + (this.getWidth() / 2), this.getY()]
+		] : [
+			[this.getX(), this.getY() + this.getWidth()],
+			[this.getX() + (this.getWidth() / 3), this.getY() + (this.getWidth() / 2)],
+			[this.getX(), this.getY()],
+			[this.getX() + this.getWidth(), this.getY() + (this.getWidth() / 2)]
+		];
+		const ctx = super.getContext();
+		ctx.strokeStyle = 'cornflowerblue';
+		ctx.lineWidth = 3;
+		ctx.fillStyle = 'darkgreen';
+		ctx.beginPath();
+		ctx.moveTo(points[3][0], points[3][1]);
+		points.forEach(p => {
+			ctx.lineTo(p[0], p[1]);
+			ctx.stroke();
+		});
+		ctx.fill();
+		ctx.closePath();
+	}
+}
+
+class PlayerBullet extends Urge.Sprite {
+	constructor(context, x, y, width, height) {
+		super(context, x, y, width, height);
+	}
+
+	update(instant) {
+		const bulletSpeed = 40;
+		const ratio = bulletSpeed * instant.elapsed() / 1000;
+		if (super.isPortrait()) {
+			this.offsetY(-this.getHeight() * ratio);
+		} else {
+			this.offsetX(this.getWidth() * ratio);
+		}
+	}
+
+	render(instant) {
+		const ctx = super.getContext();
+		ctx.fillStyle = 'yellow';
+		if (super.isPortrait()) {
+			ctx.fillRect(this.getX() - this.getWidth(), this.getY() - this.getHeight(), this.getWidth(), this.getHeight());
+		} else {
+			ctx.fillRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
+		}
+	}
+}
+
+class Hud extends Urge.RenderComponent {
+	#id = 1;
+	#health = 0;
+	#damage = 0;
+	#score = 0;
+	#remainingMiles = 0;
+
+	constructor(context) {
+		super(context);
+	}
+
+	setId(id) {
+		this.#id = id;
+	}
+
+	setHealth(health) {
+		this.#health = health;
+	}
+
+	setDamage(damage) {
+		this.#damage = damage;
+	}
+
+	setScore(score) {
+		this.#score = score;
+	}
+
+	setRemainingMiles(remainingMiles) {
+		this.#remainingMiles = remainingMiles;
+	}
+
+	render(instant) {
+		const GREEN = '#0a0';
+		const FONT = '2em sans-serif';
+		const ctx = super.getContext();
+		const canvas = super.getCanvas();
+		ctx.fillStyle = GREEN;
+		ctx.font = FONT;
+		ctx.textAlign = 'center';
+		const id = this.#id;
+		const h = this.#health;
+		const d = this.#damage;
+		const sc = this.#score;
+		const m = parseInt(this.#remainingMiles);
+		const display = `Clone #: ${id}, Health: ${h}, Damage: ${d}, Score: ${sc}, Remaining Miles: ${m}`;
+		ctx.fillText(display, canvas.width / 2, canvas.height - 20);
+	}
+}
+
+class Enemy extends Urge.Sprite {
+	#health;
+	#velocity;
+
+	constructor(context, x, y, width, height, health, velocity) {
+		super(context, x, y, width, height);
+		this.#health = health;
+		this.#velocity = velocity;
+	}
+
+	getHealth() {
+		return this.#health;
+	}
+
+	getVelocity() {
+		return this.#velocity;
+	}
+
+	reduceHealth(damage) {
+		this.#health -= Math.abs(damage);
+		this.#health = Math.max(0, this.#health);
+	}
+
+	isAlive() {
+		return this.getHealth() > 0;
+	}
+}
+
+class Cell extends Enemy {
+	constructor(context, x, y, size, health, velocity) {
+		super(context, x, y, size, size, health, velocity);
+	}
+
+	update(instant) {
+		const movement = this.getWidth() * this.getVelocity() * (instant.elapsed() / 1000);
+		if (super.isPortrait()) {
+			this.offsetY(movement);
+		} else {
+			this.offsetX(-movement);
+		}
+	}
+
+	render(instant) {
+		const ctx = super.getContext();
+		const center = this.getBoundingBox().getCenter();
+		ctx.lineWidth = 3;
+		ctx.strokeStyle = 'red';
+		ctx.fillStyle = 'darkred';
+		ctx.beginPath();
+		ctx.arc(center[0], center[1], this.getWidth() / 2, 0, Math.PI * 2);
+		ctx.stroke();
+		ctx.fill();
+		ctx.closePath();
+
+		ctx.lineWidth = 3;
+		ctx.strokeStyle = 'red';
+		ctx.fillStyle = 'blue';
+		ctx.beginPath();
+		ctx.arc(center[0], center[1], this.getWidth() / 6, 0, Math.PI * 2);
+		ctx.stroke();
+		ctx.fill();
+		ctx.closePath();
+	}
+}
+
+class Incubator extends Enemy {
+	#screen;
+	#finalPosition;
+	#reached = false;
+
+	constructor(context, x, y, width, height, screen) {
+		super(context, x, y, width, height, 5000, 1);
+		this.#screen = screen;
+		this.#finalPosition = this.isPortrait()
+			? 20
+			: this.getCanvas().width - this.getWidth() - 20;
+	}
+
+	update(instant) {
+		super.update(instant);
+		if (this.#reached) {
+			if (instant.frame % 20 == 0) {
+				this.#screen.post(MessageType.INCUBATOR_CELL);
+			}
+		} else {
+			if (this.isPortrait()) {
+				if (this.getY() < this.#finalPosition) {
+					const delta = this.getHeight() / 6;
+					this.offsetY(delta * instant.elapsed() / 1000);
+				} else {
+					this.setY(this.#finalPosition);
+					this.#reached = true;
+				}
+			} else {
+				if (this.getX() > this.#finalPosition) {
+					const delta = -this.getWidth() / 6;
+					this.offsetX(delta * instant.elapsed() / 1000);
+				} else {
+					this.setX(this.#finalPosition);
+					this.#reached = true;
+				}
+			}
+		}
+	}
+
+	render(instant) {
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		ctx.strokeStyle = 'darkgray';
+		ctx.fillStyle = 'darkred';
+		ctx.lineWidth = 3;
+		ctx.strokeRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
+		ctx.fillRect(this.getX(), this.getY(), this.getWidth(), this.getHeight());
+	}
+}
+</script>
+		<script>const PlayState = {
+	STARTING: 0,
+	PLAYING: 1,
+	BOSS_BATTLE: 2,
+	COMPLETION: 3,
+	DEATH: 4
+};
+Object.freeze(PlayState);
+
+const MessageType = {
+	PLAYER_BULLET: 0,
+	CELL: 1,
+	INCUBATOR_CELL: 2
+};
+Object.freeze(MessageType);
+
+class StartScreen extends Urge.Screen {
+	#totalElapsed = 0;
+	#lastSpacePressed = false;
+	#lastScreenState = Urge.ScreenState.INACTIVE;
+
+	constructor(game, state) {
+		super(game, state);
+	}
+
+	init() {
+		super.init();
+		this.#totalElapsed = 0;
+		this.#lastSpacePressed = false;
+		this.#lastScreenState = Urge.ScreenState.INACTIVE;
+		const state = this.getState();
+		const store = this.getStore();
+		const ctx = this.getContext();
+		const sf1 = new StarField(ctx, {
+			image: state.assets.starFields[0],
+			scrollSeconds: 150
+		});
+		const sf2 = new StarField(ctx, {
+			image: state.assets.starFields[1],
+			scrollSeconds: 110
+		});
+		const sf3 = new StarField(ctx, {
+			image: state.assets.starFields[2],
+			scrollSeconds: 75
+		});
+		store.put(sf1, sf2, sf3);
+	}
+
+	update(instant) {
+		const store = this.getStore();
+		const ctx = this.getContext();
+		const canvas = this.getCanvas();
+
+		store.update(instant);
+		const screenState = this.getScreenState();
+		if (screenState == Urge.ScreenState.ACTIVE) {
+			const spacePressed = Nucleus.Keys.checkKey(' ');
+			if (spacePressed && !this.#lastSpacePressed) {
+				this.navigate(IntroScreen);
+			}
+
+			this.#lastSpacePressed = spacePressed;
+
+			if (this.#lastScreenState == Urge.ScreenState.INITIALIZING) {
+				const spaceButton = new SpaceButton(ctx);
+				store.put(spaceButton);
+			}
+
+			this.#totalElapsed += instant.elapsed();
+		}
+
+		this.#lastScreenState = screenState;
+	}
+
+	render(instant) {
+		const store = this.getStore();
+		super.render(instant);
+		store.renderByTypes(instant, StarField, SpaceButton, Cell);
+
+		if (this.#totalElapsed > 7000) {
+			const ctx = this.getContext();
+			ctx.save();
+			const canvas = this.getCanvas();
+			ctx.textAlign = 'center';
+			ctx.font = '40px sans-serif';
+			ctx.strokeStyle = 'white';
+			ctx.fillStyle = 'transparent';
+			ctx.lineWidth = 2;
+			ctx.strokeText('Press SPACE', canvas.width / 2, canvas.height * 4 / 5);
+			ctx.restore();
+		}
+	}
+}
+
+class IntroScreen extends Urge.Screen {
+	#totalElapsed = 0;
+	#lastSpacePressed = false;
+	#lines = [
+		'Citizens Of Planet Tran!',
+		'We Are Under Attack!',
+		'Chemical Warfare, Waged From A Distant Galaxy!',
+		'Scramble The Clone Pilots To Their Ships!',
+		'Protect The Planet At All Costs From Space-Born Pathogens!',
+		'Infectious Agents Of Unknown Origin Incoming!',
+		'Be Strong, Clone Warriors!',
+		'We Will Overcome These Personal Space Invaders!',
+		'Avoid Infection! Practice Spatial Distancing!',
+		'Never Fear! A New Clone Will Replace You When You Die',
+		'Each New Clone Benefits From Your Experience',
+		'With Enhanced Abilities And Skills',
+		'Kills Improve Your Damage Rating',
+		'Distance Improves Your Health',
+		'Use W/S/A/D To Move',
+		'Press SPACE To Shoot',
+		'Now, Get Out There, Clone Warrior!',
+		'Save Our Planet From This Nefarious Viral Attack!'
+	];
+
+	constructor(game, state) {
+		super(game, state);
+	}
+
+	init() {
+		super.init();
+		const store = this.getStore();
+		const state = this.getState();
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		const x = canvas.width / 2;
+		const y = canvas.height * 1.1;
+		const width = canvas.width / 3;
+		const height = canvas.height / 5;
+		const sf1 = new StarField(ctx, {
+			image: state.assets.starFields[0],
+			scrollSeconds: 300
+		});
+		const sf2 = new StarField(ctx, {
+			image: state.assets.starFields[1],
+			scrollSeconds: 180
+		});
+		store.put(sf1, sf2);
+		for (let i = 0; i < this.#lines.length; i++) {
+			const text = this.#lines[i];
+			const delay = (i * 2 + 1) * 1000;
+			const slogan = new Slogan(ctx, x, y, width, height, text, delay);
+			store.put(slogan);
+		}
+	}
+
+	update(instant) {
+		const store = this.getStore();
+		store.update(instant);
+		const spacePressed = Nucleus.Keys.checkKey(' ');
+		if (this.getScreenState() == Urge.ScreenState.ACTIVE && spacePressed && !this.#lastSpacePressed) {
+			this.navigate(PlayingScreen);
+		}
+
+		this.#lastSpacePressed = spacePressed;
+		this.#totalElapsed += instant.elapsed();
+	}
+
+	render(instant) {
+		super.render(instant);
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		const store = this.getStore();
+		store.render(instant);
+		const text = 'Press SPACE To Begin';
+
+		ctx.fillStyle = '';
+		ctx.font = '44px sans-serif';
+		ctx.textAlign = 'center';
+		const measured = ctx.measureText(text);
+		ctx.lineWidth = 3;
+		ctx.strokeStyle = 'white';
+		ctx.fillStyle = 'rgba(64, 64, 64, 64)';
+		ctx.fillRect(((canvas.width - measured.width) / 2) - 10, 50, measured.width + 20, 58);
+		ctx.fillStyle = 'white';
+		ctx.fillText(text, canvas.width / 2, 98);
+	}
+}
+
+class PlayingScreen extends Urge.Screen {
+	#namespace = 'com.manodestra.rogue';
+	#playState = PlayState.STARTING;
+	#ship = null;
+	#hud = null;
+	#miles = 0;
+	#targetMiles = 12000;
+	#save = null;
+	#boss = null;
+
+	constructor(game, state) {
+		super(game, state);
+	}
+
+	init() {
+		super.init();
+		this.#boss = null;
+		this.#playState = PlayState.STARTING;
+		this.#miles = 0;
+
+		const state = this.getState();
+		const store = this.getStore();
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		const sf1 = new StarField(ctx, {
+			image: state.assets.starFields[0],
+			scrollSeconds: 30
+		});
+		const sf2 = new StarField(ctx, {
+			image: state.assets.starFields[1],
+			scrollSeconds: 24
+		});
+		const sf3 = new StarField(ctx, {
+			image: state.assets.starFields[2],
+			scrollSeconds: 21
+		});
+		store.put(sf1, sf2, sf3);
+
+		const size = this.#getSize();
+		const startX = this.isPortrait() ? (canvas.width - size) / 2 : -size;
+		const startY = this.isPortrait() ? canvas.height + (size * 2) : (canvas.height - size) / 2;
+
+		this.#save = this.#getSaveOrDefault();
+		const ship = new Ship(ctx, startX, startY, size, this.#save, this);
+		store.put(ship);
+		this.#ship = ship;
+		console.log(this.#ship);
+
+		this.#hud = new Hud(ctx);
+		store.put(this.#hud);
+	}
+
+	getRemainingMiles() {
+		return Math.max(0, this.#targetMiles - this.#miles);
+	}
+
+	update(instant) {
+		const store = this.getStore();
+		const canvas = this.getCanvas();
+		store.update(instant);
+		this.#hud.setId(this.#ship.getId());
+		this.#hud.setHealth(this.#ship.getHealth());
+		this.#hud.setDamage(this.#ship.getDamage());
+		this.#hud.setScore(this.#ship.getScore());
+		this.#hud.setRemainingMiles(this.getRemainingMiles());
+
+		switch (this.#playState) {
+			case PlayState.STARTING:
+				this.#updateStarting(instant);
+				break;
+			case PlayState.PLAYING:
+				this.#updatePlaying(instant);
+				break;
+			case PlayState.BOSS_BATTLE:
+				this.#updateBossBattle(instant);
+				break;
+			case PlayState.COMPLETION:
+				this.#updateCompletion(instant);
+				break;
+			case PlayState.DEATH:
+				this.#updateDeath(instant);
+				break;
+		}
+
+		store.forEach((c, id, map) => {
+			if (c instanceof PlayerBullet) {
+				const box = c.getBoundingBox();
+				const portraitRemoval = this.isPortrait() && box.getY() + box.getHeight() < 0;
+				const nonPortraitRemoval = !this.isPortrait() && box.getX() > canvas.width;
+				if (portraitRemoval || nonPortraitRemoval) {
+					map.delete(id);
+				}
+			}
+
+			if (c instanceof Enemy) {
+				const box = c.getBoundingBox();
+				const portraitRemoval = this.isPortrait() && box.getY() - (box.getHeight() / 2) > canvas.height;
+				const nonPortraitRemoval = !this.isPortrait() && box.getX() + box.getWidth() < 0;
+				if (portraitRemoval || nonPortraitRemoval) {
+					map.delete(id);
+				} else {
+					store.forEach((sc, scId, scMap) => {
+						if (sc instanceof PlayerBullet) {
+							if (sc.getBoundingBox().intersects(c.getBoundingBox())) {
+								// TODO: bullet impact?
+								scMap.delete(scId);
+
+								c.reduceHealth(this.#save.damage);
+								if (!c.isAlive()) {
+									// TODO: enemy explosion/death effect?
+									// TODO: change this hard coded value to be enemy based
+									this.#ship.increaseScore(1);
+									map.delete(id);
+								}
+							}
+						}
+
+						if (sc instanceof Ship) {
+							if (sc.getBoundingBox().intersects(c.getBoundingBox())) {
+								// TODO: enemy explosion?
+								map.delete(id);
+								sc.reduceHealth(25);
+								if (!sc.isAlive()) {
+									scMap.delete(scId);
+								}
+							} else {
+								// TODO: deal with proximity infection
+							}
+						}
+					});
+				}
+			}
+		});
+	}
+
+	#updateStarting(instant) {
+		if (this.#ship.isActive()) {
+			this.#playState = PlayState.PLAYING;
+		}
+	}
+
+	#updatePlaying(instant) {
+		const v = 10;
+		this.#miles += v * instant.elapsed() / 1000;
+		const remaining = this.getRemainingMiles();
+		if (!this.#ship.isAlive()) {
+			this.#playState = PlayState.DEATH;
+		}
+
+		if (remaining <= 0) {
+			this.#playState = PlayState.BOSS_BATTLE;
+			if (!this.#boss) {
+				const canvas = this.getCanvas();
+				const ctx = this.getContext();
+				const large = this.isPortrait() ? canvas.height : canvas.width;
+				const small = this.isPortrait() ? canvas.width : canvas.height;
+				const width = this.isPortrait() ? small * 4 / 5 : large / 3;
+				const height = this.isPortrait() ? large / 3 : small * 4 / 5;
+				const x = this.isPortrait() ? small / 10 : large + 20;
+				const y = this.isPortrait() ? -20 - height : small / 10;
+				this.#boss = new Incubator(ctx, x, y, width, height, this);
+				console.log(instant, this.#boss);
+				this.getStore().put(this.#boss);
+			}
+		}
+
+		const initial = 90;
+		const rate = initial - Math.floor((this.#miles / this.#targetMiles) * initial - 10);
+		if (instant.frame % rate == 0) {
+			this.post(MessageType.CELL);
+		}
+	}
+
+	#updateBossBattle(instant) {
+		const store = this.getStore();
+		if (!this.#boss.isAlive()) {
+			this.#playState = PlayState.COMPLETION;
+			this.#boss = null;
+			this.#ship.increaseScore(1500);
+		}
+	}
+
+	#updateCompletion(instant) {
+		this.#saveAndNavigate(CompletionScreen);
+	}
+
+	#updateDeath(instant) {
+		this.#saveAndNavigate(GameOverScreen);
+	}
+
+	render(instant) {
+		super.render(instant);
+		const store = this.getStore();
+
+		// TODO: render by types
+		store.render(instant);
+	}
+
+	term() {
+		super.term();
+	}
+
+	post(msgType) {
+		const store = this.getStore();
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		const portrait = this.isPortrait();
+		switch (msgType) {
+			case MessageType.PLAYER_BULLET:
+				{
+					const box = this.#ship.getBoundingBox();
+					const x = box.getX() + (portrait ? box.getWidth() / 2 : box.getWidth() * 4 / 5);
+					const y = box.getY() + (portrait ? box.getHeight() / 5 : box.getHeight() / 2);
+					const width = portrait ? 5 : 20;
+					const height = portrait ? 20 : 5;
+					const bullet = new PlayerBullet(ctx, x, y, width, height);
+					store.put(bullet);
+				}
+
+				break;
+			case MessageType.CELL:
+				{
+					const size = this.#getSize();
+					const x = portrait
+						? parseInt(Math.random() * (canvas.width - size))
+						: canvas.width + (size / 2);
+					const y = portrait
+						? (0 - (size / 2))
+						: parseInt(Math.random() * (canvas.height - size));
+
+					const health = 1 + Math.floor(this.#miles / 3);
+					const velocity = (this.#miles / 1000) + 2;
+					const cell = new Cell(ctx, x, y, size, health, velocity);
+					store.put(cell);
+				}
+
+				break;
+			case MessageType.INCUBATOR_CELL:
+				{
+					const size = this.#getSize();
+					if (this.#boss) {
+						const x = portrait
+							? ((this.#boss.getWidth() - size) * Math.random()) + this.#boss.getX()
+							: this.#boss.getX();
+						const y = portrait
+							? this.#boss.getY() + this.#boss.getHeight()
+							: ((this.#boss.getHeight() - size) * Math.random()) + this.#boss.getY();
+						const health = 3000;
+						const velocity = 15;
+						const cell = new Cell(ctx, x, y, size, health, velocity);
+						store.put(cell);
+					}
+				}
+
+				break;
+			default:
+				console.error('Unsupported Message Type:', msgType);
+		}
+	}
+
+	#getSize() {
+		const canvas = this.getCanvas();
+		return (this.isPortrait() ? canvas.height : canvas.width) / 25;
+	}
+
+	#saveAndNavigate(screenType) {
+		if (this.getScreenState() == Urge.ScreenState.ACTIVE) {
+			const healthRate = 100;
+			const damageRate = 3;
+			const healthBoost = Math.floor(this.#miles / healthRate);
+			const damageBoost = Math.floor(this.#ship.getScore() / damageRate);
+
+			this.#save.id++;
+			this.#save.health += healthBoost;
+			this.#save.damage += damageBoost;
+			this.#saveGame();
+			this.navigate(screenType);
+		}
+	}
+
+	#getSaveOrDefault() {
+		const model = Nucleus.Cryo.get('Save', this.#namespace);
+		if (!model) {
+			console.log('Setting Default Model...');
+			Nucleus.Cryo.set('Save', this.#getDefaultSave(), this.#namespace);
+		}
+
+		return Nucleus.Cryo.get('Save', this.#namespace);
+	}
+
+	#getDefaultSave() {
+		return {
+			id: 1,
+			health: 100,
+			damage: 1
+		};
+	}
+
+	#saveGame() {
+		Nucleus.Cryo.set('Save', this.#save, this.#namespace);
+	}
+}
+
+class CompletionScreen extends Urge.Screen {
+	#totalElapsed = 0;
+
+	constructor(game, state) {
+		super(game, state);
+	}
+
+	init() {
+		this.#totalElapsed = 0;
+	}
+
+	update(instant) {
+		this.#totalElapsed += instant.elapsed();
+		if (this.#totalElapsed > 5000 && this.getScreenState() == Urge.ScreenState.ACTIVE) {
+			this.navigate(StartScreen);
+		}
+	}
+
+	render(instant) {
+		super.render(instant);
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		ctx.font = '32px sans-serif';
+		ctx.strokeStyle = 'white';
+		ctx.textAlign = 'center';
+		ctx.strokeText(
+			'Congratulations! You Have Reached The Enemy Planet... EARTH! DESTROY THEM!',
+			canvas.width / 2,
+			canvas.height / 2
+		);
+	}
+}
+
+class GameOverScreen extends Urge.Screen {
+	#totalElapsed = 0;
+
+	constructor(game, state) {
+		super(game, state);
+	}
+
+	init() {
+		this.#totalElapsed = 0;
+	}
+
+	update(instant) {
+		this.#totalElapsed += instant.elapsed();
+		if (this.#totalElapsed > 5000 && this.getScreenState() == Urge.ScreenState.ACTIVE) {
+			this.navigate(PlayingScreen);
+		}
+	}
+
+	render(instant) {
+		super.render(instant);
+
+		const canvas = this.getCanvas();
+		const ctx = this.getContext();
+		ctx.font = '32px sans-serif';
+		ctx.strokeStyle = 'white';
+		ctx.textAlign = 'center';
+		ctx.strokeText('You Have Died! Spawning Another Clone!', canvas.width / 2, canvas.height / 2);
+	}
+}
+</script>
+		<script>const GameScreen = {
+	START: 0,
+	INTRO: 1,
+	PLAYING: 2,
+	PAUSED: 3,
+	DEATH: 4,
+	GAME_COMPLETION: 5
+};
+Object.freeze(GameScreen);
+
+class Rogue extends Urge.Game {
+	#assets;
+
+	constructor() {
+		super([StartScreen, IntroScreen, PlayingScreen, CompletionScreen, GameOverScreen]);
+		this.#assets = {};
+	}
+
+	async init() {
+		window.addEventListener('resize', () => this.onResize(), false);
+		this.onResize();
+		this.#assets['starFields'] = [
+			this.#getStarField(250, 1, 2),
+			this.#getStarField(200, 1, 3.5),
+			this.#getStarField(150, 1, 5)
+		];
+		Nucleus.Keys.start();
+
+		const state = {
+			assets: this.#assets
+		};
+
+		return state;
+	}
+
+	async start() {
+		await super.start(StartScreen);
+		this.onResize();
+	}
+
+	onResize() {
+		const c = this.getCanvas();
+		const b = document.body;
+		c.width = b.clientWidth;
+		c.height = b.clientHeight;
+		this.updateScreens(b.clientWidth, b.clientHeight);
+	}
+
+	#getStarField(count = 250, minSize = 1, maxDelta = 3) {
+		const canvas = this.getCanvas();
+		return this.generateCanvas(c => {
+			c.strokeStyle = '#0a0';
+			c.fillStyle = 'cornflowerblue';
+			for (let i = 0; i < count; i++) {
+				const r = parseInt(Math.random() * 256);
+				const g = parseInt(Math.random() * 256);
+				const b = parseInt(Math.random() * 128) + 128;
+				c.fillStyle = 'rgb(' + r + ', ' + g + ', ' + b + ')';
+				const x = parseInt(Math.random() * canvas.width);
+				const y = parseInt(Math.random() * canvas.height);
+				const size = parseInt(Math.random() * maxDelta) + minSize;
+				c.fillRect(x, y, size, size);
+			}
+		}, canvas.width, canvas.height);
+	}
+}
+
+(async () => {
+	const rogue = new Rogue();
+	await rogue.start();
+})();
+</script>
+	</body>
+</html>

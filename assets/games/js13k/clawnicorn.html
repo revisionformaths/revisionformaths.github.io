@@ -1,0 +1,276 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#28264f"><title>UNICORN CLAW</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1e2342;color:#fff;font-family:Impact,"Arial Black",system-ui,sans-serif}#game{display:block;width:100%;height:100%;touch-action:none;cursor:grab}button{font:inherit;color:inherit}#hud{position:fixed;inset:0;pointer-events:none}#top{position:absolute;z-index:4;top:2.2vh;left:2.2%;right:2.2%;display:grid;grid-template-columns:minmax(145px,16vw) 1fr minmax(145px,16vw);align-items:start;gap:2vw}.meter{height:clamp(76px,10vw,116px);padding:10px 18px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#71427f,#342956 70%);border:3px solid #b36fc4;clip-path:polygon(6% 0,94% 0,100% 12%,100% 88%,94% 100%,6% 100%,0 88%,0 12%)}.meter small{font-size:clamp(12px,1.45vw,22px);letter-spacing:.06em}.meter strong{font-size:clamp(23px,3.1vw,43px);line-height:1;color:#ffd86b;white-space:nowrap}.star{margin-right:5px}.marquee{position:relative;justify-self:center;text-align:center;min-width:42vw;padding:.1vw 4vw 1.5vw;border-bottom:2px solid #d476b7}.marquee h1{margin:0;color:#e36f9f;font-size:clamp(29px,5vw,67px);line-height:.96;letter-spacing:.065em;text-shadow:0 5px #79375f}.marquee>.spark{position:absolute;left:1vw;color:#eaa24c;font-size:2.5vw}.rainbow{position:absolute;left:50%;bottom:-1px;width:104px;height:30px;transform:translate(-50%,100%);overflow:hidden}.rainbow i{position:absolute;left:50%;bottom:-29px;transform:translateX(-50%);border:6px solid #e56e9d;border-bottom:0;border-radius:80px 80px 0 0;width:90px;height:48px}.rainbow i:nth-child(2){width:72px;height:39px;border-color:#e7b958}.rainbow i:nth-child(3){width:54px;height:30px;border-color:#5ccbc5}
+#instructions{position:absolute;z-index:3;left:1.1%;top:29%;width:clamp(190px,16vw,235px);padding:19px 15px 22px;display:flex;flex-direction:column;gap:17px;background:#28213fee;border:3px solid #b276c0;font-family:system-ui,sans-serif}#instructions>b{text-align:center;color:#ffd975;letter-spacing:.1em;font-size:15px}#instructions span{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px}#instructions strong{color:#fff;letter-spacing:.06em}kbd{display:grid;place-items:center;height:28px;padding:0 7px;border:2px solid #f7effc;border-radius:5px;background:#59466f;box-shadow:inset 0 -3px #21182f;font:800 12px system-ui,sans-serif;color:#fff}.combo{white-space:nowrap}
+#deck{position:absolute;z-index:5;left:0;right:0;bottom:0;height:clamp(105px,17vh,165px);display:grid;grid-template-columns:80px minmax(360px,620px) minmax(120px,150px);justify-content:center;align-items:center;gap:2vw;padding:12px 3%;background:linear-gradient(180deg,#83517d 0,#52335f 18%,#a75f88 20%,#684166 64%,#3d2b50 65%);border-top:5px solid #d682ae;clip-path:polygon(2% 0,98% 0,100% 28%,100% 100%,0 100%,0 28%);box-shadow:inset 0 8px 16px #2f244899}.joystick{--jx:0px;--jy:0px;--sx:0px;--sy:0px;--jr:0deg;position:relative;width:70px;height:35px;border-radius:50%;background:#211c30;box-shadow:0 7px 0 #130f1c,0 0 0 5px #48394f}.joystick:before{content:"";position:absolute;width:12px;height:52px;left:29px;bottom:16px;background:#24202f;border-radius:8px;transform:translate(var(--sx),var(--sy)) rotate(var(--jr));transform-origin:50% 100%}.joystick i{position:absolute;width:37px;height:37px;left:16px;bottom:58px;border-radius:50%;background:radial-gradient(circle at 35% 28%,#ff91bd,#c83672 65%,#752047);box-shadow:0 3px 0 #5d1d43;transform:translate(var(--jx),var(--jy))}#values{height:100%;display:flex;justify-content:center;align-items:center;gap:clamp(7px,2.4vw,36px);padding:0 1vw;background:#49345e;border:2px solid #97659d;clip-path:polygon(4% 0,96% 0,100% 18%,96% 100%,4% 100%,0 18%)}#values span{min-width:50px;display:grid;place-items:center;gap:1px;text-align:center}#values i{position:relative;display:block;width:clamp(24px,3vw,42px);height:clamp(20px,2.5vw,35px);border-radius:48% 52% 45% 45%;background:#fff7e9;box-shadow:inset -4px -3px #d9c9d2}#values i:before{content:"";position:absolute;left:48%;top:-8px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:12px solid #ffd558;transform:rotate(10deg)}#values i:after{content:"";position:absolute;right:-7px;top:7px;width:13px;height:13px;border-radius:50%;background:inherit}#values b{font-size:clamp(8px,.92vw,13px);letter-spacing:.05em}#values strong{font-size:clamp(12px,1.4vw,20px);color:#ffdb64}#grab{pointer-events:auto;justify-self:center;display:grid;place-items:center;width:clamp(72px,8.4vw,116px);aspect-ratio:1.45;border:0;border-radius:50%;background:radial-gradient(circle at 40% 25%,#ff88b3,#db3d7b 58%,#8d2559 60%);box-shadow:0 9px 0 #271c35,0 11px 0 5px #4a3154,inset 0 -8px 10px #8b245744;cursor:pointer;font-size:clamp(24px,3.2vw,42px);line-height:1;color:#fff3bd;text-shadow:0 3px 0 #8d2559}#grab:active{transform:translateY(6px);box-shadow:0 3px 0 #271c35,0 5px 0 5px #4a3154}
+.overlay{position:absolute;z-index:6;inset:0 0 clamp(105px,17vh,165px);display:grid;place-content:center;text-align:center;background:#181a3999}.overlay.hidden{display:none}.start-card{padding:24px 48px 29px;background:#30264ce8;border:3px solid #b369ab;clip-path:polygon(4% 0,96% 0,100% 12%,100% 88%,96% 100%,4% 100%,0 88%,0 12%)}.start-card small{color:#ffcc68;letter-spacing:.23em}.start-card>span{padding:8px 17px;border:2px solid #d283ba;color:#ffe08a;letter-spacing:.12em}#message{font-size:clamp(40px,7vw,88px);line-height:1;margin:7px;color:#f6eaf1;text-shadow:0 5px #7d345e}#sub{font:800 clamp(11px,1.5vw,18px) system-ui;color:#d9bcd7}#toast{position:absolute;z-index:7;left:50%;top:39%;transform:translate(-50%,-50%);font-size:clamp(35px,6vw,75px);color:#ffe16e;opacity:0;transition:opacity .14s}#toast.show{opacity:1}#mute{position:absolute;z-index:8;pointer-events:auto;right:1.5%;bottom:clamp(112px,18vh,172px);width:36px;height:36px;border:2px solid #a974a6;border-radius:50%;background:#352b50}
+@media(max-width:800px){#top{grid-template-columns:88px 1fr 88px;left:1%;right:1%}.meter{min-width:0;height:65px;padding:2px}.meter small{font-size:9px}.meter strong{font-size:18px}.marquee{min-width:0;padding-left:0;padding-right:0}.marquee h1{font-size:18px;white-space:nowrap}.spark,#instructions,.joystick{display:none}#deck{grid-template-columns:minmax(0,1fr) 74px;padding:12px 2%;gap:8px}#values{min-width:0;gap:3px;padding:0}#values span{min-width:0}#values span:nth-child(4) b{font-size:6px}#grab{grid-column:2}.start-card{padding:18px 22px}}
+#stick{pointer-events:auto;touch-action:none}@media(any-pointer:coarse){#stick,#grab,#mute{position:fixed;z-index:10;pointer-events:auto;touch-action:none}#stick{display:block;left:22px;bottom:max(20px,env(safe-area-inset-bottom));width:104px;height:104px;border-radius:50%;background:#332a50aa;box-shadow:none}#stick:before{display:none}#stick i{left:50%;top:50%;bottom:auto;width:42px;height:42px;margin:-21px}#grab{right:22px;bottom:max(20px,env(safe-area-inset-bottom));width:88px}#grab:active{transform:scale(.94)}#instructions{display:none}#mute{right:42px;bottom:126px;width:48px;height:48px}}@media(any-pointer:coarse) and (max-width:600px){#values{display:none}}
+#values i{display:grid;place-items:center}#values .rainbow-prize{border-radius:8px;background:linear-gradient(#55ddeb 33%,#ffd558 0 66%,#ed7fab 0)}#values .rainbow-prize:before,#values .rainbow-prize:after,#values .star-prize:before,#values .star-prize:after{display:none}#values .star-prize{background:0;box-shadow:none;color:#ffd558;font:36px/35px serif}#values .king{background:#ffd05d}
+#combo{position:absolute;z-index:3;right:1.1%;top:29%;width:clamp(76px,11vw,162px);display:none;border-color:#ffd975}#combo.show{display:flex;animation:pop .4s cubic-bezier(.2,1.8,.4,1)}#combo strong{color:#ff9ec6}@keyframes pop{0%{transform:scale(.4);opacity:0}}
+</style></head><body><canvas id="game" aria-label="Unicorn Claw game"></canvas><main id="hud"><header id="top"><section class="meter attempts"><small>ATTEMPTS</small><strong><span class="star">★</span><span id="tries">5 / 5</span></strong></section><div class="marquee"><span class="spark">★</span><h1>UNICORN CLAW</h1><div class="rainbow"><i></i><i></i><i></i></div></div><section class="meter score"><small>SCORE</small><strong id="score">0</strong></section></header><aside id="instructions"><b>HOW TO PLAY</b><span><kbd class="combo">WASD / ARROWS</kbd><strong>MOVE</strong></span><span><kbd class="combo">CLICK + DRAG</kbd><strong>LOOK</strong></span><span><kbd class="combo">SPACE</kbd><strong>GRAB</strong></span></aside><aside class="meter" id="combo"><small>COMBO</small><strong id="combox">x2</strong></aside><section id="deck"><div class="joystick" id="stick"><i></i></div><aside id="values"><span><i class="star-prize">★</i><b>STAR</b><strong>250</strong></span><span><i class="rainbow-prize"></i><b>RAINBOW</b><strong>500</strong></span><span><i class="unicorn"></i><b>UNICORN</b><strong>1,000</strong></span><span><i class="king"></i><b>KING</b><strong>2,000</strong></span></aside><button id="grab" aria-label="Drop claw">5</button></section><div class="overlay"><div class="start-card"><small>STEP RIGHT UP</small><div id="message"></div><p id="sub"></p><span>PRESS SPACE</span></div></div><div id="toast"></div><button id="mute" aria-label="Toggle sound">♪</button></main><script type="module">import { createScene } from "./render/scene";
+import {
+  H, createSim, reset, step, beginDrop, beginGame,
+  POINTS, FLOOR,
+  surface, comboMult, winRarity, winMult,
+  P_TITLE, P_AIM, P_RESULT,
+  EV_LOWER, EV_CLOSE, EV_GRAB, EV_EMPTY, EV_SLIP, EV_HOOK, EV_WIN, EV_OVER
+} from "./game/sim";
+
+const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
+const canvas = $<HTMLCanvasElement>("#game");
+const scoreEl = $("#score"), triesEl = $("#tries");
+const comboEl = $<HTMLElement>("#combo"), comboXEl = $("#combox");
+const message = $<HTMLElement>("#message"), sub = $<HTMLElement>("#sub");
+const overlay = $<HTMLElement>(".overlay"), toast = $<HTMLElement>("#toast");
+const muteEl = $<HTMLElement>("#mute");
+const grabEl = $<HTMLButtonElement>("#grab");
+const stick = $<HTMLElement>("#stick");
+
+const keys: Record<string, boolean> = {};
+const sim = createSim();
+let scene: ReturnType<typeof createScene>;
+let acc = 0, last = performance.now(), muted = false;
+let pointerX = 0, pointerY = 0, camYaw = 0, camPitch = 14;
+let touchX = 0, touchZ = 0, stickPointer = -1, cameraPointer = -1;
+let sparkT = -1, sparkX = 0, sparkY = 0, sparkZ = 0, toastT = 0;
+let audio: AudioContext | undefined;
+let shownScore = -1, shownTries = -1, shownCombo = -1, crowned = false;
+
+const clamp = (v: number, a: number, b: number) => v < a ? a : v > b ? b : v;
+// Un solo formateador para las dos cifras que ve el jugador: el marcador y el
+// cartel de resultado tienen que coincidir, y el juego está en inglés.
+const fmt = (n: number) => n.toLocaleString("en");
+
+function moveStick(x: number, z: number) {
+  const d = Math.max(1, Math.hypot(x, z)); x /= d; z /= d;
+  stick.style.setProperty("--jx", `${x * 12}px`);
+  stick.style.setProperty("--jy", `${z * 7}px`);
+  stick.style.setProperty("--sx", `${x * 4}px`);
+  stick.style.setProperty("--sy", `${z * 2}px`);
+  stick.style.setProperty("--jr", `${x * 9}deg`);
+}
+
+function resize() {
+  const d = Math.min(devicePixelRatio, 2);
+  canvas.width = innerWidth * d;
+  canvas.height = innerHeight * d;
+  scene?.resize(camYaw, camPitch);
+}
+
+function hud() {
+  if (sim.score !== shownScore) { scoreEl.textContent = fmt(sim.score); shownScore = sim.score; }
+  if (sim.tries !== shownTries) {
+    triesEl.textContent = `${sim.tries} / 5`;
+    grabEl.textContent = `${sim.tries}`;
+    shownTries = sim.tries;
+  }
+  // El cartel enseña el multiplicador que YA se ha cobrado, no el que vendría:
+  // aparece con el segundo premio de la tirada, que es el primero que dobla, y
+  // así nunca promete un x2 que quizá no llegue. Se lee del estado y no de los
+  // eventos porque tiene que sobrevivir al resto de la tirada.
+  const mult = sim.combo > 1 ? comboMult(sim.combo - 1) : 0;
+  if (mult !== shownCombo) {
+    shownCombo = mult;
+    comboEl.classList.remove("show");
+    if (mult) {
+      comboXEl.textContent = `x${mult}`;
+      void comboEl.offsetWidth;   // fuerza reflow: reinicia la animación de entrada
+      comboEl.classList.add("show");
+    }
+  }
+}
+
+function tone(f: number, d = .12, type: OscillatorType = "sine", vol = .09) {
+  if (muted) return;
+  audio ||= new AudioContext();
+  const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime;
+  o.type = type;
+  o.frequency.setValueAtTime(f, t);
+  o.frequency.exponentialRampToValueAtTime(f * 1.35, t + d);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(.001, t + d);
+  o.connect(g).connect(audio.destination);
+  o.start(t); o.stop(t + d);
+}
+
+function newGame() {
+  releaseStick(); releaseCamera();
+  reset(sim, (Math.random() * 0xffffffff) >>> 0);
+  if (!scene) {
+    scene = createScene(canvas, sim.toys, sim.shape);
+    scene.resize(camYaw, camPitch);
+  } else scene.setShape(sim.shape);
+  scene.hideSparks();
+  sparkT = -1; toastT = 0; acc = 0; last = performance.now(); crowned = false;
+  toast.classList.remove("show");
+  hud();
+  message.textContent = "UNICORN CLAW";
+  sub.textContent = "FIVE TRIES  •  AIM FOR THE CROWN";
+  overlay.classList.remove("hidden");
+}
+
+function showToast(text: string, seconds = .8) {
+  toast.textContent = text;
+  toastT = seconds;
+  toast.classList.add("show");
+}
+
+function fire() {
+  if (sim.phase === P_RESULT) { newGame(); return; }
+  if (sim.phase === P_TITLE) { beginGame(sim); overlay.classList.add("hidden"); tone(420); return; }
+  if (beginDrop(sim)) hud();
+}
+
+function toggleMute() {
+  muted = !muted;
+  muteEl.textContent = muted ? "×" : "♪";
+}
+
+function handleEvents() {
+  // Durante el título el montón sigue asentándose y algún peluche puede colarse
+  // por la boca —que está abierta a propósito—. Esos eventos no son del jugador:
+  // se tiran sin cartel ni sonido, y `beginGame` deja el marcador a cero. De paso
+  // es lo que garantiza que el AudioContext no se cree hasta que haya un gesto
+  // real del usuario: creado antes nace suspendido y el juego se queda mudo.
+  if (sim.phase === P_TITLE) { sim.events.length = 0; return; }
+  for (const e of sim.events) {
+    if (e === EV_LOWER) { toastT = 0; toast.classList.remove("show"); tone(170, .25, "sawtooth"); }
+    else if (e === EV_CLOSE) tone(95, .16, "square");
+    else if (e === EV_GRAB) tone(330, .1, "triangle", .06);
+    // El enganche se anuncia al agarrar, no al cobrar: el jugador tiene que ver
+    // por qué suben dos peluches antes de que caigan.
+    else if (e === EV_HOOK) { showToast("DOUBLE!", 1.2); tone(520, .22, "triangle", .08); }
+    else if (e === EV_SLIP) tone(140, .3, "sawtooth");
+    else if (e >= EV_WIN) {
+      // El multiplicador viaja en el propio evento: los eventos se consumen en
+      // lote y `sim.combo` ya puede haber avanzado cuando se lee este.
+      const r = winRarity(e), mult = winMult(e);
+      if (r === 3) crowned = true;
+      showToast(mult > 1 ? `+${POINTS[r]! * mult}  x${mult}` : `+${POINTS[r]}`, .9);
+      sparkT = 0; sparkX = sim.mx; sparkY = FLOOR + .5; sparkZ = sim.mz;
+      // Cada escalón de combo sube el premio una cuarta justa, hasta dos octavas.
+      tone((r > 2 ? 880 : 620) * Math.min(mult, 32) ** .4, .4, "triangle");
+    }
+    else if (e === EV_EMPTY && !sim.won) showToast("MISSED!");
+    else if (e === EV_OVER) {
+      // JACKPOT es "ha caído un King", y con el King en 2.000 ya no basta con
+      // mirar la puntuación: 2.000 también salen de dos Unicorns. GREAT HAUL sigue
+      // a la tabla de puntos, un Unicorn más algo de resto.
+      const great = sim.score >= 1250;
+      message.textContent = crowned ? "JACKPOT!" : great ? "GREAT HAUL!" : "GAME OVER";
+      sub.textContent = `${fmt(sim.score)} POINTS  •  SPACE / R TO PLAY AGAIN`;
+      overlay.classList.remove("hidden");
+      tone(crowned || great ? 660 : 180, .5, "triangle");
+    }
+  }
+  sim.events.length = 0;
+}
+
+function frame(now: number) {
+  const dt = Math.min(.05, (now - last) / 1000);
+  last = now;
+
+  const keyX = +!!(keys.ArrowRight || keys.KeyD) - +!!(keys.ArrowLeft || keys.KeyA);
+  const keyZ = +!!(keys.ArrowDown || keys.KeyS) - +!!(keys.ArrowUp || keys.KeyW);
+  sim.inX = keyX || touchX;
+  sim.inZ = keyZ || touchZ;
+  moveStick(sim.phase === P_AIM ? sim.inX : 0, sim.phase === P_AIM ? sim.inZ : 0);
+
+  // Acumulador de paso fijo: el mundo avanza en pasos de H sea cual sea el
+  // refresco del monitor. El tope evita la espiral de la muerte tras un parón.
+  acc = Math.min(acc + dt, .2);
+  while (acc >= H) { step(sim); acc -= H; }
+  handleEvents();
+  if (toastT > 0 && (toastT -= dt) <= 0) toast.classList.remove("show");
+
+  // El render ocurre UNA vez por frame, nunca dentro del bucle de física.
+  for (let i = 0; i < sim.toys.length; i++) {
+    const p = sim.toys[i]!;
+    if (p.state === 2) scene.hidePrize(i); else scene.movePrize(i, p);
+  }
+  scene.moveClaw(sim.clawX, sim.clawY, sim.clawZ, sim.close);
+  scene.moveReticle(sim.clawX, surface(sim.shape, sim.clawX, sim.clawZ).y, sim.clawZ, sim.phase === P_AIM);
+
+  if (sparkT >= 0) {
+    sparkT += dt * 1.5;
+    if (sparkT > 1) { sparkT = -1; scene.hideSparks(); }
+    else scene.celebrate(sparkX, sparkY, sparkZ, sparkT);
+  }
+
+  hud();
+  requestAnimationFrame(frame);
+}
+
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if ((e.code === "Space" || e.code === "Enter") && !e.repeat) { e.preventDefault(); fire(); }
+  if (e.code === "KeyR" && sim.phase === P_RESULT && !e.repeat) newGame();
+  if (e.code === "KeyM" && !e.repeat) toggleMute();
+});
+addEventListener("keyup", e => { keys[e.code] = false; });
+
+function updateStick(e: PointerEvent) {
+  const r = stick.getBoundingClientRect(), radius = r.width * .36;
+  let x = e.clientX - r.left - r.width / 2, z = e.clientY - r.top - r.height / 2;
+  const d = Math.hypot(x, z), k = d > radius ? radius / d : 1;
+  x *= k; z *= k;
+  const power = Math.max(0, Math.min(1, d / radius) - .12) / .88;
+  touchX = d ? x / Math.min(d, radius) * power : 0;
+  touchZ = d ? z / Math.min(d, radius) * power : 0;
+}
+
+function releaseStick(id?: number) {
+  if (id !== undefined && id !== stickPointer) return;
+  const old = stickPointer; stickPointer = -1; touchX = touchZ = 0;
+  if (old >= 0 && stick.hasPointerCapture(old)) stick.releasePointerCapture(old);
+}
+
+stick.addEventListener("pointerdown", e => {
+  if (stickPointer >= 0) return;
+  stickPointer = e.pointerId; stick.setPointerCapture(e.pointerId); updateStick(e);
+  e.preventDefault();
+});
+stick.addEventListener("pointermove", e => { if (e.pointerId === stickPointer) updateStick(e); });
+stick.addEventListener("pointerup", e => releaseStick(e.pointerId));
+stick.addEventListener("pointercancel", e => releaseStick(e.pointerId));
+stick.addEventListener("lostpointercapture", e => releaseStick(e.pointerId));
+
+const press = (e: PointerEvent, action: () => void) => {
+  e.preventDefault(); action();
+};
+grabEl.addEventListener("pointerdown", e => press(e, fire));
+muteEl.addEventListener("pointerdown", e => press(e, toggleMute));
+
+function releaseCamera(id?: number) {
+  if (id !== undefined && id !== cameraPointer) return;
+  const old = cameraPointer; cameraPointer = -1;
+  if (old >= 0 && canvas.hasPointerCapture(old)) canvas.releasePointerCapture(old);
+}
+
+canvas.addEventListener("pointerdown", e => {
+  if (cameraPointer >= 0) return;
+  cameraPointer = e.pointerId; pointerX = e.clientX; pointerY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", e => {
+  if (e.pointerId !== cameraPointer) return;
+  camYaw = clamp(camYaw + (e.clientX - pointerX) * .16, -55, 55);
+  camPitch = clamp(camPitch + (e.clientY - pointerY) * .12, 4, 34);
+  pointerX = e.clientX; pointerY = e.clientY;
+  scene.moveCamera(camYaw, camPitch);
+});
+canvas.addEventListener("pointerup", e => releaseCamera(e.pointerId));
+canvas.addEventListener("pointercancel", e => releaseCamera(e.pointerId));
+canvas.addEventListener("lostpointercapture", e => releaseCamera(e.pointerId));
+
+function clearInput() {
+  for (const k in keys) delete keys[k];
+  sim.inX = sim.inZ = 0; releaseStick(); releaseCamera();
+}
+addEventListener("blur", clearInput);
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearInput(); });
+addEventListener("resize", resize);
+
+resize();
+newGame();
+requestAnimationFrame(frame);
+</script></body></html>

@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
+    <title>Little element game</title>
+  </head>
+  <body>
+    <table style="border:1px solid #000000; background: linear-gradient(to bottom right, #97FF97 , #8A8AFF);">
+      <tr>
+        <td colspan="3" align="center"><h1>Little element game</h1></td>
+      </tr>
+      <tr>
+        <td><p id="countdown"></p></td>
+        <td align="center"><h3 id="success"></h3></td>
+        <td><p id="points"></p></td>
+      </tr>
+      <tr>
+        <td colspan="2" align="right">
+          <canvas id="testCanvas" width="660" height="360" style="float:left;">   
+          </canvas>
+        </td>
+        <td style="vertical-align: top;">
+          <table>
+            <tr>
+              <td>
+                <table style="float:left;">
+                  <tr>
+                    <td style="border: 1px solid black; background-color:#FF4500;" border="1" ></td>
+                    <td>Fire: Burns earth. Can only be put next to air or fire</td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid black; background-color:#0000FF;"></td>
+                    <td>Water: Floods earth and puts out fire. Can only be put next to air or water</td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid black; background-color: #08BDEB"></td>
+                    <td>Air: Can be put next to any block</td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid black; background-color: #2FC418"></td>
+                    <td>Earth: No special skill. Can only be put next to air or earth</td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid black; background-color: #D2D2D2"></td>
+                    <td>Optional: Can be left empty or filled</td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid black; background-color: #FFFFFF"></td>
+                    <td>Blank: Must be left empty</td>
+                  </tr>
+                  <tr>
+                    <td><b>a,s,d</b></td>
+                    <td>Rotate block</td>
+                  </tr>
+				  <tr>
+					<td><b>Mouse</b></td>
+					<td>Move block</td>
+				  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <select id="ChangeLevelLst" size="10" width="200">
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <button id="ChangeLevelBtn" type="button">Select level</button>
+              </td>
+            </tr>
+            </table
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2" align="center">
+            <b id="feedback"></b>
+            <button id="NextLevelBtn" type="button" style="visibility:hidden">Next level!!</button>
+          </td>
+          <td>	
+            <button id="RestartLevelBtn" type="button">Restart level</button>
+          </td>
+        </tr>
+      </table>
+
+
+      <!-- Used scripts below -->
+      <script>jsonstr = [ 
+{
+	"id": 1,"name": "Basic Tutorial","size": { "x": 4, "y": 2},
+	"special_squares":{},
+	"blocks":{
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 2, "i": 0 }
+	}
+},
+{
+	"id": 2,"name": "Blanks and Optionals","size": { "x": 5, "y": 5},
+	"special_squares":{
+		"blank": ["0,0,0,4"],
+		"optional": ["4,0,4,4"],
+		"disabled": ["1,4,3,4"]
+	},
+	"blocks": {
+		"b_earth": { "s": 0, "sq": 2, "t": 0, "l": 2, "i": 0 }
+	}
+},
+{
+	"id": 3,"name": "Basic block test","size": { "x": 10, "y": 5},
+	"special_squares":{
+		"disabled": [ "0,2,9,2", "2,0,2,2", "3,1", "5,0,6,0", "6,1,7,1", "9,1", "1,3,3,3", "3,4,9,4", "8,3,9,3" ]
+	},
+	"blocks":{
+		"b_earth": { "s": 1, "sq": 1, "t": 1, "l": 1, "i": 1 }
+	}
+},
+{
+	"id": 4,"name": "It's all about L's","size": { "x": 6, "y": 4 },
+	"special_squares":{
+	},
+	"blocks": {
+		"b_air": { "s": 0, "sq": 0, "t": 0, "l": 3, "i": 0 },
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 3, "i": 0 },
+	}
+},
+{
+	"id": 5,"name": "It's all about L's II","size": { "x": 5, "y": 5 },
+	"special_squares":{
+		"blank": [ "4, 4" ]
+	},
+	"blocks": {
+		"b_air": { "s": 0, "sq": 0, "t": 0, "l": 3, "i": 0 },
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 3, "i": 0 },
+	}
+},
+{
+	"id": 6,"name": "Symmetry","size": { "x": 6, "y": 4 },
+	"special_squares":{
+		"disabled" : [ "0,0", "5,0", "0,3", "5,3" ],
+	},
+	"blocks": {
+		"b_air": { "s": 4 },
+		"b_water": { "sq": 1 }
+	}
+},
+{
+	"id": 7,"name": "One to rule them all","size": { "x": 5, "y": 5},
+	"special_squares":{
+		"optional": ["2,4"]
+	},
+	"blocks": {
+		"b_earth": { "s": 2, "sq": 1, "t": 2, "l": 1, "i": 0 }
+	}
+},
+{
+	"id": 8,"name": "Babtism by fire","size": { "x": 10, "y": 6},
+	"special_squares":{},
+	"blocks": {
+		"b_fire": { "s": 2, "sq": 4, "t": 2, "l": 7, "i": 0 }
+	}
+},
+{
+	"id": 9,"name": "Maze","size": { "x": 8, "y": 8},
+	"special_squares":{
+		"blank": ["3,0","5,0,6,0","3,2","5,2,7,2","2,3,2,5","0,4","4,4,6,4","1,6,1,7","6,6,7,6","3,7,7,7"],
+		"optional": ["1,0","0,1,2,1","2,2","0,3","4,6"],
+		"earth": ["7,0","0,7"]
+	},
+	"blocks": {
+		"b_earth": { "s": 2, "sq": 1, "t": 2, "l": 5, "i": 0 },
+	}
+},
+{
+	"id": 10,"name": "Doggy style","size": { "x": 11, "y": 8},
+	"special_squares":{
+		"blank": ["2,3"],
+		"disabled": ["0,2","0,3,1,7","1,0","2,0,6,1","8,0","9,0,9,1","10,0","10,1","3,6,6,7","8,5,9,7","9,4","10,4","10,5","10,6","10,7"],
+		"optional": ["8,4"],
+	},
+	"blocks": {
+		"b_water": { "s": 2, "sq": 1, "t": 2, "l": 4, "i": 1 },
+	}
+},
+{
+	"id": 11,"name": "Elements Tutorial","size": { "x": 4, "y": 5},
+	"special_squares":{},
+	"blocks": {
+		"b_fire": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 },
+		"b_air": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 2 },
+		"b_water": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 },
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 }
+   }
+},
+{
+	"id": 12,"name": "It's all about S'es","size": { "x": 5, "y": 6 },
+	"special_squares":{
+		"optional" : [ "0,0,0,1", "4,4,4,5" ],
+		"disabled" : [ "0,4,0,5", "1,5,2,5", "3,0,4,0", "4,1,4,2" ],
+	},
+	"blocks": {
+		"b_fire": { "s": 2, "sq": 0, "t": 0, "l": 0, "i": 0 },
+		"b_air": { "s": 2, "sq": 0, "t": 0, "l": 0, "i": 0 },
+		"b_water": { "s": 1, "sq": 0, "t": 0, "l": 0, "i": 0 },
+	}
+},
+{
+	"id": 13,"name": "It's all about T's","size": { "x": 6, "y": 5 },
+	"special_squares":{
+		"disabled" : [ "4,0,5,0", "0,3,1,4" ],
+	},
+	"blocks": {
+		"b_fire": { "s": 0, "sq": 0, "t": 2, "l": 0, "i": 0 },
+		"b_air": { "s": 0, "sq": 0, "t": 2, "l": 0, "i": 0 },
+		"b_water": { "s": 0, "sq": 0, "t": 2, "l": 0, "i": 0 },
+	}
+},
+{
+	"id": 14,"name": "Know your elements","size": { "x": 10, "y": 6},
+	"blocks": {
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 2, "i": 0 },
+		"b_air": { "s": 0, "sq": 3, "t": 0, "l": 1, "i": 0 },
+		"b_water": { "s": 1, "sq": 0, "t": 0, "l": 1, "i": 0 },
+		"b_fire": { "s": 1, "sq": 1, "t": 2, "l": 3, "i": 0 },
+	}
+},
+{
+	"id": 15,"name": "Burning sky","size": { "x": 6, "y": 6},
+	"special_squares":{},
+	"blocks": {
+		"b_fire": { "s": 1, "sq": 0, "t": 1, "l": 1, "i": 0 },
+		"b_air": { "s": 0, "sq": 0, "t": 1, "l": 2, "i": 1 },
+		"b_earth": { "s": 0, "sq": 1, "t": 0, "l": 0, "i": 1 },
+	}
+},
+{
+	"id": 16,"name": "Square Triangular","size": { "x": 6, "y": 6},
+	"special_squares":{},
+	"blocks": {
+		"b_fire": { "s": 1, "sq": 0, "t": 0, "l": 1, "i": 0 },
+		"b_air": { "s": 2, "sq": 0, "t": 2, "l": 1, "i": 0 },
+		"b_water": { "s": 0, "sq": 0, "t": 0, "l": 1, "i": 0 },
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 },
+	}
+},
+{
+	"id": 17,"name": "Gadolinium","size": { "x": 8, "y": 8},
+	"special_squares":{},
+	"blocks": {
+		"b_fire": { "s": 1, "sq": 1, "t": 0, "l": 4, "i": 1 },
+		"b_air": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 2 },
+		"b_water": { "s": 2, "sq": 1, "t": 2, "l": 2, "i": 0 },
+	}
+},
+{
+	"id": 18,"name": "Required Elements","size": { "x": 4, "y": 5},
+	"special_squares":{
+		"fire": ["0,0,3,0"],
+		"air": ["0,1,3,1","0,3,3,3"],
+		"water": ["0,2,3,2"],
+		"earth": ["0,4,3,4"]
+	},
+	"blocks": {
+		"b_fire": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 },
+		"b_air": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 2 },
+		"b_water": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 },
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 }
+	}
+},
+{
+	"id": 19,"name": "Know your elements II","size": { "x": 10, "y": 6},
+	"special_squares":{
+		"fire": ["3,2,4,3"],
+		"air": ["6,2,6,4","7,2"],
+		"water": [],
+		"earth": []
+	},
+	"blocks": {
+		"b_earth": { "s": 0, "sq": 0, "t": 0, "l": 2, "i": 0 },
+		"b_air": { "s": 0, "sq": 3, "t": 0, "l": 1, "i": 0 },
+		"b_water": { "s": 1, "sq": 0, "t": 0, "l": 1, "i": 0 },
+		"b_fire": { "s": 1, "sq": 1, "t": 2, "l": 3, "i": 0 },
+	}
+},
+{
+	"id": 20,"name": "Air is our friend","size": { "x": 8, "y": 6},
+	"special_squares":{
+		"air": ["4,0","5,3,6,4"],
+		"fire": ["3,2,4,3","1,1"],
+		"water": ["6,2,7,2","7,3,7,4","0,3"],
+	},
+	"blocks": {
+		"b_air": { "s": 1, "sq": 0, "t": 0, "l": 4, "i": 1 },
+		"b_water": { "s": 0, "sq": 1, "t": 0, "l": 2, "i": 0 },
+		"b_fire": { "s": 0, "sq": 0, "t": 0, "l": 2, "i": 1 },
+	}
+},
+{
+	"id": 21,"name": "Divide and Conquer","size": { "x": 8, "y": 6},
+	"special_squares":{
+		"air": ["2,1","4,3","2,5","7,0"],
+		"fire": ["5,2","6,3"],
+		"earth": ["0,2,0,3","1,3,1,4"],
+	},
+	"blocks": {
+		"b_air": { "s": 1, "sq": 1, "t": 0, "l": 1, "i": 1 },
+		"b_water": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 1 },
+		"b_fire": { "s": 0, "sq": 1, "t": 0, "l": 2, "i": 1 },
+		"b_earth": { "s": 1, "sq": 0, "t": 2, "l": 0, "i": 0 },
+	}
+},
+{
+	"id": 22,"name": "MC Sword","size": { "x": 12, "y": 11},
+	"special_squares":{
+		"disabled": ["0,0,7,2","8,0,8,1","9,0","4,3,6,3","5,4","0,3,1,8","0,9","0,10","2,5,2,7","3,6",
+					"3,10,9,10","10,10","11,10","4,9,6,9","5,8","11,2,11,9","10,3,10,9","9,4,9,9","8,5,8,7","7,6"],
+		"optional": ["1,9"]
+	},
+	"blocks": {
+		"b_air": { "s": 0, "sq": 0, "t": 2, "l": 1, "i": 0 },
+		"b_water": { "s": 1, "sq": 0, "t": 1, "l": 0, "i": 0 },
+		"b_fire": { "s": 0, "sq": 2, "t": 2, "l": 0, "i": 0 },
+		"b_earth": { "s": 0, "sq": 2, "t": 0, "l": 0, "i": 0 },
+	}
+},
+{
+	"id": 23,"name": "Ring of Fire","size": { "x": 12, "y": 12},
+	"special_squares":{
+		"water":["3,3,8,8"],
+		"blank": ["0,0,1,1","2,0","0,2","10,0,11,1","9,0","11,2","10,10,11,11","9,11",
+					"11,9","0,10,1,11","0,9","2,11","3,3","8,8","3,8","8,3"],
+
+	},
+	"blocks": {
+		"b_fire": { "s": 2, "sq": 3, "t": 8, "l": 2, "i": 2 },
+		"b_air": { "s": 0, "sq": 0, "t": 0, "l": 0, "i": 4 },
+		"b_water": { "s": 4, "sq": 2, "t": 2, "l": 0, "i": 0 },
+	}
+},
+{
+	"id": 24,"name": "Patriot","size": { "x": 20, "y": 14},
+	"no_multiplier": ["blank"],
+	"no_timer": [],
+	"special_squares":{
+		"blank": ["0,0,5,4","0,9,5,13","10,0,19,4","10,9,19,9","10,10,19,13"],
+	},
+	"blocks": {
+		"b_water": { "s": 6, "sq": 4, "t": 8, "l": 8, "i": 4 },
+	}
+},
+];
+jsonstr_tst = [{
+	"id": 99,"name": "Max reference", size: { "x": 20, "y": 20},
+	"special_squares":{
+		"fire": ["3,2,4,4"],
+		"air": ["6,2,6,4","7,2"],
+		"water": [],
+		"earth": []
+	},
+	"blocks": {
+		"b_earth": { "s": 1, "sq": 2, "t": 3, "l": 2, "i": 1 },
+		"b_air": { "s": 1, "sq": 3, "t": 0, "l": 1, "i": 1 },
+		"b_water": { "s": 1, "sq": 2, "t": 3, "l": 1, "i": 4 },
+		"b_fire": { "s": 1, "sq": 1, "t": 2, "l": 3, "i": 0 },
+	}
+}];
+</script>
+      <script>
+// All drawing stuff goes to this file. 
+// It uses somekind of model where it gets its information for drawing current game situation
+
+function GraphEngine( canvas, boardModel, boardController ) {
+	// Drawing canvas and context
+	this.c = canvas;
+	this.ctx = canvas.getContext("2d");
+	
+	// Settings for game board - perhaps from board model?
+	this.board = boardModel;
+	this.controller = boardController;
+	this.rowCount = boardModel.size.y;
+	this.colCount = boardModel.size.x;
+	
+	// Offsets for different game parts
+	this.boardStartX = 5;
+	this.boardStartY = 30;
+	this.boardBlockXinit = 330;
+	this.boardBlockYinit = 40;
+	
+	this.addingElement = false;
+	this.lastLoc = { x:0, y:0 };
+	this.orientation = 0;
+	this.flipped = false;
+
+	
+	this.activeBlocks = [];
+	this.timerOn = false;
+	this.intervalId;
+	//for points calculation purposes
+	this.millisLeft;
+	
+	// Initialization function
+	this.init = function() {
+		this.c.addEventListener( "click", this.doMouseClick.bind( this ) );
+		this.c.addEventListener( "mousemove", this.doMouseMove.bind( this ) );
+		window.addEventListener( "keydown", this.doKeyDown.bind( this ), false );
+		
+		var seconds_left = (this.rowCount * this.colCount - map.disabled_squares)*2;
+		this.updateTimer(parseInt(seconds_left / 60), parseInt(seconds_left % 60))
+		document.getElementById("success").innerHTML = "Fill the board with the provided blocks using mouse and keys a,s,d"
+		
+		// defaults for block and cell sizes, 14 + 2 * 20 = 320
+		var maxDim = this.rowCount > this.colCount ? this.rowCount : this.colCount;
+		this.boardCellSize = Math.floor( 320 / maxDim ) > 24 ? 24 : Math.floor( 320 / maxDim );
+		console.log("board cell size:" + this.boardCellSize);
+		this.boardBlockSize = this.boardCellSize - 2;
+	};
+	
+	// Draws current state of the game
+	this.draw = function() {
+		// clear everything first
+		this.ctx.beginPath();
+		this.ctx.clearRect( 0,0, this.c.width, this.c.height );
+
+		this.boardBlockX = this.boardBlockXinit;
+		this.boardBlockY = this.boardBlockYinit;
+		
+		// draw different parts
+		this.ctx.strokeRect( this.boardStartX - 3, this.boardStartY - 3, 
+			this.colCount * this.boardCellSize + 6, this.rowCount * this.boardCellSize + 6 );
+		this.drawInfo();
+		this.drawBlocks();
+		this.drawGame();
+	};
+	
+	
+	this.drawInfo = function() {
+		this.ctx.font = "20px Arial";
+
+		this.ctx.fillStyle = "#000000";
+		this.ctx.strokeStyle = "#000000";
+		
+		this.ctx.fillText("Available blocks:", this.boardBlockX, this.boardBlockY - 20);	// Does NOT work in Konqueror - valid HTML5 though
+		this.ctx.strokeText( this.board.name, this.boardStartX, this.boardStartY - 10 ); 	// Does NOT work in Konqueror - valid HTML5 though
+	}
+	
+	
+	this.drawGame = function() {
+		// Draw current game situation		
+		for( var row in this.board.activeBoard ) {
+			for ( var column = 0; column < this.board.activeBoard[row].length; column++ ) {
+				this.drawBoardElement( this.board.activeBoard[row][column], row, column );
+			}
+		}
+	}
+
+	this.setElementFill = function ( element ) {
+		switch ( element ) {
+			// Color codes from: http://www.rapidtables.com/web/color/RGB_Color.htm
+			// TODO Colors / images from ElementModel
+			case 'fire':
+			case 'b_fire':
+				this.ctx.fillStyle = "#FF4500";
+				break;
+			case 'air':
+			case 'b_air':
+				this.ctx.fillStyle = "#08BDEB";
+				break;
+			case 'water':
+			case 'b_water':
+				this.ctx.fillStyle = "#0000FF";
+				break;
+			case 'earth':
+			case 'b_earth':
+				this.ctx.fillStyle = "#2FC418";
+				break;
+			case 'disabled':
+				this.ctx.fillStyle = "#000000";
+				break;
+			case 'optional':
+				this.ctx.fillStyle = "#D2D2D2";
+				break;
+			case 'blank':
+				this.ctx.fillStyle = "#FFFFFF";
+				break;
+			default:
+				this.ctx.fillStyle = "#909090";
+				break;
+		}
+	}
+	
+	this.drawElement = function( element, x, y) {
+		if ( element != "disabled" ) {
+			this.ctx.strokeStyle = "#909090";
+			this.ctx.strokeRect( x - 1, y - 1, this.boardBlockSize + 2, this.boardBlockSize + 2 );
+			if ( element === undefined ) {
+			} else {
+				this.setElementFill( element );
+				if ( element.substr(0, 2) == "b_") {
+					if ( this.addingElement ) {
+						this.ctx.strokeStyle = "#404040";
+						this.ctx.strokeRect( x, y, this.boardBlockSize, this.boardBlockSize);
+					}
+					this.ctx.fillRect( x, y, this.boardBlockSize, this.boardBlockSize);
+				} else if ( element == 'blank' || element == 'optional' ) {
+					this.ctx.fillRect( x, y, this.boardBlockSize, this.boardBlockSize);
+				} else {
+					this.ctx.strokeStyle = this.ctx.fillStyle;
+					this.ctx.strokeRect( x, y, this.boardBlockSize, this.boardBlockSize);			
+				}
+			}
+		}	
+	}
+	
+	this.drawBoardElement = function( element, x, y) {
+		this.drawElement(  element, 
+			this.boardStartX + x * this.boardCellSize + 1,
+			this.boardStartY + y * this.boardCellSize + 1);
+	}
+	
+	this.drawBlocks = function( ) {
+		this.activeBlocks = []; // reset bounding boxes for available blocks
+		
+		// Draw available block based on board
+		for ( var element in this.board.blocks ) {
+			this.setElementFill( element );
+			for ( var block in this.board.blocks[element] ) {
+				var amount = this.board.blocks[element][block];
+				if ( amount == 0 ) {
+					// Don't draw empty blocks
+					continue;
+				}
+				// Show amount and save "bounding box" for later use
+				this.ctx.fillText( "x " + amount, this.boardBlockX + this.boardBlockSize * 5, this.boardBlockY + this.boardBlockSize );
+				this.activeBlocks.push( { 
+					x1: this.boardBlockX, y1: this.boardBlockY, 
+					x2: this.boardBlockX + this.boardBlockSize * 4, 
+					y2: this.boardBlockY + this.boardBlockSize * 2, 
+					blocktype: block, blockelement: element }  ); 
+				// Draw the block
+				switch ( block ) {
+					case 's':
+						this.ctx.fillRect( this.boardBlockX, this.boardBlockY,
+							this.boardBlockSize * 2, this.boardBlockSize );
+						this.ctx.fillRect( this.boardBlockX + this.boardBlockSize, 
+							this.boardBlockY + this.boardBlockSize,
+							this.boardBlockSize * 2, this.boardBlockSize );
+						break;
+					case 'sq':
+						this.ctx.fillRect( this.boardBlockX, this.boardBlockY, 
+							this.boardBlockSize * 2, this.boardBlockSize * 2);
+						break;
+					case 'l':
+						this.ctx.fillRect( this.boardBlockX, this.boardBlockY, 
+							this.boardBlockSize * 3, this.boardBlockSize);
+						this.ctx.fillRect( this.boardBlockX, 
+							this.boardBlockY + this.boardBlockSize, 
+							this.boardBlockSize, this.boardBlockSize );
+						break;
+					case 't':
+						this.ctx.fillRect( this.boardBlockX, this.boardBlockY,
+							this.boardBlockSize * 3, this.boardBlockSize );
+						this.ctx.fillRect( this.boardBlockX + this.boardBlockSize, 
+							this.boardBlockY + this.boardBlockSize,
+							this.boardBlockSize, this.boardBlockSize );						
+						break;
+					case 'i':
+						this.ctx.fillRect( this.boardBlockX, this.boardBlockY,
+							this.boardBlockSize * 4, this.boardBlockSize );
+						break;						
+					default:
+						break;
+				}
+				this.boardBlockY += this.boardBlockSize * 3;
+				if ( this.boardBlockY + this.boardBlockSize * 2 > this.c.height ) {
+					// create new column
+					this.boardBlockX = this.boardBlockX + this.boardBlockSize * 8;
+					this.boardBlockY = this.boardBlockYinit;
+				}
+			}
+		}
+	}
+
+	this.drawBlockShape = function( x1, y1, x2, y2, x3, y3, x4, y4 ) {
+		this.drawBoardElement( this.addingElement.element, x1, y1 );
+		this.drawBoardElement( this.addingElement.element, x2, y2 );
+		this.drawBoardElement( this.addingElement.element, x3, y3 );
+		this.drawBoardElement( this.addingElement.element, x4, y4 );
+
+	}
+	
+	this.drawBlockOnBoard = function( x, y ) {
+		switch ( this.addingElement.type ) {
+			case 's':
+				if ( !this.flipped ) {
+					if ( this.orientation == 0 || this.orientation == 2 ) {
+						x = x > this.colCount - 3 ? this.colCount - 3 : x;
+						y = y > this.rowCount - 2 ? this.rowCount - 2 : y;
+						this.drawBlockShape( x, y, x + 1, y, x + 1, y + 1, x + 2, y + 1 );
+					} else {
+						x = x > this.colCount - 2 ? this.colCount - 2 : x;
+						y = y > this.rowCount - 3 ? this.rowCount - 3 : y;
+						this.drawBlockShape( x + 1, y, x, y + 1, x + 1, y + 1, x, y + 2 );
+					}
+				} else {
+					if ( this.orientation == 0 || this.orientation == 2 ) {
+						x = x > this.colCount - 3 ? this.colCount - 3 : x;
+						y = y > this.rowCount - 2 ? this.rowCount - 2 : y;
+						this.drawBlockShape( x, y + 1, x + 1, y, x + 1, y + 1, x + 2, y );
+					} else {
+						x = x > this.colCount - 2 ? this.colCount - 2 : x;			// *_
+						y = y > this.rowCount - 3 ? this.rowCount - 3 : y;			// **
+						this.drawBlockShape( x, y, x, y + 1, x + 1, y + 1, x + 1, y + 2 );	// _*
+					}
+				}
+				break;
+			case 'sq':
+				x = x > this.colCount - 2 ? this.colCount - 2 : x;
+				y = y > this.rowCount - 2 ? this.rowCount - 2 : y;
+				this.drawBlockShape( x, y, x + 1, y, x, y + 1, x + 1, y + 1 );
+				break;
+			case 'l':
+				if ( !this.flipped ) {
+					if ( this.orientation == 0 || this.orientation == 2 ) {
+						x = x > this.colCount - 3 ? this.colCount - 3 : x;
+						y = y > this.rowCount - 2 ? this.rowCount - 2 : y;
+						if ( this.orientation == 0 ) {
+							this.drawBlockShape( x, y, x + 1, y, x + 2, y, x, y + 1 );
+						} else {
+							this.drawBlockShape( x, y + 1, x + 1, y + 1, x + 2, y + 1, x + 2, y );
+						}
+					} else {
+						x = x > this.colCount - 2 ? this.colCount - 2 : x;
+						y = y > this.rowCount - 3 ? this.rowCount - 3 : y;
+						if ( this.orientation == 1 ) {
+							this.drawBlockShape( x, y, x + 1, y, x + 1, y + 1, x + 1, y + 2 );
+						} else {
+							this.drawBlockShape( x, y, x, y + 1, x, y + 2, x + 1, y + 2 );
+						}
+					}
+				} else {
+					if ( this.orientation == 0 || this.orientation == 2 ) {
+						x = x > this.colCount - 3 ? this.colCount - 3 : x;
+						y = y > this.rowCount - 2 ? this.rowCount - 2 : y;
+						if ( this.orientation == 0 ) {
+							this.drawBlockShape( x, y, x, y + 1, x + 1, y + 1, x + 2, y + 1 );
+						} else {
+							this.drawBlockShape( x, y, x + 1, y, x + 2, y, x + 2, y + 1 );
+						}
+					} else {
+						x = x > this.colCount - 2 ? this.colCount - 2 : x;
+						y = y > this.rowCount - 3 ? this.rowCount - 3 : y;
+						if ( this.orientation == 1 ) {
+							this.drawBlockShape( x, y + 2, x + 1, y, x + 1, y + 1, x + 1, y + 2 );
+						} else {
+							this.drawBlockShape( x, y, x + 1, y, x, y + 1, x, y + 2 );
+						}
+					}					
+				}
+				break;
+			case 't':
+				if ( this.orientation == 0 || this.orientation == 2 ) {
+					x = x > this.colCount - 3 ? this.colCount - 3 : x;
+					y = y > this.rowCount - 2 ? this.rowCount - 2 : y;
+					if ( this.orientation == 0 ) {
+						this.drawBlockShape( x, y, x + 1, y, x + 2, y, x + 1, y + 1 );
+					} else {
+						this.drawBlockShape( x, y + 1, x + 1, y + 1, x + 2, y + 1, x + 1, y );
+					}
+				} else {
+					x = x > this.colCount - 2 ? this.colCount - 2 : x;
+					y = y > this.rowCount - 3 ? this.rowCount - 3 : y;
+					if ( this.orientation == 1 ) {
+						this.drawBlockShape( x + 1, y, x + 1, y + 1, x + 1, y + 2, x, y + 1 );
+					} else {
+						this.drawBlockShape( x, y, x, y + 1, x, y + 2, x + 1, y + 1 );
+					}
+				}
+				break;
+			case 'i':
+				if ( this.orientation == 0 || this.orientation == 2 ) {
+					x = x > this.colCount - 4 ? this.colCount - 4 : x;
+					y = y > this.rowCount - 1 ? this.rowCount - 1 : y;
+					this.drawBlockShape( x, y, x + 1, y, x + 2, y, x + 3, y );
+				} else {
+					x = x > this.colCount - 1 ? this.colCount - 1 : x;
+					y = y > this.rowCount - 4 ? this.rowCount - 4 : y;
+					this.drawBlockShape( x, y, x , y + 1, x, y + 2, x, y + 3 );
+				}
+				break;						
+			default:
+				break;
+		}
+		this.activeBlockX = x;
+		this.activeBlockY = y;
+	}
+
+	this.insideBoard = function( x, y ) {
+		return ( x >= this.boardStartX && x <= this.boardStartX + this.colCount * this.boardCellSize 
+			&& y >= this.boardStartY && y <= this.boardStartY + this.rowCount * this.boardCellSize );
+	}
+	
+	this.boardLoc = function ( locx, locy ) {
+		return { x: Math.floor( ( locx - this.boardStartX) / this.boardCellSize ), 
+				y: Math.floor( ( locy - this.boardStartY) / this.boardCellSize )};
+	}
+
+	this.doMouseClick = function( event ) {
+		// TODO route event forward based on where it had happened
+		var bbox = this.c.getBoundingClientRect();
+		var loc = { x: Math.floor( event.clientX - bbox.left * (this.c.width  / bbox.width) ),
+				y: Math.floor( event.clientY - bbox.top  * (this.c.height / bbox.height) )
+			};
+
+		graph.printFeedBack("");			
+		
+		if ( this.insideBoard( loc.x, loc.y ) ) 
+		{
+			// Forward clicks to board to board controller
+			var boardLoc = this.boardLoc( loc.x, loc.y );
+			
+			if ( this.addingElement ) {
+				// Draw element to board controller
+				if ( this.controller.addBlock( this.addingElement.element, this.addingElement.type, this.activeBlockX, this.activeBlockY, this.orientation, this.flipped ) ) // TODO Orientation
+				{
+					this.boardState = false;
+					this.addingElement = false;
+					this.lastBlockLoc = undefined;
+					this.draw();
+					if(this.controller.checkSuccess()){
+						clearInterval(this.intervalId);
+						this.calculatePoints();
+						document.getElementById("success").innerHTML = "Success!!";
+					}
+
+				}
+			}
+			
+		} else {
+			// Check if block was already selected
+			for ( var i in this.activeBlocks ) {
+				var x1 = this.activeBlocks[i].x1, y1 = this.activeBlocks[i].y1, x2 = this.activeBlocks[i].x2, y2 = this.activeBlocks[i].y2;
+				if ( loc.x > x1 && loc.x < x2 &&
+					loc.y > y1 && loc.y < y2 ) {	
+					
+					this.addingElement = { element: this.activeBlocks[i].blockelement, type: this.activeBlocks[i].blocktype };
+					this.orientation = 0;
+					this.flipped = false;
+					
+					if(!this.timerRunning()){
+						this.runTimer();
+					}
+					
+					// Draw edges around selected block
+					if ( this.lastBlockLoc === undefined ) {
+						console.log( "not found" );
+					} else {
+						this.ctx.putImageData( this.blockState, this.lastBlockLoc.x1 - 1, this.lastBlockLoc.y1 - 1 );
+					}
+					this.blockState = this.ctx.getImageData( x1 - 1, y1 - 1, x2 - x1 + 2, y2 - y1 + 2 );
+					this.ctx.strokeStyle = "#000000";
+					this.ctx.strokeRect( x1, y1, x2 - x1, y2 - y1 );
+					this.ctx.strokeStyle = "#FFFFFF";
+					
+					this.lastBlockLoc = { x1: x1, y1: y1 };
+					
+					// Draw shape to board
+					this.draftBlock( this.lastLoc.x, this.lastLoc.y );
+					break;
+				}
+			}
+		}
+	}
+	
+	this.draftBlock = function( x, y ) {
+		if ( this.boardState ) {
+			this.ctx.putImageData( this.boardState, this.boardStartX - 1, this.boardStartY - this.boardCellSize - 1 );
+		}
+		// Save current board so that we can draw over it
+		this.boardState = this.ctx.getImageData( this.boardStartX - 1,  this.boardStartY - this.boardCellSize - 1, 
+			this.colCount * this.boardCellSize + 2, ( this.rowCount + 1 ) * this.boardCellSize + 2
+			);
+		
+		// Draw block baesed on type and element
+		this.drawBlockOnBoard( x, y );
+		
+	}
+	
+	this.doMouseMove = function( event ) {
+		var bbox = this.c.getBoundingClientRect();
+		var loc = { x: Math.floor( event.clientX - bbox.left * (this.c.width  / bbox.width) ),
+				y: Math.floor( event.clientY - bbox.top  * (this.c.height / bbox.height) )
+			}; 
+		if ( this.insideBoard( loc.x, loc.y ) && this.addingElement ) 
+		{
+			var boardLoc = this.boardLoc( loc.x, loc.y );
+			if ( boardLoc.x != this.lastLoc.x || boardLoc.y != this.lastLoc.y ) {
+				
+				this.draftBlock( boardLoc.x, boardLoc.y );
+				
+				// Save current location
+				this.lastLoc = boardLoc;
+			}
+		}
+	}
+		
+	this.doKeyDown = function( event ) {
+		// Route to controller to handle block orientation
+		if ( event.keyCode == 65 ) {
+			this.orientation++;
+		} else if ( event.keyCode == 68 ) {
+			this.orientation--;
+		} else if ( event.keyCode == 83 ) {
+			this.flipped = !this.flipped;
+		}
+		this.orientation = this.orientation < 0 ? this.orientation += 4 : this.orientation;
+		this.orientation = this.orientation >= 4 ? this.orientation -= 4 : this.orientation;
+		this.draftBlock( this.lastLoc.x, this.lastLoc.y );
+	}
+
+	
+	this.timerRunning = function( ) {
+		return this.timerOn;
+	}
+	
+	this.runTimer = function( ) {
+		//Calculate the available time
+		//+1 because otherwise timer would jump 2s on first interval
+		
+		var availableTime = (this.rowCount * this.colCount + 1 - map.disabled_squares) * 2 * 1000;
+		
+		// set the date we're counting down to
+		var targetDate = Date.now() + availableTime;
+		// variables for time units
+		var minutes, seconds;
+		// get tag element
+		var countdown = document.getElementById("countdown");
+		this.timerOn = true;
+		this.intervalId = setInterval(function () {
+				var currentDate = Date.now();
+				graph.millisLeft = targetDate - currentDate
+				var secondsLeft = graph.millisLeft / 1000;
+
+				graph.updateTimer (parseInt(secondsLeft / 60), parseInt(secondsLeft % 60));  
+		}, 1000);
+	}
+	
+	this.updateTimer = function( minutes, seconds ) {
+		document.getElementById("countdown").innerHTML = minutes + ":" + seconds;
+	}
+	
+ 	this.calculatePoints = function( ) {
+		var points = 0;
+		if (this.millisLeft > 0){
+			var multiplier = 1 + (this.board.pointsMultiplier/100);
+			points = parseInt((this.millisLeft / 10) * multiplier)
+		}
+		document.getElementById("points").innerHTML = "You got " + points + " points!"
+ 	}
+	
+	this.printFeedBack = function( msg ) {
+			document.getElementById("feedback").innerHTML = msg;
+	}
+	
+}
+</script>
+      <script>//Model object of the game map. Initialized by reading from json from text file.
+function MapModel( canvas ) {
+	
+	this.lookup = {};
+	this.pointsMultiplier = 0;
+	this.disabled_squares = 0;
+	this.no_multiplier;
+	this.no_timer;
+	
+	// Initialization function
+	this.init = function( id ) {
+		for (var i = 0, len = jsonstr.length; i < len; i++) {
+			this.lookup[jsonstr[i].id] = jsonstr[i]; 
+		}
+		
+		// Load current data
+		this.id = id;
+		this.name = this.lookup[id].name;
+		this.specials = this.lookup[id].special_squares;
+		this.size = this.lookup[id].size;
+		this.blocks = this.lookup[id].blocks;
+		this.no_multiplier = this.lookup[id].no_multiplier || ["disabled"]
+		this.no_timer = this.lookup[id].no_timer || ["disabled"]
+		
+		// Init board & data
+		this.activeBoard = new Array( this.size.x );
+		for ( var i = 0; i < this.size.x; i++ ) {
+			this.activeBoard[i] = new Array( this.size.y );
+		}
+		this.initBoard();
+		this.countDisabled();
+		
+	}
+	
+	this.initBoard = function() {
+		for ( var element in this.specials ) {
+			for ( var block in this.specials[ element ] ) {
+				var position = (this.specials[ element ])[ block ].split(",") ;
+				var xArr = [parseInt(position[0]),parseInt(position[2]) || parseInt(position[0])].sort(sortNumber);
+				var yArr = [parseInt(position[1]),parseInt(position[3]) || parseInt(position[1])].sort(sortNumber);
+				
+				if(xArr[ 0 ] == xArr[ 1 ]){
+					x = xArr[0];
+					for(y = yArr[ 0 ]; y <= yArr[ 1 ]; y++){
+						this.activeBoard[ x ][ y ] = element;
+						this.countMultiplier(element);
+					}
+				}
+				else if(yArr[ 0 ] == yArr[ 1 ]){
+					y = yArr[0];
+					for(x = xArr[ 0 ]; x <= xArr[ 1 ]; x++){
+						this.activeBoard[ x ][ y ] = element;
+						this.countMultiplier(element);
+					}
+				}
+				else{
+					for(x = xArr[ 0 ]; x <= xArr[ 1 ]; x++){
+						for(y = yArr[ 0 ]; y <= yArr[ 1 ]; y++){
+							this.activeBoard[ x ][ y ] = element;
+							this.countMultiplier(element);
+
+						}
+					}
+				}
+			}
+		}
+	}
+
+	
+	function sortNumber(a,b) {
+		return a - b;
+	}
+	this.countMultiplier = function( element ) {
+		if(element == 'optional'){
+			this.pointsMultiplier--;
+		}
+		else if(element == "disabled" || this.no_multiplier.indexOf(element) > -1){
+		
+		}
+		else{
+			this.pointsMultiplier++;
+		}
+	}
+	
+	this.countDisabled = function( ) {
+	
+		for( var row in this.activeBoard ) {
+			for ( var column = 0; column < this.activeBoard[row].length; column++ ) {
+				element = this.activeBoard[row][column];
+				if( element == 'disabled' || this.no_timer.indexOf(element) > -1){
+					this.disabled_squares++;
+				}
+			}
+		}
+	
+		
+	}
+}
+</script>
+      <script>
+// Controller between graphengine (View) and mapmodel (Model)
+
+function MapController( boardModel ) {
+	this.board = boardModel;
+	
+	this.addElement = function(element, x, y) {
+		this.board.activeBoard[x][y] = element;
+	}
+
+
+	this.checkValid = function ( x, y, element ) {
+		square_type = this.board.activeBoard[x][y];
+		//block elements have b as first character. Need to be removed before comparison.
+		if( this.checkAdjacentSquares(x, y, element) ){
+			if( (square_type === undefined && x > -1 && y > -1) || square_type == "optional" || square_type == element.substr(2)){
+				return true;
+			} else {
+				if(square_type !== undefined && square_type.substr(0,2) == "b_"){
+					graph.printFeedBack("Can't put a block on top of another block!");
+				} else if(square_type == "blank"){
+					graph.printFeedBack("Blank squares must be left empty!");
+				}	else if(square_type !== undefined && square_type != element.substr(0,2) && square_type != "disabled"){
+					graph.printFeedBack("Cannot put "+ element.substr(2) +" on square requiring "+ square_type +"!");
+				}	else{
+					graph.printFeedBack("Block must be completely inside game area!");
+				}
+				return false;
+			}
+		}
+		else{
+			return false;
+		}
+	}
+	this.checkAdjacentSquares = function ( x, y, element){
+			adjacent_square_types = [];
+		
+			//find all adjacent elements to this square
+			if( x != 0 ){
+				adjacent_square_types.push(this.board.activeBoard[x-1][y]);
+			}
+			if( this.board.activeBoard.length > x+1 ){
+				adjacent_square_types.push(this.board.activeBoard[x+1][y]);
+			}
+			if( y != 0 ){
+				adjacent_square_types.push(this.board.activeBoard[x][y-1]);
+			}
+			if( this.board.activeBoard[x].length > y+1 ){
+				adjacent_square_types.push(this.board.activeBoard[x][y+1]);
+			}
+			//remove type undefined elements
+			adjacent_square_types = adjacent_square_types.filter(function(n){ return n != undefined });
+			
+			adjacent_ok = true;
+			switch (element) {
+				case 'b_fire' :
+					if(adjacent_square_types.indexOf("water") > -1 || adjacent_square_types.indexOf("b_water") > -1){
+						graph.printFeedBack("fire can't be next to water!");
+						adjacent_ok = false;
+					}
+					else if(adjacent_square_types.indexOf("earth") > -1 || adjacent_square_types.indexOf("b_earth") > -1){
+						graph.printFeedBack("fire can't be next to earth!");
+						adjacent_ok = false;
+					}
+					break;
+				case 'b_water' :
+					if(adjacent_square_types.indexOf("fire") > -1 || adjacent_square_types.indexOf("b_fire") > -1){
+						graph.printFeedBack("water can't be next to fire!");
+						adjacent_ok = false;
+					}
+					else if(adjacent_square_types.indexOf("earth") > -1 || adjacent_square_types.indexOf("b_earth") > -1){
+						graph.printFeedBack("water can't be next to earth!");
+						adjacent_ok = false;
+					}
+					break;
+				case 'b_earth' :
+					if(adjacent_square_types.indexOf("water") > -1 || adjacent_square_types.indexOf("b_water") > -1){
+						graph.printFeedBack("earth can't be next to water!");
+						adjacent_ok = false;
+					}
+					else if(adjacent_square_types.indexOf("fire") > -1 || adjacent_square_types.indexOf("b_fire") > -1){
+						graph.printFeedBack("earth can't be next to fire!");
+						adjacent_ok = false;
+					}
+					break;
+				default :
+					break;
+			}
+			return adjacent_ok;
+			
+	}
+	
+	this.checkSuccess = function ( ){
+		var x_max = this.board.size.x;
+		var y_max = this.board.size.y;
+		var elements = ["fire","water","air","earth"];
+		var success = true;
+
+		for ( y = 0; y < y_max; y++ ){
+			for ( x = 0; x < x_max; x++ ){
+				var square_type = this.board.activeBoard[x][y];
+				if (square_type === undefined || elements.indexOf(square_type) > -1 ){
+					success = false;
+				}
+			}
+		}
+		
+		if ( success && map.lookup[parseInt(map.id)+1] !== undefined) {
+			// Show next button
+			var nextBtn = document.getElementById("NextLevelBtn");
+			nextBtn.style.visibility = "visible";
+		}
+		else if(success){
+			graph.printFeedBack("No more levels. Congratulations! You have passed all levels! ")
+		}
+		return success;
+ 	}
+	
+	this.addBlockToModel = function( element, x1, y1, x2, y2, x3, y3, x4, y4 )  {
+		// Check that block can be placed 
+		if (  this.checkValid(x1, y1, element)  &&
+			this.checkValid(x2, y2, element)  &&
+			this.checkValid(x3, y3, element) &&
+			this.checkValid(x4, y4, element)) {
+			this.board.activeBoard[x1][y1] = element;
+			this.board.activeBoard[x2][y2] = element;
+			this.board.activeBoard[x3][y3] = element;
+			this.board.activeBoard[x4][y4] = element;
+			return true;
+		}
+		return false;
+	}
+	
+	this.addBlock = function(  element, type, x, y, orientation, flipped )  {
+		var result = false;
+		
+		switch ( type ) {
+			case 's':
+				if ( !flipped ) {
+					if ( orientation == 0 || orientation == 2 ) {
+						result = this.addBlockToModel( element, x, y, x + 1, y, x + 1, y + 1, x + 2, y + 1 );
+					} else {
+						result = this.addBlockToModel( element, x + 1, y, x, y + 1, x + 1, y + 1, x, y + 2 );
+					}
+				} else {
+					if ( orientation == 0 || orientation == 2 ) {
+						result = this.addBlockToModel( element, x, y + 1, x + 1, y, x + 1, y + 1, x + 2, y );
+					} else {
+						result = this.addBlockToModel( element, x, y, x, y + 1, x + 1, y + 1, x + 1, y + 2 );
+					}
+				}
+				break;
+			case 'sq':
+				result = this.addBlockToModel( element, x, y, x + 1, y, x , y  + 1, x + 1, y + 1 );
+				break;
+			case 'l':
+				if ( !flipped ) {
+					switch ( orientation ) {
+						case 0:
+							result = this.addBlockToModel( element, x, y, x + 1, y, x + 2, y, x, y + 1 );
+							break;
+						case 1:
+							result = this.addBlockToModel( element, x, y, x + 1, y, x + 1, y + 1, x + 1, y + 2 );
+							break;
+						case 2:
+							result = this.addBlockToModel( element, x, y + 1, x + 1, y + 1, x + 2, y + 1, x + 2, y );
+							break;
+						case 3:
+							result = this.addBlockToModel( element, x, y, x, y + 1, x, y + 2, x + 1, y + 2 );
+							break;
+					}
+				} else {
+					if ( orientation == 0 || orientation == 2 ) {
+						if ( orientation == 0 ) {
+							result = this.addBlockToModel(  element, x, y, x, y + 1, x + 1, y + 1, x + 2, y + 1 );
+						} else {
+							result = this.addBlockToModel(  element, x, y, x + 1, y, x + 2, y, x + 2, y + 1 );
+						}
+					} else {
+						if ( orientation == 1 ) {
+							result = this.addBlockToModel(  element, x, y + 2, x + 1, y, x + 1, y + 1, x + 1, y + 2 );
+						} else {
+							result = this.addBlockToModel(  element, x, y, x + 1, y, x, y + 1, x, y + 2 );
+						}
+					}					
+				}
+				break;
+			case 't':
+				if ( orientation == 0 || orientation == 2 ) {
+					if (  orientation == 0 ) {
+						result = this.addBlockToModel( element, x, y, x + 1, y, x + 2, y, x + 1, y + 1 );
+					} else {
+						result = this.addBlockToModel( element, x, y + 1, x + 1, y + 1, x + 2, y + 1, x + 1, y );
+					}
+				} else {
+					if ( orientation == 1 ) {
+						result = this.addBlockToModel( element, x + 1, y, x + 1, y + 1, x + 1, y + 2, x, y + 1 );
+					} else {
+						result = this.addBlockToModel( element, x, y, x, y + 1, x, y + 2, x + 1, y + 1 );
+					}
+				}
+				break;
+			case 'i':
+				if ( orientation == 0 || orientation == 2 ) {
+					result = this.addBlockToModel( element, x, y, x + 1, y, x + 2, y, x + 3, y );
+				} else {
+					result = this.addBlockToModel( element, x, y, x , y + 1, x, y + 2, x, y + 3 );
+				}
+				break;
+		}
+		
+		// remove added block from map model's available blocks
+		if ( result ) {
+			this.board.blocks[element][type]--;
+		};
+		return result;
+	}
+}
+
+</script>
+      <script>// This file is for initializing all other components and kicking games main loop in the action.
+
+
+// Part of the (non-existing) GameEngine, but placed in main.js
+initSelectBox = function ( ) {
+	var selectBox = document.getElementById("ChangeLevelLst");
+  
+	for (var i = 0, len = jsonstr.length; i < len; i++) {
+		var map = new Option( jsonstr[i].name, jsonstr[i].id );
+		selectBox.options.add( map ); 
+	}
+
+}
+
+
+// Init model
+var mapid = location.hash.substring(1);
+
+// Board model
+var map = new MapModel( );
+if ( !isNaN( mapid ) && mapid != undefined && mapid != "" ) {
+	map.init( mapid );
+} else {
+	map.init( 1 );
+}
+
+initSelectBox();
+
+// init controller
+var controller = new MapController( map );
+
+// Init graph engine
+var canvas = document.getElementById("testCanvas");
+var graph = new GraphEngine( canvas, map, controller );
+graph.init();
+
+// Draw initial setup
+graph.draw();
+
+
+// Init change level button
+var buttonClickEvent = function( event ) {
+	// Load level based on ChangeLevetLst
+	var selectBox = document.getElementById("ChangeLevelLst");
+	if ( selectBox.selectedIndex >= 0 ) {
+		location.replace( location.href.substring(0, location.href.indexOf("#") ) + "#" +  selectBox.options[ selectBox.selectedIndex ].value ); // select new level...
+		location.reload(); // ... and reload it
+	}
+}
+
+var selectBtn = document.getElementById("ChangeLevelBtn");
+selectBtn.addEventListener( "click", buttonClickEvent );
+
+
+// Init restart level button
+var buttonReStClickEvent = function( event ) {
+	location.reload(); // ... and reload it
+}
+
+var restartBtn = document.getElementById("RestartLevelBtn");
+restartBtn.addEventListener( "click", buttonReStClickEvent );
+
+
+// Init next button
+var buttonNextClickEvent = function( event ) {
+	    location.replace( location.href.substring(0, location.href.indexOf("#") ) + "#" +  (parseInt(map.id) + 1) ); // select new level...
+		location.reload(); // ... and reload it
+}
+
+var nextBtn = document.getElementById("NextLevelBtn");
+nextBtn.addEventListener( "click", buttonNextClickEvent );
+</script>
+    </body>
+  </html>

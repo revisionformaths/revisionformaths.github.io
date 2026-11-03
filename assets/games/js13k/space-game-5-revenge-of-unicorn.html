@@ -1,0 +1,2236 @@
+<!doctype html>
+<body id=b>
+<!-- HTML FRAMEWORK https://gist.github.com/xem/a7ff7215375520d89b73beeabd7b16bd -->
+<audio id=sound_beep src=sounds/beep.wav></audio>
+<audio id=sound_roar src=sounds/roar.wav></audio>
+<audio id=sound_explosion src=sounds/explosion.wav></audio>
+<audio id=sound_engine src=sounds/engine.wav loop></audio>
+<canvas id=a></canvas>
+<style>
+#b{margin:0;overflow:hidden;cursor:none;}
+#a{image-rendering:pixelated;height:100vh;width:100vw;font-smooth:never;-webkit-font-smoothing:none;}
+</style>
+<script>
+// Improves performance when checking if (self.production)
+self.production = false
+</script>
+<script>
+// This is here because it needs to be defined early! See mut-check.js
+let handledKeys = {}
+let markMut = (k) => {
+    if (self.production) return
+    handledKeys[str(k)] = 1
+}
+
+// Putting assert before anything else. Terser inlines it better
+let assert = self.production
+    ? () => {}
+    : (cond, message = 'assertion error') => {
+        if (!cond()) {
+            message = typeof message == 'function' ? message() : message
+            assertFail(message + ' ' + cond)
+        }
+    }
+
+let drawTransform = self.production
+    ? () => {}
+    : (t) => {
+        let origin = cameraProject2d(t[0])
+
+        let x1 = cameraProject2d(vecAddVec(t[0], t[1][x]))
+        let y1 = cameraProject2d(vecAddVec(t[0], t[1][y]))
+        let z1 = cameraProject2d(vecAddVec(t[0], t[1][z]))
+
+        let originZ = cameraDistance(t[0])
+        let xbehind = cameraDistance(vecAddVec(t[0], t[1][x])) > originZ
+        let ybehind = cameraDistance(vecAddVec(t[0], t[1][y])) > originZ
+        let zbehind = cameraDistance(vecAddVec(t[0], t[1][z])) > originZ
+
+        // Axes are 3 lines from origin to 1-at-x, 1-at-y, 1-at-z
+        ctx.strokeStyle = xbehind ? '#800' : '#F00'
+        ctx.beginPath()
+        ctx.moveTo(...origin)
+        ctx.lineTo(...x1)
+        if (!xbehind) ctx.arc(...x1, canvasPixelWidth * 2, 0, TAU)
+        ctx.stroke()
+
+        ctx.strokeStyle = ybehind ? '#080' : '#0F0'
+        ctx.beginPath()
+        ctx.moveTo(...origin)
+        ctx.lineTo(...y1)
+        if (!ybehind) ctx.arc(...y1, canvasPixelWidth * 2, 0, TAU)
+        ctx.stroke()
+
+        ctx.strokeStyle = zbehind ? '#008' : '#00F'
+        ctx.beginPath()
+        ctx.moveTo(...origin)
+        ctx.lineTo(...z1)
+        if (!zbehind) ctx.arc(...z1, canvasPixelWidth * 2, 0, TAU)
+        ctx.stroke()
+
+    }
+
+let drawDebugCube = self.production
+    ? () => {}
+    : (t) => {
+        // Draw a debug cube, too
+        ctx.strokeStyle = 'red'
+        ctx.stroke(assetSquare([
+            vecAddVec(t[0], t[1][x]),
+            matTransformMat(matRotateY(TAU * .25), matMulNum(t[1], 2)),
+        ]))
+        ctx.strokeStyle = 'green'
+        ctx.stroke(assetSquare([
+            vecAddVec(t[0], t[1][y]),
+            matTransformMat(matRotateX(TAU * .25), matMulNum(t[1], 2)),
+        ]))
+        ctx.strokeStyle = 'blue'
+        ctx.stroke(assetSquare([
+            vecAddVec(t[0], t[1][z]),
+            matMulNum(t[1], 2),
+        ]))
+    }
+</script>
+<script>// micro-math3d.js
+// Roughly equivalent to Godot math, in that Z is back, Y is up.
+// But tiny and no objects used.
+//
+// ASSUMPTIONS:
+// - you created a function called 'assertFail(x)' that's an alias for throw new Error(x)
+// - you have configured your JS compiler to precompute `self.production` as `true`. That is, conditional compilation.
+// Sine/cosine. `numSinCos` calculates both & returns sine
+let sin
+let cos
+let numSinCos = n => {
+    markMut('sin')
+    markMut('cos')
+    n = num(n)
+    cos = Math.cos(n)
+    return sin = Math.sin(n)
+}
+/** How wide is a sphere at `distance`, given `fov`? */
+let numRadiusAtDistance = (radius, distance, fov) => {
+    return num(radius / (distance * fov))
+}
+
+// SHAPE FUNCTIONS
+// These functions do nothing but make sure you didn't mess up types
+// num(n) will simply return `n` unless it's NaN, in which case it throws
+// vec(v) will simply return `v` if it's an array of 3 non-NaN numbers
+// etc.
+let num = n => {
+    if (!self.production && (typeof n !== 'number' || isNaN(n))) {
+        assertFail(`${str(n)} is not a num`)
+    }
+    return n;
+}
+let vec = n => {
+    if (!self.production) {
+        if (n.length !== 3) assertFail(`${str(n)} is not a vec`)
+        for (let vecNum = 0; vecNum < 3; vecNum++) {
+            if (typeof n[vecNum] !== 'number' || isNaN(n[vecNum])) {
+                assertFail(`${str(n[vecNum])} is not a vec num`)
+            }
+        }
+    }
+    return n;
+}
+let mat = n => {
+    if (!self.production) {
+        if (n.length !== 3) assertFail(`${str(n)} is not a mat`)
+        for (let row = 0; row < 3; row++) {
+            if (n[row].length !== 3) assertFail(`${str(n[row])} is not a mat row`)
+            for (let cell = 0; cell < 3; cell++) {
+                if (typeof n[row][cell] !== 'number' || isNaN(n[row][cell])) {
+                    assertFail(`${str(n[row][cell])} is not a mat cell num`)
+                }
+            }
+        }
+    }
+    return n;
+}
+let tform = n => {
+    if (!self.production) {
+        if (n[0].length !== 3) assertFail(`${str(n[0])} is not a vec`)
+        for (let vecNum = 0; vecNum < 3; vecNum++) {
+            if (typeof n[0][vecNum] !== 'number' || isNaN(n[0][vecNum])) {
+                assertFail(`${str(n[0][vecNum])} is not a vec num`)
+            }
+        }
+
+        if (n[1].length !== 3) assertFail(`${str(n[1])} is not a mat`)
+        for (let row = 0; row < 3; row++) {
+            if (n[1][row].length !== 3) assertFail(`${str(n[1][row])} is not a mat row`)
+            for (let cell = 0; cell < 3; cell++) {
+                if (typeof n[1][row][cell] !== 'number' || isNaN(n[1][row][cell])) {
+                    assertFail(`${str(n[1][row][cell])} is not a mat cell num`)
+                }
+            }
+        }
+    }
+    return n
+}
+
+let testMath = () => {
+    num(1)
+    vec([1, 2, 3])
+    mat([
+        [1, 2, 3],
+        [1, 2, 3],
+        [1, 2, 3]
+    ])
+    tform([
+        [1, 2, 3],
+        [
+            [1, 2, 3],
+            [1, 2, 3],
+            [1, 2, 3]
+        ]
+    ])
+    /* skip these tests because it makes debugging harder
+    assertThrows(() => assertNotNaN(NaN))
+    assertThrows(() => assertNotNaN([NaN]))
+    assertThrows(() => assertNotNaN([[NaN]]))
+    assertThrows(() => num(NaN))
+    assertThrows(() => vec([NaN, 1, 1]))
+    assertThrows(() => mat([[1, 0, 0], [0, 1, 0], [0, 0, NaN]]))
+    /**/
+
+    let rotate90deg = mat(matRotateY(-TAU * 0.25))
+    assertEq(matTransformVec(rotate90deg, vec([0, 0, -1])), vec([1, 0, 0]))
+
+    assertEq(
+        tformTransformVec([[10, 10, 10], rotate90deg], vec([0, -1, -1])),
+        vec([11, 9, 10])
+    )
+
+    let rotate90deg2 = matFromAxisAngle([0, -1, 0], TAU * 0.25)
+    assertEq(matTransformVec(rotate90deg2, vec([0, 0, -1])), vec([1, 0, 0]))
+
+    assertEq(
+        tformTransformVec([[10, 10, 10], rotate90deg2], vec([0, 0, -1])),
+        vec([11, 10, 10])
+    )
+
+    assertEq(vecNormalize([2, 0, 0]), [1, 0, 0])
+    assertEq(vecNormalize([1, 1, 0]), [.707, .707, 0])
+
+    assertEq(matTranspose([
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+    ]), [
+        [1, 4, 7],
+        [2, 5, 8],
+        [3, 6, 9],
+    ])
+    assertEq(matTranspose(matTranspose([
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+    ])), [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+    ])
+
+    // matrix by angle tests
+    assertEq(matRotateX(0.5), matFromAxisAngle([1, 0, 0], 0.5))
+    assertEq(matRotateY(0.5), matFromAxisAngle([0, 1, 0], 0.5))
+    assertEq(matRotateZ(0.5), matFromAxisAngle([0, 0, 1], 0.5))
+
+    assertEq(matOrthonormalize([
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+    ]), matIdentity())
+    assertEq(matOrthonormalize([
+        [.1, 0, 0],
+        [0, .1, 0],
+        [0, 0, .1],
+    ]), matIdentity())
+}
+let assertEq = (n1, n2) => {
+    if (self.production) return
+    if (typeof n1 === 'function') n1 = n1()
+    if (typeof n2 === 'function') n2 = n2()
+    if (shape(n1) !== shape(n2)) {
+        throw new Error(`shape mismatch ${str(n1)} ${str(n2)}`)
+    }
+    n1 = [n1].flat(Infinity)
+    n2 = [n2].flat(Infinity)
+    assert(() => n1.length == n2.length)
+    assert(() => n1.every((it, i) => Math.abs(it - n2[i]) < 0.001), () => `${str(n1)} != ${str(n2)}`)
+}
+// LCG deterministic random number generator.
+// https://stackoverflow.com/a/72732727/1011311 (adapted)
+// returns -0.5..0.5
+let rngSeed
+let rng = () => {
+    rngSeed = numSinCos(rngSeed) * 10000;
+    return (rngSeed - Math.round(rngSeed));
+}
+let assertThrows = (cb) => {
+    try {
+        cb()
+    } catch (e) {
+        return
+    }
+    assertFail('callback `' + cb + '` did not throw')
+}
+let isNum = n => typeof n == 'number'
+let isStr = s => s && s.big
+let isVec = vec => vec && vec.every && vec.length === 3 && vec.every(isNum)
+let isQuat = quat => quat && quat.every && quat.length === 4 && quat.every(isNum)
+let isMat = mat => mat && mat.every && mat.length === 3 && mat.every(isVec)
+let isTform = tform => tform && tform.every && tform.length === 2 && isVec(tform[0]) && isMat(tform[1])
+let shape = n => isNum(n) ? 1 : isVec(n) ? 2 : isMat(n) ? 3 : isTform(n) ? 4 : assertFail('unknown shape for ' + n)
+let str = n => (
+    isNum(n) ? (
+        Math.floor(n) !== n && Math.abs(n) < 1000 && String(n).length > 6
+            ? (n = '' + Math.round(n * 1000) / 1000)
+                .replace(/^([0-9])/, ' $1') // add spc when no leading "-"
+                .padEnd(n.includes(".") ? 5 : 6, n.includes(".") ? '0' : " ") // add trailing zeros (or space, if not decimal)
+            : n
+    )
+    : !n || isStr(n) ? n
+    : isVec(n) ? `vec([${n.map(str)}])`
+    : isMat(n) ? `mat([${n.map(n => `[${n.map(str)}]`)}])`
+    : isTform(n) ? `tform([${str(n[0])}, ${str(n[1])}])`
+    : isQuat(n) ? `quat([${n.map(str)}])`
+    : n.map ? `[${n}]`
+    : n
+) + ''
+let numCloseTo = (a, b) => {
+    return Math.abs(num(a) - num(b)) < 0.02
+}
+let numSmallOrZero = n =>
+    // Allows undefined/NAN, intentionally flattening them to zero
+    Math.abs(n) > .1 ? n : 0
+let numLerp = (a, b, weight) => {
+    return a + (b - a) * weight
+}
+let numClamp = (n, min, max) => n < min ? min : n > max ? max : n
+let numMoveToward = (a, b, byN) => {
+    assert(() => byN > 0)
+    if (a < b) return numClamp(a + byN, a, b)
+    else return numClamp(a - byN, b, a)
+}
+let vecMulNum = (v, n) => (vec(v), num(n), [v[x] * n, v[y] * n, v[z] * n])
+let vecAddVec = (v1, v2) => (vec(v1), vec(v2), [v1[x] + v2[x], v1[y] + v2[y], v1[z] + v2[z]])
+let vecSubVec = (v1, v2) => (vec(v1), vec(v2), [v1[x] - v2[x], v1[y] - v2[y], v1[z] - v2[z]])
+let vecMulVec = (v1, v2) => (vec(v1), vec(v2), [v1[x] * v2[x], v1[y] * v2[y], v1[z] * v2[z]])
+let vecDivVec = (v1, v2) => (vec(v1), vec(v2), [v1[x] / v2[x], v1[y] / v2[y], v1[z] / v2[z]])
+let vecMoveToward = (v1, v2, byN) => (
+    vec(v1),
+    vec(v2),
+    num(byN),
+    [
+        numMoveToward(v1[x], v2[x], byN),
+        numMoveToward(v1[y], v2[y], byN),
+        numMoveToward(v1[z], v2[z], byN)
+    ]
+)
+let vecNegative = (v) => mapI3(i=>-v[i])
+let vecIsNormalized = (v) => {
+    return numCloseTo(vecLengthSq(v), 1)
+}
+let vecNormalize = (v, length = vecLength(v)) => {
+    if (length > .00001) {
+        let norm = mapI3(axis => num(v[axis]/length))
+
+        assert(() => vecIsNormalized(norm))
+
+        return norm
+    }
+    return v
+}
+let vecLength = v => num(Math.sqrt(vecLengthSq(v)))
+let vecLengthSq = v => {
+    return num(v[x] * v[x] + v[y] * v[y] + v[z] * v[z])
+}
+let vecLimitLength = (v, maxLen, curLen = vecLength(v)) => {
+    if (curLen > maxLen) return vecMulNum(vecNormalize(v), maxLen)
+    return v
+}
+let vecZero = () => [0, 0, 0]
+let matIdentity = () => [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+]
+let tformIdentity = () => [
+    vecZero(),
+    matIdentity()
+]
+let vecDotVec = (v1, v2) => {
+    return num((v1[x] * v2[x]) + (v1[y] * v2[y]) + (v1[z] * v2[z]))
+}
+// from godot vector3.h
+let vecCrossVec = (v1, v2) => (
+    vec(v1),
+    vec(v2),
+    [
+        (v1[y] * v2[z]) - (v1[z] * v2[y]),
+        (v1[z] * v2[x]) - (v1[x] * v2[z]),
+        (v1[x] * v2[y]) - (v1[y] * v2[x]),
+    ]
+)
+let vecLerp = (v1, v2, weight) => mapI3(axis => numLerp(v1[axis], v2[axis], weight))
+let vecDistance = (v1, v2) => Math.sqrt(
+    vecLengthSq(vecSubVec(v1, v2))
+)
+let vecDirection = (v1, v2) => {
+    return vecNormalize(vecSubVec(v2, v1))
+}
+let vecDivNum = (v, n) => vec(mapI3(axis => v[axis] / n))
+// Yoinked and ported from Godot
+// https://github.com/godotengine/godot/blob/3defa2466e4f2c767c347f74620ee86b23282902/core/math/basis.h#L274
+let matTransformVec = (m, v) => {
+    return [
+        vecDotVec(m[x], v),
+        vecDotVec(m[y], v),
+        vecDotVec(m[z], v),
+    ]
+}
+let matFlip = (m) => matMulNum(m, -1)
+let matMulNum = (m, n) => {
+    mat(m)
+    num(n)
+    return [
+        [m[x][x] * n, m[x][y] * n, m[x][z] * n],
+        [m[y][x] * n, m[y][y] * n, m[y][z] * n],
+        [m[z][x] * n, m[z][y] * n, m[z][z] * n],
+    ]
+}
+let matMulMat = (m1, m2) => mapI3(row => mapI3(col => m1[row][col] * m2[row][col]))
+let matAddMat = (m1, m2) => mapI3(row => mapI3(col => m1[row][col] + m2[row][col]))
+let matAddNum = (m, n) => mapI3(row => mapI3(col => m[row][col] + n))
+let matSubMat = (m1, m2) => mapI3(row => mapI3(col => m1[row][col] - m2[row][col]))
+let matTransformAndAddVec = (m, v, v2) => {
+    return [
+        vecDotVec(m[x], v) + v2[x],
+        vecDotVec(m[y], v) + v2[y],
+        vecDotVec(m[z], v) + v2[z],
+    ]
+}
+// Transformed dot product
+let matTDotxVec = (m, v) => num(m[x][x] * v[x] + m[y][x] * v[y] + m[z][x] * v[z])
+let matTDotyVec = (m, v) => num(m[x][y] * v[x] + m[y][y] * v[y] + m[z][y] * v[z])
+let matTDotzVec = (m, v) => num(m[x][z] * v[x] + m[y][z] * v[y] + m[z][z] * v[z])
+let matTDotAxisVec = (m, v, axis) =>
+    num(m[x][axis] * v[x] + m[y][axis] * v[y] + m[z][axis] * v[z])
+// https://github.com/godotengine/godot/blob/89cea143987d564363e15d207438530651d943ac/core/math/basis.cpp#L36
+let matCofac = (m, row1, col1, row2, col2) =>
+    (m[row1][col1] * m[row2][col2] - m[row1][col2] * m[row2][col1])
+let matInvert = (m) => {
+    mat(m)
+
+    let co0 = matCofac(m, 1, 1, 2, 2)
+    let co1 = matCofac(m, 1, 2, 2, 0)
+    let co2 = matCofac(m, 1, 0, 2, 1)
+
+    let det =
+        m[x][x] * co0 +
+        m[x][y] * co1 +
+        m[x][z] * co2
+
+    // assert(() => det != 0)
+
+    let s = 1/(det)
+
+    return mat([
+        [co0 * s, matCofac(m, 0, 2, 2, 1) * s, matCofac(m, 0, 1, 1, 2) * s],
+        [co1 * s, matCofac(m, 0, 0, 2, 2) * s, matCofac(m, 0, 2, 1, 0) * s],
+        [co2 * s, matCofac(m, 0, 1, 2, 0) * s, matCofac(m, 0, 0, 1, 1) * s],
+    ])
+}
+// https://github.com/godotengine/godot/blob/89cea143987d564363e15d207438530651d943ac/core/math/basis.cpp#L56
+let matOrthonormalize = (m) => {
+    m = matTranspose(m)
+    let vx = m[x]
+    let vy = m[y]
+    let vz = m[z]
+
+    vx = vecNormalize(vx)
+    vy = (vecSubVec(vy, vecMulNum(vx, vecDotVec(vx, vy))))
+    vy = vecNormalize(vy)
+    //z = (z - x * (x.dot(z))                 - y * (y.dot(z)));
+    vz = [
+        vz,
+        vecMulNum(vx, vecDotVec(vx, vz)),
+        vecMulNum(vy, vecDotVec(vy, vz))
+    ].reduce(vecSubVec)
+    vz = vecNormalize(vz)
+
+    assert(() => vecIsNormalized(vx))
+    assert(() => vecIsNormalized(vy))
+    assert(() => vecIsNormalized(vz))
+
+    m = matTranspose([vx, vy, vz])
+
+    assert(() => vecIsNormalized(m[x]))
+    assert(() => vecIsNormalized(m[y]))
+    assert(() => vecIsNormalized(m[z]))
+
+    return m
+}
+let matMoveToward = (m1, m2, byN) => matOrthonormalize(
+    mapI3(row => vecMoveToward(m1[row], m2[row], byN))
+)
+// Sloppily dampen and angular-velocity-limit a matrix
+// - For each axis, there's one that normalizes MUCH slower than the others.
+let matDampen = (m, n, max /* TODO angular-velocity-limit */) => {
+    let ideal = matIdentity() // TODO don't call the func
+    // the number that's close to 1 on the identity matrix moves by 2%. The others move more.
+    // this is an arbitrary number that happens to work well
+    /*
+    let dampeningRate = [
+        [0.02, 0.49, 0.49],
+        [0.49, 0.02, 0.49],
+        [0.49, 0.49, 0.02],
+    ]
+    */
+    let dampeningRate = [
+        [0.002, 0.499, 0.499],
+        [0.499, 0.002, 0.499],
+        [0.499, 0.499, 0.002],
+    ]
+
+    let absoluteDifference = mapI3(row => mapI3(col => Math.abs(m[row][col] - ideal[row][col]) * dampeningRate[row][col]))
+        .flat(1 / 0)
+        .reduce((a, b) => a + b)
+    frameLog('absoluteDifference', String(absoluteDifference))
+    if (absoluteDifference > max) {
+        n = absoluteDifference - max
+    }
+    if (absoluteDifference < n) {
+        return ideal
+    }
+
+    let differences = matMulMat(matSubMat(ideal, m), dampeningRate)
+
+    frameLog('differences[x]', differences[x])
+    frameLog('differences[y]', differences[y])
+    frameLog('differences[z]', differences[z])
+
+    // `n` is an absolute travel. But we're going to be using multiplication
+
+    // Now we move-towards the ideal, by `n`
+    return mapI3(row => mapI3(col => numMoveToward(m[row][col], m[row][col] + differences[row][col], n)))
+
+    /*
+    return mapI3(row => mapI3(col => {
+        let difference = (ideal[row][col] - m[row][col]) * dampeningRate[row][col]
+        return m[row][col] + difference
+    }))
+    */
+}
+let matIsOrthonormalized = m =>
+    numCloseTo(vecLengthSq(m[x]) + vecLengthSq(m[y]) + vecLengthSq(m[z]), 3)
+    && numCloseTo(0, vecDotVec(m[x], m[y]))
+    && numCloseTo(0, vecDotVec(m[x], m[z]))
+    && numCloseTo(0, vecDotVec(m[y], m[z]))
+let matTranspose = m => mat(mapI3(xs=>mapI3(ys=>m[ys][xs])))
+let mapI3 = (cb) => [cb(0),cb(1),cb(2)]
+let matTransformMat = (m1, m2) => {
+    mat(m1)
+    mat(m2)
+    return mat(mapI3(row => mapI3(col => matTDotAxisVec(m2, m1[row], col))))
+}
+let matRotateX = (angle) => matFromAxisAngle([1, 0, 0], angle)
+let matRotateY = (angle) => matFromAxisAngle([0, 1, 0], angle)
+let matRotateZ = (angle) => matFromAxisAngle([0, 0, 1], angle)
+let matScaled = S => matMulNum(matIdentity(), S)
+let matLerp = (l, r, weight) => mapI3(row => vecLerp(l[row], r[row], weight))
+// https://github.com/godotengine/godot/blob/89cea143987d564363e15d207438530651d943ac/core/math/basis.cpp#L840
+let matFromAxisAngle = (axis, angle) => {
+    assert(() => vecIsNormalized(axis))
+
+    numSinCos(angle)
+
+    let axis_sq = vecMulVec(axis, axis)
+
+    let retMatrix = matIdentity()
+    retMatrix[x][x] = axis_sq[x] + cos * (1 - axis_sq[x])
+    retMatrix[y][y] = axis_sq[y] + cos * (1 - axis_sq[y])
+    retMatrix[z][z] = axis_sq[z] + cos * (1 - axis_sq[z])
+
+    let t = 1 - cos
+
+    let xyzt = axis[x] * axis[y] * t
+    let zyxs = axis[z] * sin
+    retMatrix[x][y] = xyzt - zyxs;
+    retMatrix[y][x] = xyzt + zyxs;
+
+    xyzt = axis[x] * axis[z] * t
+    zyxs = axis[y] * sin
+    retMatrix[x][z] = xyzt + zyxs
+    retMatrix[z][x] = xyzt - zyxs
+
+    xyzt = axis[y] * axis[z] * t
+    zyxs = axis[x] * sin
+    retMatrix[y][z] = xyzt - zyxs
+    retMatrix[z][y] = xyzt + zyxs
+
+    return retMatrix
+}
+let matScaleNum = (m, n) => mapI3(row => mapI3(axis => m[row][axis] * n))
+let tformTransformVec = (t, v) => (
+    tform(t),
+    [
+        vecDotVec(t[1][x], v) + t[0][x],
+        vecDotVec(t[1][y], v) + t[0][y],
+        vecDotVec(t[1][z], v) + t[0][z],
+    ]
+)
+let tformTransformVecUnchecked = (t, v) => {
+    return [
+        vecDotVec(t[1][x], v) + t[0][x],
+        vecDotVec(t[1][y], v) + t[0][y],
+        vecDotVec(t[1][z], v) + t[0][z],
+    ]
+}
+let tformProjectVec = (t, v, fov) => {
+    return tformProjectVecInner(t, [
+        v[x] + t[0][x],
+        v[y] + t[0][y],
+        v[z] + t[0][z],
+    ], fov)
+}
+/* Project each point of an asset with knowledge that
+ *  assets are flat (Z is zero)
+ *  point arrays are constructed in the asset code (ok to mutate)
+ **/
+let tformProjectAssetVec = (assetT, pointX, pointY, fov) => {
+    // Careful here -- we're accessing a variable cameraTransformInv from another module
+    return tformProjectVecInner(cameraTransformInv, [
+        vecDotVec(assetT[1][x], [pointX, pointY, 0]) + assetT[0][x] + cameraTransformInv[0][x],
+        vecDotVec(assetT[1][y], [pointX, pointY, 0]) + assetT[0][y] + cameraTransformInv[0][y],
+        vecDotVec(assetT[1][z], [pointX, pointY, 0]) + assetT[0][z] + cameraTransformInv[0][z],
+    ], fov)
+}
+let tformProjectAssetFlatVec = (assetT, pointX, pointY, fov) => {
+    // TODO maybe don't need tformProjectVecInner, maybe something that allocates less
+    let centerXY = tformProjectVecInner(cameraTransformInv, [
+        assetT[0][x] + cameraTransformInv[0][x],
+        assetT[0][y] + cameraTransformInv[0][y],
+        assetT[0][z] + cameraTransformInv[0][z],
+    ], fov)
+
+    // Careful here -- we're accessing a variable cameraTransformInv from another module
+    let distance = tformProjectZVec(cameraTransformInv, assetT[0])
+    let scale = numRadiusAtDistance(tformGetScale(assetT), distance, fov)
+
+    return [centerXY[x] + pointX * scale, centerXY[y] + pointY * scale]
+}
+let tformProjectVecInner = (t, v, fov) => {
+    // Do z first because is necessary for perspective
+    let distance = -vecDotVec(t[1][z], v)
+    let perspective = distance && 1 / (distance * fov)
+    // same as mat transform but we'll negate y for DOM canvas
+    // and we add 0.5 to center on the screen
+    return [
+        (vecDotVec(t[1][x], v) * perspective + 0.5),
+        (-vecDotVec(t[1][y], v) * perspective + 0.5),
+    ]
+}
+let tformProjectZVec = (t, v) => {
+    return -vecDotVec(t[1][z], [
+        v[x] + t[0][x],
+        v[y] + t[0][y],
+        v[z] + t[0][z],
+    ])
+}
+let tformTransformTform = (tParent, tChild) => {
+    tform(tParent)
+    tform(tChild)
+
+    // scale/rot the child vec, then add parent
+    let v = matTransformAndAddVec(tParent[1], tChild[0], tParent[0])
+    let m = matTransformMat(tParent[1], tChild[1])
+    return [v, m]
+}
+let tformTranslateByLocalVec = (t, v) => {
+    tform(t)
+    vec(v)
+    v = matTransformAndAddVec(t[1], v, t[0])
+    return [
+        v,
+        t[1]
+    ]
+}
+let tformGetScale = t => {
+    return (t[1][x][x] + t[1][x][y] + t[1][x][z])/3
+}
+let tformScaleNum = (t, s) => tform([t[0], matScaleNum(t[1], s)])
+let assertFail = message => {
+    throw new Error(message)
+}
+</script>
+<script>
+// Assets are built in inkscape, by copying base.svg
+// They exist in 0..100 space, so no decimal numbers required to reproduce correctly
+/* vim command to remove decimal part:
+%s/\([0-9]\)\.[0-9]\+/\1/g
+JS code to turn lowercase commands to uppercase `M` commands
+((string) => {
+  let isAbsolute = true
+  let position = [0,0]
+  return string.replace(/(\S+)/gi, (_, $1) =>
+		/[A-Z]/.test($1) ? (isAbsolute = true, $1)
+  	: /[a-z]/.test($1) ? (isAbsolute = false, $1.toUpperCase())
+		: (isAbsolute ? position = eval('[' + $1 + ']') : position = [position[0] + eval('[' + $1 + '][0]'), position[1] + eval('[' + $1 + '][1]')])
+	)
+})('m 46,44 3,-2 2,2 Z m 5,-15 3,-4 -0,7 Z m -6,-4 3,4 -3,3 Z')
+*/
+
+/** Macro-ish function we could run at compile time if we really wanted.
+ * Turns SVG shapes into JS code that projects them by a transform */
+let svgProjector = (svgShape) => {
+    // turn SVG shape into JS code.
+    // Later inserted into a template string `` so we can use ${}
+    let jsShape = 'new Path2D(`' + svgShape
+        .replace(/(-?\d+),(-?\d+)/g, (_, $1, $2) => {
+            // Input: a vector in some SVG command (hopefully absolute)
+            // Output: code that projects this vector by calling P
+            let args = [(+$1/100) - 0.5,(+$2/100) - 0.5,FOV]
+            return `$\{P(t,${args})}`
+        }) + '`)'
+
+    let shapeProjector =
+        // Create a function with
+        // - P (tformProjectAssetVec) argument
+        // Into a pathmaker function with
+        // - t (asset tform) argument
+        globalEval(
+            'P=>t=>' + jsShape
+            // Provide our eval-ed function with `tformProjectAssetVec`
+            // Because the minifier will rename `tformProjectAssetVec`
+        )(tformProjectAssetVec)
+
+    // A flat projector that doesn't transform, only moves and scales
+    // This is because I can't work out some of the matrix math and gave up
+    shapeProjector.flat =
+        globalEval(
+            'P=>t=>' + jsShape
+        )(tformProjectAssetFlatVec)
+
+    return shapeProjector
+}
+let assetCloud = `M 91,51 C 93,64 91,76 80,81 73,92 62,96 50,93 37,94 25,90 20,81 10,74 7,62 9,51 8,40 9,32 19,23 27,10 39,7 50,9 64,8 72,12 80,21 89,28 92,39 91,51 Z`
+let assetSquare = `M 0,0 100,0 100,100 0,100 Z`
+let assetUnicornBody = `M 50,27 60,31 66,51 59,71 63,86 60,93 53,87 53,74 53,64 46,65 51,88 46,95 41,86 43,72 34,58 35,37 Z`
+let assetUnicornHead = `M 26,12 49,27 70,11 50,64 Z`
+let assetUnicornHorn = `M 45,35 50,0 55,35 50,40 Z`
+let assetUnicornEyesMouth = `M 35,40 40,35 45,40 40,45 Z M 55,40 60,35 65,40 60,45 Z`
+let assetExplosion = `M 19,10 45,28 54,11 58,31 83,23 80,44 89,60 63,70 63,91 46,75 21,87 33,59 8,49 33,39 Z`
+let assetExplosion2 = `M 19,19 45,28 54,10 60,34 83,24 78,45 93,72 68,63 65,90 46,73 21,85 33,60 11,49 32,40 Z`
+let assetExplosion3 = `M 17,13 44,25 60,7 63,29 92,23 80,46 95,68 70,70 61,93 44,76 16,86 28,60 6,47 30,39 Z`
+let assetCompositeUnicorn = unicornTform => {
+    ctx.fillStyle = '#f06'
+    ctx.fill(assetUnicornBody(unicornTform))
+    ctx.fillStyle = '#f0a'
+    ctx.fill(assetUnicornHead(unicornTform))
+    ctx.fillStyle = '#fff'
+    ctx.fill(assetUnicornHorn(unicornTform))
+    ctx.fillStyle = '#ff0'
+    ctx.fill(assetUnicornEyesMouth(unicornTform))
+}
+let assetCompositeUnicornFlat = unicornTform => {
+    ctx.fillStyle = '#f06'
+    ctx.fill(assetUnicornBody.flat(unicornTform))
+    ctx.fillStyle = '#f0a'
+    ctx.fill(assetUnicornHead.flat(unicornTform))
+    ctx.fillStyle = '#fff'
+    ctx.fill(assetUnicornHorn.flat(unicornTform))
+    ctx.fillStyle = '#ff0'
+    ctx.fill(assetUnicornEyesMouth.flat(unicornTform))
+}
+let prepareAssets = () => {
+    assetCloud = svgProjector(assetCloud)
+    assetSquare = svgProjector(assetSquare)
+    assetUnicornBody = svgProjector(assetUnicornBody)
+    assetUnicornHead = svgProjector(assetUnicornHead)
+    assetUnicornHorn = svgProjector(assetUnicornHorn)
+    assetUnicornEyesMouth = svgProjector(assetUnicornEyesMouth)
+    assetExplosion = svgProjector(assetExplosion)
+    assetExplosion2 = svgProjector(assetExplosion2)
+    assetExplosion3 = svgProjector(assetExplosion3)
+}
+
+/* Check if, when rendered, this SVG would go behind or in front of the camera
+ * In future, we might do frustum culling here too.
+ * Or even do proper culling
+ * assets are 1 unit in diameter, scaled by transform here */
+let assetCull = (transform) => {
+    return cameraDistance(transform[0]) > tformGetScale(transform)
+}
+</script>
+<script>// initialize 2D canvas (c)
+// initialize game state (s)
+// initialize keys states (u,r,d,l for directions, allKeys for all the keyboard)
+/** @type {CanvasRenderingContext2D} */
+let ctx=a.getContext`2d`
+
+let main = self.main = () => tryCatch(() => {
+    if (!self.production) {
+        testMath()
+    }
+    resetToGameStart()
+    prepareAssets()
+    startLoopAndEvents()
+}, fatalError)
+
+let isFirstFrameOfThisScreen // is this the first frame of the screen (IE is it != previousScreen)
+let previousScreen // used to check if changed
+let onFrame = tmp => tryCatch(() => {
+    if (!self.production && ERROR) {
+        return
+    }
+
+    markMut('cameraTransform'),
+    markMut('cameraTransformInv'),
+    markMut('currentScreen')
+    markMut('previousScreen')
+    markMut('isFirstFrameOfThisScreen')
+    isFirstFrameOfThisScreen = previousScreen != currentScreen
+    previousScreen = currentScreen
+    frameLogReset()
+    recalculateViewport()
+    TIME = getTime()
+    clearScreen('#111')
+    updateControlsWithGamepad()
+
+    // DEV: In the first frame, freeze all variables
+    mutationCheckInit()
+
+    tmp = ({
+        [SCREEN_MAIN_MENU]: onFrameMainMenu,
+        [SCREEN_SPACE_GAME]: onFrameSpaceGame(1),
+        [SCREEN_FREE_FLIGHT]: onFrameSpaceGame(),
+        [SCREEN_DEAD]: onFrameDeath,
+        [SCREEN_ENDGAME]: onFrameEndgame,
+        [SCREEN_TESTING]: onFrameTesting,
+    })[currentScreen]
+
+    if (currentScreen != SCREEN_SPACE_GAME && currentScreen != SCREEN_FREE_FLIGHT) {
+        onFrameNotSpaceGame()
+    }
+
+    if (!self.production && !tmp) {
+        assertFail('unknown screen ' + currentScreen)
+    }
+
+    tmp(isFirstFrameOfThisScreen)
+
+    undeferRenderCommands()
+
+    mutationCheck()
+}, fatalError)
+let tryCatch = (try_, catch_ = str /* str is an okay no-op */) => {
+    try {
+        return try_(try_)
+    } catch (try_) {
+        catch_(try_)
+    }
+}
+
+// CONSTANTS
+// Vector keys
+let x = 0
+let y = 1
+let z = 2
+let w = 3
+let TAU = Math.PI * 2
+let FOV = 0.5
+let FONT_HEIGHT = 32
+let FONT_WIDTH = 20
+let canvasIdealSize = 640
+let canvasPixelWidth = 1/canvasIdealSize
+
+// The game is a big state machine
+let SCREEN_MAIN_MENU = 1
+let SCREEN_SPACE_GAME = 2
+let SCREEN_DEAD = 3
+let SCREEN_ENDGAME = 4
+let SCREEN_FREE_FLIGHT = 11
+let SCREEN_TESTING = 123
+
+// VARIABLES
+
+let ERROR
+let getTime = () => (new Date - PAUSED_LOST_TIME) * .001
+let PAUSED_LOST_TIME = 0 // keep track of amount of time paused
+let PAUSE_TIME // keep track of amount of time paused
+let TIME = getTime()
+
+// Put these together to benefit from zip
+let locationHref = '' + location
+let currentScreen = +(locationHref).match(/screen=(\d+)/)?.[1] || SCREEN_MAIN_MENU
+let currentStoryBeat = +(locationHref).match(/story=(\d+)/)?.[1] || 0
+let cheatsOn = /cheats=1/.test(locationHref)
+let skipStory = /skipstory=1/.test(locationHref)
+let skipToFishy = /skiptofishy=1/.test(locationHref)
+let skipToUnicorn = /skiptounicorn=1/.test(locationHref)
+let passive = /passive=1/.test(locationHref)
+
+let recalculateViewport = () => {
+    let aspectRatio = innerWidth / innerHeight
+
+    if (aspectRatio > 1) {
+        // landscape
+        a.height = canvasIdealSize
+        a.width = canvasIdealSize * aspectRatio
+
+        ctx.scale(canvasIdealSize, canvasIdealSize)
+        ctx.translate((a.width - a.height) / canvasIdealSize / 2, 0)
+    } else {
+        // portrait
+        a.height = canvasIdealSize / aspectRatio
+        a.width = canvasIdealSize
+
+        ctx.scale(canvasIdealSize, canvasIdealSize)
+        ctx.translate(0, (a.height - a.width) / canvasIdealSize / 2)
+    }
+}
+
+let errorFont = '32px monospace'
+let screenFont = size => (size * .05) + 'px monospace'
+let screenFontHeight = 0.025
+let onError = (_, __, ___, ____, e) => {
+    fatalError(e)
+    console.error(e)
+}
+let fatalError = (err) => {
+    if (ERROR) return
+    ERROR = err // stop further frames
+    console.error(err)
+    // `b` is the ID of the body elem
+    b.style = "background:red;color:white;white-space:preserve;font:" + errorFont;
+    b.innerText = errorLines(err).join('\n')
+}
+let errorLines = (err) => {
+    err = (err + '\n' + err.stack).split(/\n/g)
+    if (err[0]?.trim() === err[1]?.trim()) return err.slice(1)
+    else return err
+}
+let cameraTransform = tformIdentity()
+let cameraTransformInv = tformIdentity()
+let setCameraPosition = (v) => {
+    cameraTransform[0] = vec(v)
+    cameraTransformInv[0] = vecMulNum(v, -1)
+}
+let setCameraRotation = (rotationX, rotationY) => {
+    num(rotationY), num(rotationX)
+    cameraTransform[1] = cameraTransformInv[1] = matIdentity()
+
+    cameraTransform[1] = matTransformMat(cameraTransform[1], matRotateY(rotationY))
+    cameraTransform[1] = matTransformMat(cameraTransform[1], matRotateX(rotationX))
+
+    cameraTransformInv[1] = matTransformMat(cameraTransformInv[1], matRotateX(-rotationX))
+    return cameraTransformInv[1] = matTransformMat(cameraTransformInv[1], matRotateY(-rotationY))
+}
+let setCameraRotation2 = (rotation) => {
+    mat(rotation)
+
+    assert(() => matIsOrthonormalized(rotation))
+
+    cameraTransform[1] = matTransformMat(cameraTransform[1], rotation)
+
+    cameraTransformInv[1] = matTransformMat(cameraTransformInv[1], matInvert(rotation))
+}
+let resetCameraTransform = () => (
+    cameraTransform = tformIdentity(),
+    cameraTransformInv = tformIdentity()
+)
+let cameraProject2d = v => {
+    return tformProjectVec(cameraTransformInv, vec(v), FOV)
+}
+let cameraDistance = (v) => tformProjectZVec(cameraTransformInv, v)
+let cameraProjectRadiusAtDistance = (distance, radius) => {
+    return numRadiusAtDistance(distance, radius, FOV)
+}
+let globalEval = self.eval
+
+let frameKeys
+let currentTextY = 0
+let frameLogReset = () => {
+    markMut('frameKeys')
+    markMut('currentTextY')
+    frameKeys = {};
+    currentTextY = 0;
+}
+let frameLog = (key, ...message) => {
+    if (frameKeys[key]) return;
+
+    frameKeys[key] = 1
+
+    frameLog2(key + ': ' + message.map(str).join(" "))
+}
+let frameLog2 = (message, size, layer = UI_LAYER_FRAME_LOG, color = '#fff') => deferDrawUICommand(layer, () => {
+    message = message.split('\n')
+    _drawText(message, .101, 0.101 + currentTextY, '#200', size)
+    _drawText(message, 0.1, 0.1 + currentTextY, color, size)
+    return (currentTextY += 0.1 * message.length)
+})
+let frameLogAdvanceXYWidthHeight = (widthMultiplier) => [0.1, (currentTextY += 0.1) - 0.1, 0.8 * widthMultiplier, 0.1]
+let _drawText = (lines, x, y, fillStyle='#fff', size = 1) => {
+    ctx.fillStyle = fillStyle
+    ctx.font = screenFont(size)
+    return lines.forEach((word, i) => {
+        ctx.fillText(word, x, y + (0.1 * i))
+    })
+}
+
+// For sorted rendering!
+let deferLayerHud = []
+let deferLayer3D = []
+let deferRenderCommand = (transform, cb, tmpDist) => (
+    assert(() => deferLayer3D === deferLayerHud || deferLayer3D === deferLayer3D),
+    tmpDist = cameraDistance(transform[0]),
+    tmpDist > 1
+        && vecDotVec(
+            vecNormalize(vecSubVec(transform[0], cameraTransform[0])),
+            vecMulNum(cameraTransformInv[1][z], -1)
+        ) > 0.2
+        && deferLayer3D.push([tmpDist, transform, cb])
+)
+let deferDrawUICommand = (layer, cb) => deferLayerHud.push([layer, cb])
+let UI_LAYER_HUD = 0
+let UI_LAYER_UNICORN_BAR = 1
+let UI_LAYER_STORY = 2
+let UI_LAYER_FRAME_LOG = 3
+let undeferRenderCommands = () => {
+    // distance sort
+    deferLayer3D.sort((a, b) => b[0] - a[0])
+    deferLayer3D.forEach(a => a[2](a[0]))
+    deferLayerHud.sort((a, b) => a[0] - b[0])
+    deferLayerHud.forEach(layerAndCb => layerAndCb[1]())
+    deferLayer3D.length = deferLayerHud.length = 0
+    markMut('deferLayer3D')
+    markMut('deferLayerHud')
+}
+
+// update u,l,d,r globals when an arrow key/wasd/zqsd is pressed or released
+let keyCodesToControls = {
+    // wasd keys
+    65: 'l',
+    87: 'u',
+    83: 'd',
+    68: 'r',
+    // q,e: up/down
+    81: 'U',
+    69: 'D',
+    // arrow keys
+    38: 'P', // arrow up, pitch down
+    40: 'p', // arrow down, pitch up
+    37: 'C', // arrow left turn counter-clockwise
+    39: 'c', // arrow right turn clockwise
+    // roll (Screw): Z and C
+    // 90: 's',
+    // 67: 'S',
+    // B stands for "bress the button in the UI"
+    13: 'B',
+    32: 'B',
+}
+// https://w3c.github.io/gamepad/#remapping
+let gamepadAxesToControls = ['r', 'd', 'c', 'p']
+let gamepadButtonsToControls = Object.assign([], {
+    // Cross (bottom face button)
+    0: 'B',
+    // L1, R1
+    // 4: 's',
+    // 5: 'S',
+    6: 'U',
+    7: 'D',
+    // D-pad
+    12: 'u',
+    13: 'd',
+    14: 'l',
+    15: 'r',
+})
+let updateControlsWithGamepad = () =>
+    navigator.getGamepads?.().forEach(gamepad => {
+        gamepadAxesToControls
+            .forEach((axisControl, axisIdx) => (gamepadAxes[axisControl] = gamepad?.axes[axisIdx]))
+        gamepadButtonsToControls
+            .forEach((buttonControl, buttonIdx) => (gamepadButtons[buttonControl] = gamepad?.buttons[buttonIdx]?.value))
+    })
+let gamepadAxes = {}
+let keyControls = {}
+let gamepadButtons = {}
+let readControl = key =>
+    numSmallOrZero(gamepadAxes[key]) ||
+    numSmallOrZero(gamepadButtons[key]) ||
+    numSmallOrZero(keyControls[key])
+
+let requestFullscreenForCanvas = (userEvent) =>
+    // a is the canvas
+    !passive && userEvent && !document.fullscreenElement && a.requestFullscreen?.()?.catch(() => {})
+
+let FRAME_INTERVAL = 16
+let FRAME_INTERVAL_MS_INV = 63 // 62.5 actually
+
+let startLoopAndEvents = () => {
+    if (passive) {
+        // don't want to change canvas while running or pause when blurring
+        a.style.cursor = 'default';
+    }
+    onclick = onClick
+    onkeydown = onKeyDownKeyUp(1)
+    onkeyup = onKeyDownKeyUp(0)
+    if (!passive) onblur = stopLoop
+    onfocus = runLoop
+
+    markMut('loop')
+    markMut('TIME')
+    markMut('PAUSE_TIME')
+    markMut('PAUSED_LOST_TIME')
+    PAUSE_TIME = getTime() // a usable valid PAUSE_TIME for our runLoop
+    runLoop()
+
+    if (!self.production) {
+        onerror = onError
+    }
+}
+
+// This is a little state machine.
+// There either is a loop (setInterval handle) or there isn't.
+let loop
+let runLoop = (maybeEvent) => {
+    requestFullscreenForCanvas(maybeEvent)
+    if (loop) return
+    loop = setInterval(onFrame, FRAME_INTERVAL)
+    PAUSED_LOST_TIME = getTime() - PAUSE_TIME
+}
+let stopLoop = () => {
+    if (!loop) return
+    loop = clearInterval(loop)
+    PAUSE_TIME = getTime()
+    clearScreen('#fff', 0.5)
+    _drawText(['paused. click to continue'], 0, 0.5, '#fff', /* size */1.5)
+    sound_engine.volume = 0
+}
+
+let onClick = e => (
+    requestFullscreenForCanvas(e),
+    getPermissionToPlayAudio()
+)
+
+let onKeyDownKeyUp = downOrUp01 => event => {
+    getPermissionToPlayAudio()
+    if (keyCodesToControls[event.which]) {
+        keyControls[keyCodesToControls[event.which]] = downOrUp01
+        event.preventDefault()
+    }
+}
+
+let everPlayedAudioBefore = 0
+let getPermissionToPlayAudio = () => (markMut('everPlayedAudioBefore'), everPlayedAudioBefore++ || sound_beep.play())
+
+let clearScreen = (color = '#f00', alpha=1) => {
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = color
+    ctx.fillRect(-10, -10, 20, 20) // returns undefined
+    ctx.globalAlpha = 1
+}
+
+// GUI utility. Scopes a menu index variable, from which the user can choose
+let menuIndexChangeTime
+let menuHasMovedNow
+let menuHasMovedBefore
+let createMenu = (options, i = 0) => {
+    markMut('menuIndexChangeTime')
+    markMut('menuHasMovedBefore')
+    markMut('menuHasMovedNow')
+    options = options.filter(o => !!o)
+    menuIndexChangeTime = TIME
+    return () => {
+        menuHasMovedNow =
+            readControlNegPos('u', 'd')
+            + readControlNegPos('P', 'p')
+        if (!menuHasMovedBefore && menuHasMovedNow) {
+            i = ((menuHasMovedNow > 0 ? i + 1 : i - 1) + options.length) % options.length
+            menuIndexChangeTime = TIME
+            sound_beep.play()
+        }
+        menuHasMovedBefore = menuHasMovedNow
+        return options.forEach(([optWords, optCb], optI) => {
+            if (optI - i) {
+                ctx.globalAlpha = 1
+                return frameLog2('  ' + optWords, 1)
+            } else {
+                if (readControl('B')) {
+                    sound_beep.play()
+                    return optCb()
+                }
+                ctx.globalAlpha = 1.2 + Math.sin((TIME - menuIndexChangeTime) * 20)
+                return frameLog2('> ' + optWords, 1)
+            }
+        }), ctx.globalAlpha = 1
+    }
+}
+
+</script>
+<script>let readControlAxis = (neg, pos, v) => {
+    return vecMulNum(v, readControlNegPos(neg, pos))
+}
+let readControlNegPos = (neg, pos) => readControl(neg) * -1 + readControl(pos)
+
+let onFrameDemo = isFirstFrame => {
+    if (isFirstFrame) {
+        setCameraPosition([0, 2, 10])
+    }
+    var demoRotation = numSinCos(TIME) * 0.2
+    var demoRotationX = numSinCos(TIME * 0.5) * 0.1
+    setCameraRotation(demoRotationX, demoRotation)
+
+    let cameraMovement = vec([
+        readControlNegPos('l', 'r'),
+        readControlNegPos('D', 'U'),
+        readControlNegPos('u', 'd'),
+    ])
+    cameraMovement = vecMulNum(cameraMovement, 0.2)
+    setCameraPosition(vecAddVec(cameraTransform[0], cameraMovement))
+
+    let rectangle = [
+        [-5, -5],
+        [ 5, -5],
+        [ 5,  5],
+        [-5,  5],
+        [-5, -5]
+    ]
+    // Render 10 progressively further squares
+    for (let dist = 0; dist < 10; dist++) {
+
+        ctx.lineWidth = 0.005
+        ctx.globalAlpha = 0.5
+        ctx.strokeStyle = 'red'
+
+        // Avoid rendering behind us
+        if (cameraDistance([0, 0, -dist * 10]) < 0.5) continue;
+
+        ctx.moveTo(...cameraProject2d([...rectangle[0], -dist * 10]))
+        for (let i = 1; i < rectangle.length; i++) {
+            ctx.lineTo(...cameraProject2d([...rectangle[i], -dist * 10]))
+        }
+        ctx.stroke()
+    }
+
+    // Render a cloud
+    if (assetCull(tformIdentity())) ctx.stroke(assetCloud(tformIdentity()))
+}
+
+let onFrameTestingCameraRotation = 0
+let onFrameTestingCameraRotationX = 0
+let onFrameTesting = isFirstFrame => {
+    if (isFirstFrame) {
+        setCameraPosition([5, 5, 10])
+        onFrameTestingCameraRotation = -0.07 * TAU
+        onFrameTestingCameraRotationX = 0.05 * TAU
+    }
+    onFrameTestingCameraRotation += (
+        readControlNegPos('C', 'c')
+    ) * 0.01
+    onFrameTestingCameraRotationX += (
+        readControlNegPos('D', 'U')
+    ) * 0.01
+
+    setCameraRotation(onFrameTestingCameraRotationX, onFrameTestingCameraRotation)
+
+    let cameraMovement = vec([
+        readControlNegPos('l', 'r'),
+        0, // readControlNegPos('D', 'U'),
+        readControlNegPos('u', 'd'),
+    ])
+    cameraMovement = matTransformVec(cameraTransform[1], cameraMovement)
+    cameraMovement = vecMulNum(cameraMovement, 0.2)
+    setCameraPosition(vecAddVec(cameraTransform[0], cameraMovement))
+
+    let rectangle = [
+        [-5, -5],
+        [ 5, -5],
+        [ 5,  5],
+        [-5,  5],
+        [-5, -5]
+    ]
+    // Render 10 progressively further squares
+    for (let dist = 0; dist < 10; dist++) {
+
+        ctx.lineWidth = 0.005
+        ctx.globalAlpha = 0.5
+        ctx.strokeStyle = 'red'
+
+        // Avoid rendering behind us
+        if (cameraDistance([0, 0, -dist * 10]) < 0.5) continue;
+
+        ctx.moveTo(...cameraProject2d([...rectangle[0], -dist * 10]))
+        for (let i = 1; i < rectangle.length; i++) {
+            ctx.lineTo(...cameraProject2d([...rectangle[i], -dist * 10]))
+        }
+        ctx.stroke()
+    }
+
+    let cubeParent = matRotateY(numSinCos(TIME))
+    cubeParent = matTransformMat(matRotateZ(0.3), cubeParent)
+    cubeParent = matTransformMat(matRotateX(0.3), cubeParent)
+    cubeParent = [vec([1,1,1]), matMulNum(cubeParent, 1.2 + 0.5 * Math.cos(TIME * 2.2))]
+
+    // Render a bunch of clouds
+    rngSeed = 123
+    let rngScaled = () => num((rng() - 0.5) * 2 * 2)
+    for (let i = 0; i < 100; i++) {
+        var pos = [rng(), rng(), rng()]
+        if (cameraDistance(pos) > 0.5) ctx.stroke(assetCloud(tformTranslateByLocalVec(cubeParent, pos)))
+    }
+
+    let parentTform = transform => tformTransformTform(cubeParent, transform)
+
+    if (cameraDistance(vecZero()) > 5) {
+        // Render a cube around the clouds
+        ctx.stroke(assetSquare(parentTform([
+            [0, 0, -7/2],
+            [
+                [7, 0, 0],
+                [0, 7, 0],
+                [0, 0, 7],
+            ]
+        ])))
+        ctx.stroke(assetSquare(parentTform([
+            [0, 0, 7/2],
+            [
+                [7, 0, 0],
+                [0, 7, 0],
+                [0, 0, 7],
+            ]
+        ])))
+        ctx.stroke(assetSquare(parentTform([
+            [7/2, 0, 0],
+            [
+                [0, 0, 7],
+                [0, 7, 0],
+                [7, 0, 0],
+            ]
+        ])))
+        ctx.stroke(assetSquare(parentTform([
+            [-7/2, 0, 0],
+            [
+                [0, 0, 7],
+                [0, 7, 0],
+                [7, 0, 0],
+            ]
+        ])))
+    }
+}
+
+let menuMainMenu
+let initMainMenu = () => {
+    markMut('menuMainMenu')
+    menuMainMenu = createMenu([
+        ['play', () => (currentScreen = SCREEN_SPACE_GAME)],
+        ['free flight', () => (currentScreen = SCREEN_FREE_FLIGHT)]
+    ])
+}
+let onFrameMainMenu = (isFirstFrame) => {
+    if (isFirstFrame) {
+        initMainMenu()
+        resetCameraTransform()
+    }
+
+    setCameraRotation2(matTransformMat(matRotateZ(0.001), matRotateY(0.0001)))
+
+    updateRenderStars()
+
+    frameLog2('SPACE GAME 5', 1.2)
+    frameLog2('REVENGE OF UNICORN', 1.2)
+
+    menuMainMenu()
+
+    frameLog2('press space to go to space', 0.5)
+    frameLog2('use controller or keyboard WASD&Arrows', 0.5)
+}
+
+let deadUntil
+let deadReason
+let onFrameDeath = (isFirstFrame) => {
+    if (isFirstFrame) {
+        markMut('deadUntil')
+        deadUntil = TIME + 4
+    }
+
+    clearScreen('#e33')
+
+    frameLog('DEAD', deadReason)
+
+    if (deadUntil < TIME) { currentScreen = SCREEN_MAIN_MENU }
+}
+let onFrameEndgame = (isFirstFrame) => {
+    // Let's reuse variable `deadUntil`
+    if (isFirstFrame) {
+        markMut('deadUntil')
+        deadUntil = TIME + 20
+    }
+
+    clearScreen('#022')
+
+    frameLog2('You go to the doctor. It turns out\nthe UNICORN was a manifestation of\nyour regret.\n\nYou feel very disappointed, though\nnot very surprised.\n\n~ THE END ~')
+
+    if (deadUntil < TIME) { currentScreen = SCREEN_MAIN_MENU }
+}
+let die = reason => {
+    markMut('deadReason')
+    deadReason = reason
+    currentScreen = SCREEN_DEAD
+}
+
+
+// Some of these are initialized in story.js :D
+let spaceGamePlanets
+let spaceGamePlanetsInitialLength
+let onFrameSpaceGame = storyMode => isFirstFrame => {
+    if (isFirstFrame) {
+        sound_engine.play()
+        sound_engine.volume = 0
+        markMut('spaceGamePlanets')
+        markMut('spaceGamePlanetsInitialLength')
+        markMut('planetSun')
+        markMut('planetFishy')
+        spaceGamePlanets = initPlanets()
+        spaceGamePlanetsInitialLength = spaceGamePlanets.length
+
+        // Initialize things (first frame, after all)
+        updateLandedOnPlanet(storyMode, isFirstFrame)
+        updateControls(isFirstFrame)
+        if (storyMode) {
+            updateRenderUnicorn(isFirstFrame)
+            advanceStory(isFirstFrame)
+        } else {
+            setCameraPosition([5000, -300, 0])
+            setCameraRotation(-0.12, TAU * -.23)
+            spaceGameInertia = [0.1, 0.1, -0.1]
+        }
+        return
+    }
+
+    if (storyMode && (advanceStory(isFirstFrame) || updateRenderUnicorn(isFirstFrame))) {
+        return
+    }
+
+    // Blip states (early return if one of these is truthy)
+    if (updateLandedOnPlanet(storyMode, isFirstFrame)) {
+        return
+    }
+
+    ctx.lineWidth = 0.005
+    ctx.globalAlpha = 0.5
+    ctx.strokeStyle = 'red'
+
+    updateControls(isFirstFrame)
+    updateRenderStars()
+    updateRenderPlanets()
+
+    updateRenderLanding()
+    updateRenderConsumedPlanet()
+
+    deferDrawUICommand(UI_LAYER_FRAME_LOG, () => {
+        // TODO smaller in SVG subsystem?
+        let top = 0.45
+        let bottom = 0.55
+        let middle = 0.5
+        let left = 0.45
+        let right = 0.55
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)'
+        ctx.beginPath()
+        ctx.moveTo(left, middle)
+        ctx.lineTo(right, middle)
+        ctx.moveTo(middle, top)
+        ctx.lineTo(middle, bottom)
+        ctx.stroke()
+    })
+}
+let onFrameNotSpaceGame = () => {
+    sound_engine.volume = numLerp(sound_engine.volume, 0, 0.1)
+}
+
+let starDistance = 100_000_000
+let range = n => (
+    assert(() => n >= 0),
+    n-- ? [...range(n), n] : []
+)
+let spaceGameStars = Array.from({ length: 1000 }, (_, i, vecCoords) => {
+    rngSeed = i + 2 * 33
+
+    vecCoords = vecNormalize([rng(), rng(), rng()])
+    vecCoords[y] **= 2
+
+    return [rng(), rng() ** 2, vecMulNum(vecCoords, starDistance)]
+})
+
+let updateRenderStars = () => (
+    spaceGameStars.forEach(([ speed, phase , vec ]) => (
+        ctx.fillStyle = '#ccc',
+        ctx.globalAlpha = 0.3 * (numSinCos(TIME * speed + phase) + 1.0),
+        vec = cameraProject2d(vec),
+        ctx.fillRect(
+            vec[x] - canvasPixelWidth * 2, vec[y],
+            canvasPixelWidth * 5, canvasPixelWidth * 2
+        ),
+        ctx.fillRect(
+            vec[x], vec[y] - canvasPixelWidth * 2,
+            canvasPixelWidth * 2, canvasPixelWidth * 5
+        )
+    )),
+    ctx.globalAlpha = 1.0
+)
+
+let planetTransform = 0
+let planetColor = 1
+let planetName = 2
+let planetSun
+let planetFishy
+let getPlanetSize = planet => vecLength(planet[planetTransform][1][x])
+let initPlanets = () => [
+    planetSun = [
+        tform([
+            [1, 1, 1],
+            matScaled(700)
+        ]),
+        '#f62',
+        'Sun',
+    ],
+    [
+        tform([
+            [ -4350, -215, -1130 ],
+            matScaled(14),
+        ]),
+        "#9fff86",
+        "Yes"
+    ],
+    [
+        tform([
+            [ -3470, -376, -850 ],
+            matScaled(81),
+        ]),
+        '#c45',
+        "No"
+    ],
+    [
+        tform([
+            [ -2200, 0, 3200 ],
+            matScaled(400),
+        ]),
+        "#eac1e4",
+        "One"
+    ],
+    [
+        tform([
+            [ 3060, 300, 4360 ],
+            matScaled(300),
+        ]),
+        "#91eaff",
+        "Seven"
+    ],
+    [
+        tform([
+            [ 2890, 290, 2440 ],
+            matScaled(90),
+        ]),
+        "#ffb99a",
+        "Six"
+    ],
+    [
+        tform([
+            [ -1560, -27, -2520 ],
+            matScaled(144),
+        ]),
+        "#332266",
+        "Zero"
+    ],
+    planetFishy = [
+        tform([
+            [ 3333, 443, -3333 ],
+            matScaled(299),
+        ]),
+        "#443",
+        "Fishy"
+    ],
+].filter(planet => !planetsConsumed.includes(planet[planetName]))
+let planetExplosionRenderTime = 2
+let planetsConsumed // initialized to [] in resetToGameStart
+let planetExplosionTransform
+let planetExplosionTimeout
+let consumePlanet = (planet) => {
+    planetsConsumed.push(planet[planetName])
+    spaceGamePlanets = initPlanets()
+    markMut('planetExplosionTransform')
+    markMut('planetExplosionTimeout')
+    planetExplosionTransform = [planet[planetTransform][0], matScaleNum(planet[planetTransform][1], 10)]
+    planetExplosionTimeout = TIME + planetExplosionRenderTime
+}
+let updateRenderConsumedPlanet = (explosionTime) => {
+    explosionTime = planetExplosionTimeout - TIME
+
+    if (!(explosionTime > 0)) return 0 // accepts NaN
+
+    deferRenderCommand(planetExplosionTransform, (_tmp) => {
+        _tmp = Math.floor(explosionTime * 12) % 3
+        ctx.fillStyle = ['#f33', '#f92', '#fe6'][_tmp]
+        drawTransform(planetExplosionTransform)
+        return ctx.fill(
+            [
+                assetExplosion,
+                assetExplosion2,
+                assetExplosion3
+            ][_tmp]
+                .flat(planetExplosionTransform)
+        )
+    })
+}
+let getConsumedPlanets = () => {
+    return planetsConsumed.length
+}
+
+let getPlanetName = p => p == planetSun ? 'The sun' :  'Planet ' + p[planetName]
+
+let updateRenderPlanets = () => {
+    spaceGamePlanets.forEach((planet) =>
+        deferRenderCommand(planet[planetTransform], (distance) => {
+            let planetScreenRadius = cameraProjectRadiusAtDistance(getPlanetSize(planet), distance)
+
+            if (distance < 5000) {
+                _drawText(
+                    [' ' + getPlanetName(planet)],
+                    ...cameraProject2d(planet[planetTransform][0]).map((coord, i) => coord + (i ? screenFontHeight/2 : planetScreenRadius)),
+                )
+            }
+
+            ctx.fillStyle = planet[planetColor]
+            ctx.beginPath()
+            ctx.arc(
+                ...cameraProject2d(planet[planetTransform][0]),
+                planetScreenRadius,
+                0,
+                TAU
+            )
+            ctx.fill()
+
+            drawTransform(planet[planetTransform])
+            drawDebugCube(planet[planetTransform])
+        })
+    )
+
+    // Draw a sun direction indicator
+    deferDrawUICommand(UI_LAYER_HUD, () => {
+        let sunPos = planetSun[planetTransform][0]
+        let sunDotCamera = -vecDotVec(vecNormalize(vecSubVec(sunPos, cameraTransform[0])), cameraTransformInv[1][z])
+        // let's render a sun indicator so we see where it is behind camera
+        let projected = cameraProject2d(sunPos)
+        let isLeft
+        if (sunDotCamera > 0.85) return
+ 
+        projected.push(0)
+        projected = vecSubVec(projected, [0.5, 0.5, 0])
+        projected = vecNormalize(projected)
+        projected = sunDotCamera < 0 ? vecMulNum(projected, -1) : projected
+        projected = vecMulNum(projected, 0.5)
+        projected = vecAddVec(projected, [0.5, 0.5, 0])
+        isLeft = projected[x] < 0.5
+        ctx.fillStyle = '#0f0'
+
+        return _drawText(
+            [isLeft ? '<- Sun' : 'Sun ->'],
+            projected[x] - 0.1 * isLeft,
+            projected[y],
+            '#ccc',
+            0.7
+        )
+    })
+}
+
+/*
+let getCumulativeGravity = () => spaceGamePlanets.reduce((accumulateInertia, [planetTform, _planetColor, planetName]) => {
+    // Let's gravitate towards the sun & planets?
+    let planetPosition = vec(planetTform[0])
+    let planetDistance = vecDistance(cameraTransform[0], planetPosition)
+    let planetSize = vecLength(planetTform[1][x])
+
+    // Gravity scale: 1000
+    planetDistance = planetDistance / (planetSize * 10)
+
+    frameLog('planetDistance', planetDistance)
+
+    if (planetDistance < 1) {
+        let planetMass = 1
+        var intensity = Math.sqrt((1 - planetDistance)) * planetMass
+        frameLog('intensity', intensity)
+        var vecToward = vecNormalize(vecSubVec(planetPosition, cameraTransform[0]))
+        var gravityToward = vecMulNum(vecToward, intensity)
+        return vecAddVec(accumulateInertia, gravityToward)
+    }
+    return accumulateInertia
+}, vecZero())
+*/
+
+let dampenVelocity = 0.01
+let accelerationRate = 0.02 + dampenVelocity
+let dampenAngle = 0.000025
+let dampenAngleMul = 0.997
+let angularAccelerationRate = 0.000075 + dampenAngle
+let maxVelocity = 4
+let maxAngularVelocity = 0.05
+let spaceGameInertia
+let spaceGameAngularInertia
+let spaceGameAngle
+let resetInertia = () => {
+    markMut('spaceGameInertia')
+    markMut('spaceGameAngle')
+    markMut('spaceGameAngularInertia')
+    spaceGameInertia = vecZero()
+    spaceGameAngle = vecZero()
+    spaceGameAngularInertia = vecZero()
+}
+let updateControls = (isFirstFrame) => {
+    if (isFirstFrame) {
+        resetInertia()
+    }
+
+    assert(() => matIsOrthonormalized(cameraTransformInv[1]))
+    assert(() => matIsOrthonormalized(cameraTransform[1]))
+
+    let rotations = vecMulNum(vecLimitLength([
+        readControlNegPos('p', 'P'), // P-itch
+        readControlNegPos('c', 'C'), // yaw (clockwise/counterclockwise)
+        0,
+        // readControlNegPos('S', 's'), // roll (S-pin)
+    ], 1), angularAccelerationRate)
+    let rotationsLength = vecLength(rotations)
+
+    spaceGameAngularInertia = vecLimitLength(vecAddVec(spaceGameAngularInertia, rotations), maxAngularVelocity)
+    spaceGameAngle = vecAddVec(spaceGameAngle, spaceGameAngularInertia)
+
+    // Rotate the camera!
+    setCameraRotation(spaceGameAngle[0], spaceGameAngle[1])
+
+    spaceGameAngularInertia =
+        vecMoveToward(vecMulNum(spaceGameAngularInertia, dampenAngleMul), vecZero(), dampenAngle)
+        // vecMulNum(spaceGameAngularInertia, dampenAngleMul)
+
+    let directionX = cameraTransformInv[1][x]
+    let directionY = cameraTransformInv[1][y]
+    let directionZ = vecNegative(cameraTransformInv[1][z])
+
+    // Add propulsion!
+    let propulsion = vecLimitLength(vecAddVec(
+        readControlAxis('d', 'u', directionZ),
+        vecAddVec(
+            readControlAxis('l', 'r', directionX),
+            readControlAxis('U', 'D', directionY),
+        )
+    ), 1)
+    let propulsionLength = vecLength(propulsion)
+    spaceGameInertia = vecAddVec(
+        spaceGameInertia,
+        vecMulNum(propulsion, accelerationRate)
+    )
+
+    setCameraPosition(vecAddVec(cameraTransform[0], spaceGameInertia))
+
+    // Dampen movement!
+    let currentVelocity = vecLength(spaceGameInertia)
+    let dampenedVelocity = numClamp(currentVelocity - dampenVelocity, 0.001, maxVelocity)
+    spaceGameInertia = vecMulNum(vecNormalize(spaceGameInertia), dampenedVelocity)
+
+    // When already moving fast, align directions
+    let alignmentRate = currentVelocity > .1 && propulsionLength > .1 && vecDotVec(vecNormalize(spaceGameInertia), vecNormalize(propulsion))
+    if (alignmentRate > 0) {
+        spaceGameInertia = vecMoveToward(spaceGameInertia, vecMulNum(vecNormalize(propulsion), dampenedVelocity), alignmentRate * 0.01)
+    }
+
+    // Do some audio
+    sound_engine.volume = numLerp(sound_engine.volume, propulsionLength * (dampenedVelocity / maxVelocity), propulsionLength > 0.2 ? 0.2 : 0.01)
+}
+
+let fuelSucProgress
+let fuelSucSpeed = 0.3
+let landedOnPlanet
+let landedMenu
+let updateLandedOnPlanet = (storyMode, isFirstFrame) => {
+    if (isFirstFrame) {
+        markMut('fuelSucProgress')
+        markMut('landedMenu')
+        markMut('landedOnPlanet')
+        fuelSucProgress = 0
+        resetInertia()
+
+        landedMenu = createMenu([
+            ['offblast now', offblast(storyMode)],
+        ])
+        return landedOnPlanet = 0
+    } else if (!landedOnPlanet) {
+        fuelSucProgress = 0
+        return 0
+    } else {
+        sound_engine.volume = numLerp(sound_engine.volume, 0, 0.1)
+        frameLog('FUEL SUC', landedOnPlanet[planetName])
+        frameLog('PROGRESS', (fuelSucProgress.toFixed(0).padStart(3, ' ') + '%'))
+        if (
+            (fuelSucProgress = numClamp(fuelSucProgress + fuelSucSpeed, 0, 100))
+                == 100
+        ) {
+            landedMenu()
+        }
+        return 1
+    }
+}
+
+let offblastSpeed = 3
+let lastOffblast = 0
+let offblast = storyMode => () => {
+    let planetCenter = landedOnPlanet[planetTransform][0]
+    let playerPosition = cameraTransform[0]
+    let awayFromPlanet = vecSubVec(playerPosition, planetCenter)
+    if (storyMode) {
+        // CONSUME THE PLANET OMG
+        consumePlanet(landedOnPlanet)
+        resetUnicornToPlanet(planetCenter)
+        sound_explosion.play()
+    }
+
+    // Go away from planet
+    setCameraPosition(vecAddVec(cameraTransform[0], awayFromPlanet))
+    spaceGameInertia = vecMulNum(vecNormalize(awayFromPlanet), offblastSpeed)
+
+    // Fuck off
+
+    landedOnPlanet = 0
+    markMut('lastOffblast') // safe to use without reset
+    lastOffblast = TIME
+}
+
+let getIsLandedOrStillOffBlasting = () =>
+    landedOnPlanet || TIME - lastOffblast < planetExplosionRenderTime
+
+let distanceCloseEnoughToLand = 2 // times planet radius
+let speedTooFastToLand = 100
+let updateRenderLanding = () => {
+    let speed = vecLength(spaceGameInertia) * FRAME_INTERVAL_MS_INV
+    let [closestPlanet, closestPlanetDistance] = spaceGamePlanets.map(a => [a, vecDistance(a[planetTransform][0], cameraTransform[0]) - getPlanetSize(a)]).toSorted((a, b) => (
+        a[1] - b[1]
+    ))[0]
+    let closestPlanetSize = getPlanetSize(closestPlanet)
+    let message
+    let towardsPlanet = vecSubVec(closestPlanet[planetTransform][0], cameraTransform[0])
+    let dotTowardsPlanet = vecLengthSq(spaceGameInertia) > 0.01
+        ? vecDotVec(
+            vecNormalize(spaceGameInertia),
+            vecNormalize(towardsPlanet)
+        )
+        : -0.1
+
+    if (dotTowardsPlanet < 0 || closestPlanetDistance > 1000) return
+
+    frameLog('speed', speed.toFixed(2) + 'km/s')
+    frameLog('distance', closestPlanetDistance.toFixed(2) + 'km')
+
+    if (closestPlanet == planetSun) {
+        frameLog2('autopilot: can\'t land on the sun', 1, UI_LAYER_FRAME_LOG, '#FE3')
+    } else if (speed > speedTooFastToLand) {
+        frameLog2('autopilot: too fast to land safely', 1, UI_LAYER_FRAME_LOG, '#FE3')
+    }
+
+    if (
+        closestPlanetDistance < 0
+        // Easy-land: if not too fast, land earlier
+        || closestPlanetDistance < closestPlanetSize * distanceCloseEnoughToLand && speed < speedTooFastToLand
+    ) {
+        // When going away from planet, do not land
+        if (dotTowardsPlanet > 0) {
+            if (speed > speedTooFastToLand || closestPlanet == planetSun) {
+                sound_explosion.play()
+                die('crash landed on ' + getPlanetName(closestPlanet))
+            }
+            landedOnPlanet = closestPlanet
+        }
+    }
+}
+</script>
+<script>// let currentStoryBeat defined in engine.js, reads ?story=\d+
+// reset the saved state (between deaths)
+let resetToGameStart = () => {
+    markMut('currentStoryBeat')
+    markMut('savedPlayerTransform')
+    markMut('planetsConsumed')
+    currentStoryBeat = skipStory ? 1 : 0
+    savedPlayerTransform = 0
+    planetsConsumed = []
+}
+let savedPlayerTransform
+// format the story words
+let storyWords = lines => lines.map(line => {
+    assert(() => !line.split('\n').some(line => line.length > 35))
+
+    let lineCount = line.split('\n').length
+
+    return line + '\n'.repeat(numClamp(5 - lineCount, 0, 5))
+})
+let story = [
+    [
+        storyWords([
+            'Gamepad is recommended\nplug it in and refresh the page',
+            'On keyboard:\nArrow keys = look around\nWASD keys = move',
+            'Try to land on planet Fishy\nApproach it, but not too fast',
+        ]),
+        () => { },
+        isFirstFrame => {
+            // Because story[0] is a blackout, this waits for its cutscene
+            return !isFirstFrame && !getCurrentWords()
+        }
+    ],
+    [
+        storyWords([
+            'BASE: Omega Rainbow 45-U\n    Do you copy? Please respond\n',
+            '\n\nYOU: Where am I?',
+            'BASE: You really did it this time.\nWhat is your status?',
+            '\nYOU: I think I hallucinated a huge\n    pink THING outside the ship',
+            'BASE: Stop joking around!\n    You\'re lucky you survived.',
+            'BASE: Use your ship\'s FUEL SUC.',
+            '\n\nYOU: This planet seems... Fishy',
+        ]),
+        () => {
+            resetCameraTransform()
+            setCameraPosition(
+                vecAddVec(
+                    planetFishy[planetTransform][0],
+                    skipToFishy ? [200, 0, -200] : [5500, -50, -4000]
+                )
+            )
+            spaceGameAngle = [0, TAU * 0.35, 0]
+        },
+        (isFirstFrame) => {
+            return getConsumedPlanets() // advance the story the first time a planet gets eaten
+        },
+    ],
+    [
+        storyWords([
+            "\nYOU: What?\n    BASE, what the hell is that?",
+            "\n\nRADIO: A planet-eating entity.",
+            "\n\n\nRADIO: A unicorn",
+            "\nYOU: Are you serious?",
+            "BASE: It just CONSUMED that\n    planet you were on",
+            "\nYOU: You're joking.",
+            "BASE: I wish I was.",
+            "BASE: Quick, get to another planet\n    and try to lose the tail!",
+            "\n\nYOU: I sure hope this isn't what\n    I think it is.",
+            "BASE: GET GOING!",
+            "\nYOU: I am!",
+        ]),
+        () => {
+            setUnicornSpeedAccel(unicornSpeedEasy, unicornAccelEasy)
+        },
+        (isFirstFrame) => {
+            return !isFirstFrame && getConsumedPlanets() && landedOnPlanet
+        },
+    ],
+    [
+        storyWords([
+            "BASE: You seem to have escaped.",
+            "\nYOU: What do I do now?",
+            "BASE: What can you do?",
+            "BASE: ...",
+            "BASE: FUEL SUCC more planets.",
+            "\n    Then, escape.",
+            "\n\nYOU: It might be too late...",
+        ]),
+        () => {
+            setUnicornSpeedAccel(unicornSpeedVeryEasy, unicornAccelVeryEasy)
+        },
+        (isFirstFrame) => {
+            return getConsumedPlanets() > 4
+        },
+    ],
+    [
+        storyWords([
+            "\nYOU: I think I'm being punished",
+            "RADIO: Why?",
+            "\nYOU: I've been writing horror.\n    for years.",
+            "\nYOU: I wrote many stories where the\n    monster represents my regret.",
+            "\nYOU: Where the monster eats what I\n    try to enjoy.\n    What brings me peace.",
+            "\nYOU: And something like this?\n\n    This can't be a coincidence!",
+            "RADIO: I wouldn't worry about it.\n    I'll call the brain engineer\n    for you.",
+            "RADIO: You'll talk about this\n    for a while, maybe get some\n    SPACE MEDS.",
+            "RADIO: You'll feel better soon.",
+        ]),
+        () => {
+            setUnicornSpeedAccel(unicornSpeedMedium, unicornAccelMedium)
+        },
+        (isFirstFrame) => {
+            return getConsumedPlanets() > 5
+        },
+    ],
+    [
+        storyWords([
+            "\nYOU: I wonder if I'm still alive.",
+            "\n\nYOU: I wonder if this...",
+            "\nYOU: If this is purgatory and...",
+            "RADIO: Just one more planet.\n    You'll come home.",
+        ]),
+        () => {
+            setUnicornSpeedAccel(unicornSpeedMedium, unicornAccelMedium)
+        },
+        (isFirstFrame) => {
+            return getConsumedPlanets() > 6
+        },
+    ],
+    /* story template
+    [
+        storyWords([
+            "BASE: Something HUGE approaching!!", // maximum length
+        ]),
+        () => {
+            // Init story beat
+        },
+        (isFirstFrame) => {
+            if (isFirstFrame) {
+                return 0
+            } else {
+                return 0 // always false
+            }
+        },
+    ],
+    */
+    // reset the game save, switch to endgame screen
+    [
+        storyWords([]),
+        () => { resetToGameStart(); currentScreen = SCREEN_ENDGAME },
+        () => {},
+    ],
+]
+let storyState // 0: reset. 1: words
+let STORY_STATE_RESET = 0
+let STORY_STATE_WORDS = 1
+let showWordsIndex
+let showWordsTime = 4
+let showingTheseWordsUntil
+/** returns truthy if should skip frame */
+let advanceStory = (isFirstFrame, [wordsList, initialize, shouldGoToNext] = story[currentStoryBeat]) => {
+    if (isFirstFrame) {
+        // Support skipping with ?story=N
+        story.slice(0, currentStoryBeat).map(prevStoryBeat => prevStoryBeat[1]())
+    }
+    if (!storyState || isFirstFrame) {
+        markMut('storyState')
+        markMut('showWordsIndex')
+        showWordsIndex = -1
+
+        if (savedPlayerTransform) {
+            [cameraTransform, cameraTransformInv] = savedPlayerTransform
+        }
+
+        storyState = STORY_STATE_WORDS;
+        initialize()
+        shouldGoToNext(1)
+    }
+
+    // Just keep increasing the current word, who cares
+    if (showWordsIndex < 0 || showingTheseWordsUntil < TIME) {
+        showWordsIndex++
+        markMut('showingTheseWordsUntil')
+        showingTheseWordsUntil = TIME + showWordsTime
+    }
+    if (getCurrentWords()) {
+        frameLog2(getCurrentWords(), 1, UI_LAYER_STORY, '#4f5')
+    }
+
+    if (shouldGoToNext()) {
+        if (currentStoryBeat) {
+            // unless we reset (or are in the first try) save our position
+            savedPlayerTransform = structuredClone([cameraTransform, cameraTransformInv])
+        }
+        markMut('currentStoryBeat') // no need to reset
+        currentStoryBeat++
+        storyState = STORY_STATE_RESET;
+    }
+
+    return currentStoryBeat == 0 // on the first screen, blackout
+}
+let getCurrentWords = () => story[currentStoryBeat][0][showWordsIndex]
+</script>
+<script>
+let unicornSpeedMaximum = 1100
+let unicornSpeedMinimum = 100
+
+/* How many frames behind is the unicorn? */
+let unicornSpeedEasy = 1000
+let unicornAccelEasy = 0.05
+
+let unicornSpeedVeryEasy = 1200
+let unicornAccelVeryEasy = 0.01
+
+let unicornSpeedMedium = 800
+let unicornAccelMedium = 0.1
+
+let unicornScale = 1000
+let unicornAcceleration = 0
+let unicornSpeed // Mutable, handled by story
+let unicornRecordedPlayerTform // How it knows to follow player
+let setUnicornSpeedAccel = (newSpeed, newAccel) => {
+    unicornSpeed = newSpeed
+    unicornAcceleration = newAccel
+}
+let unicornInitialPosition
+let resetUnicornToPlanet = planetCenter => {
+    unicornInitialPosition = planetCenter
+    unicornRecordedPlayerTform = []
+}
+let updateRenderUnicorn = isFirstFrame => {
+    let unicornDotSelf
+    let unicornPos
+    let unicornTform = matIdentity()
+    let vecTowardsUnicorn
+
+    if (isFirstFrame) {
+        markMut('unicornRecordedPlayerTform')
+        markMut('unicornInitialPosition')
+        markMut('unicornSpeed')
+        markMut('unicornAcceleration')
+        unicornSpeed = 0
+        unicornAcceleration = 0
+        unicornRecordedPlayerTform = []
+        unicornInitialPosition = 0
+        if (skipToUnicorn) setUnicornSpeedAccel(unicornSpeedEasy, unicornAccelEasy)
+        return
+    }
+
+    unicornRecordedPlayerTform.push(cameraTransform[0])
+    trimTopOf(unicornRecordedPlayerTform, Math.ceil(unicornSpeed))
+    unicornTform[0] =
+        unicornRecordedPlayerTform.length >= unicornSpeed ? unicornRecordedPlayerTform[0] : unicornInitialPosition
+
+    if (!unicornSpeed || !unicornTform[0] || getIsLandedOrStillOffBlasting()) {
+        return setRoaring(0)
+    }
+
+    setRoaring(1)
+
+    unicornSpeed -= unicornAcceleration
+
+    assert(() => unicornSpeed > 0, 'UNICORN got too close. The player should have died')
+
+    deferDrawUICommand(UI_LAYER_UNICORN_BAR, () => {
+        ctx.fillStyle = '#f00'
+        ctx.fillRect(...frameLogAdvanceXYWidthHeight(
+            1.0 - (unicornSpeed / (unicornSpeedMaximum - unicornSpeedMinimum))
+        ))
+    })
+
+    if (vecLength(vecSubVec(cameraTransform[0], unicornTform[0])) < unicornScale * .1) {
+        sound_explosion.play()
+        sound_roar.play()
+        die('The UNICORN caught up')
+    }
+
+    // make sure not to render our unicorn when he's behind. He glitches out
+    vecTowardsUnicorn = vec(vecNormalize(vecSubVec(cameraTransform[0], unicornTform[0])))
+    if (vecDotVec(cameraTransformInv[1][z], vecTowardsUnicorn) < 0.1) return
+
+    unicornTform[1] = matMulNum(matIdentity(), unicornScale)
+
+    deferRenderCommand(unicornTform, () => {
+        assetCompositeUnicornFlat(unicornTform)
+
+        drawTransform(unicornTform)
+        drawDebugCube(unicornTform)
+    })
+}
+
+// Trim the top of the array
+let trimTopOf = (array, unicornSpeed) =>
+    (array.length > unicornSpeed + 1)
+        ? (array.shift(), trimTopOf(array, unicornSpeed))
+        : 0
+
+let wasRoaring
+let setRoaring = shouldRoar => {
+    markMut('wasRoaring')
+    if (shouldRoar && !wasRoaring) {
+        sound_roar.play()
+    }
+    wasRoaring = shouldRoar
+}
+</script>
+<script>
+// Evil-ly retrieve all variables
+// Somehow does not use eval
+// But, reads source code!
+let varDeclRegex = /(?:let|var)\s*(\w+)/g
+let _allLetVariables = !self.production
+    && (async () => {
+        let scriptSources = await Promise.all(Array.from(document.getElementsByTagName('script'), async script => {
+            if (!script.src) return ''
+            let res = await fetch(script.src)
+            return await res.text()
+        }))
+        let reduced = scriptSources.reduce((s1, s2) => s1 + s2)
+        let variables = reduced.match(varDeclRegex).map(let_ => let_.replace(varDeclRegex, '$1')) // It's okay to have a few false positives AND false negatives.
+        let variablesThatExist = variables.filter(let_ => {
+            try {
+                _variableReader(let_)()
+                return true
+            } catch {}
+        })
+        allLetVariables = variablesThatExist
+    })()
+let allLetVariables // defined asynchronously, above
+let globalsAfterInit
+let _variableReaders = {}
+
+// let handledKeys
+// let markMut
+
+// After the first frame
+let mutationCheckInit = () => {
+    if (self.production) return
+    if (!allLetVariables) return
+    if (globalsAfterInit) return
+
+    markMut('globalsAfterInit')
+    markMut('_variableReaders')
+
+    globalsAfterInit = Object.fromEntries(allLetVariables.map((let_) => {
+        _variableReaders[let_] = _variableReader(let_)
+        return [let_, mutationComparable(_variableReaders[let_]())]
+    }))
+}
+let mutationComparable = self.production
+    ? () => true
+    : (a) => {
+        if (typeof a === 'object' && a) return str(a)
+        return a // everything else can be compared with ===
+    }
+let mutationCheck = () => {
+    if (self.production) return
+    if (!allLetVariables) return
+    if (!globalsAfterInit) return
+
+    for (const let_ of Object.keys(globalsAfterInit)) {
+        if (let_ in handledKeys) continue
+
+        const oldValue = globalsAfterInit[let_]
+        const newValue = mutationComparable(_variableReaders[let_]())
+
+        if (oldValue != newValue) {
+            throw new Error('Property `' + let_ + '` has changed:\n  ' + oldValue + ' != ' + newValue)
+        }
+    }
+}
+
+let _variableReader =
+    self.production
+        ? () => {}
+        : varname => globalThis.eval(`() => (${varname})`)
+
+</script>
+<script>main()</script>
+</body>

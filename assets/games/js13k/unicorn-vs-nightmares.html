@@ -1,0 +1,1646 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Unicorn vs Nightmares</title>
+<style>
+html,body{margin:0;height:100%;background:#171232;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+canvas{display:block;width:100%;height:100%}
+</style></head><body><canvas id=c></canvas><script>
+"use strict";
+// =====================================================================
+//  UNICORN VS NIGHTMARES  (js13k 2026, theme "Unicorns and Rainbows")
+//  A tile-placing game imagined by Raphael, who designs games with his dad
+//  and with Claude Code.
+// =====================================================================
+
+// ---------- Canvas ----------
+var C=document.getElementById('c'), X=C.getContext('2d'), W,H,DPR;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=innerWidth; H=innerHeight;
+  C.width=W*DPR|0; C.height=H*DPR|0;
+  C.style.width=W+'px'; C.style.height=H+'px';
+  X.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize',resize); resize();
+
+// ---------- Utils ----------
+var T=0, PI=Math.PI, TAU=PI*2;
+function lerp(a,b,t){ return a+(b-a)*t; }
+// All the randomness in the game funnels through ri() and shuffle(), and
+// nothing anywhere reads the clock. Override Math.random with a seeded
+// generator and an entire game replays move for move -- which is what makes
+// this canvas game reproducible outside a browser, and what
+// scripts/record-gif.mjs relies on to re-encode the same GIF byte for byte.
+function ri(n){ return Math.random()*n|0; }
+function rr(x,y,w,h,r){ X.beginPath(); X.moveTo(x+r,y);
+  X.arcTo(x+w,y,x+w,y+h,r); X.arcTo(x+w,y+h,x,y+h,r);
+  X.arcTo(x,y+h,x,y,r); X.arcTo(x,y,x+w,y,r); X.closePath(); }
+function rgb(c){ return 'rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')'; }
+function mix(a,b,t){ return [lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]; }
+function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=ri(i+1), t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+function fnt(size,weight){ X.font=(weight||'bold')+' '+size+'px system-ui,sans-serif'; }
+function txt(s,x,y,size,col,al,weight,maxw){
+  fnt(size,weight);
+  maxw=maxw||W*0.92;
+  var lines=s.split('\n'), i, w=0;
+  for(i=0;i<lines.length;i++) w=Math.max(w,X.measureText(lines[i]).width);
+  if(w>maxw) fnt(size*maxw/w,weight);
+  X.textAlign=al||'center'; X.textBaseline='middle'; X.fillStyle=col;
+  var lh=size*1.15, y0=y-(lines.length-1)*lh/2;
+  for(i=0;i<lines.length;i++) X.fillText(lines[i],x,y0+i*lh);
+}
+
+// ---------- Audio ----------
+// STEP16 = 0.1136 s is a sixteenth note at 132 BPM (60/132/4). It is the clock
+// step of musTick, so it is the tempo. Sound can only start on the FIRST TAP :
+// browsers refuse to create an AudioContext without a user gesture, which is
+// why ensureAudio() is only ever reached from onTap(), never on load.
+var AC, musGain, musOn=false, musNext=0, musStep=0, STEP16=0.1136, muted=false;
+function setMute(v){ muted=v; if(musGain&&AC) musGain.gain.setTargetAtTime(v?0:0.45,AC.currentTime,0.05); }
+function ensureAudio(){
+  if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(AC && AC.state==='suspended') AC.resume();
+  return AC;
+}
+function snd(f,d,type,v,f2){
+  if(muted||!ensureAudio()) return;
+  try{
+    var o=AC.createOscillator(), g=AC.createGain(), t=AC.currentTime;
+    o.type=type||'sine'; o.frequency.value=f; g.gain.value=v||0.05;
+    o.connect(g); g.connect(AC.destination); o.start(t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(30,f*(f2||0.5)),t+d);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    o.stop(t+d+0.02);
+  }catch(e){}
+}
+// Vibration: the most direct feedback on a phone. Silent everywhere else.
+function vib(p){ try{ navigator.vibrate(p); }catch(e){} }
+function sPlace(){ snd(420,0.16,'triangle',0.06,1.6); }
+function sStar(){ snd(880,0.10,'sine',0.07,2.2); setTimeout(function(){snd(1320,0.12,'sine',0.05,1.6);},70); }
+function sBad(){ snd(150,0.30,'sawtooth',0.06,0.4); }
+function sPop(){ snd(300,0.12,'square',0.05,0.35); }
+function sWin(){ [0,4,7,12,16].forEach(function(n,i){ setTimeout(function(){ snd(330*Math.pow(2,n/12),0.5,'triangle',0.07,1); },i*110); }); }
+function sLose(){ [0,-3,-7,-12].forEach(function(n,i){ setTimeout(function(){ snd(240*Math.pow(2,n/12),0.5,'sawtooth',0.06,0.6); },i*160); }); }
+function sMagic(){ for(var i=0;i<8;i++) (function(i){ setTimeout(function(){ snd(500+i*160,0.3,'sine',0.05,1.4); },i*55); })(i); }
+
+// The Ride: eighth-note bass, full drums, a rising melody.
+// Minor scale during the nightmare, major once it becomes a dream.
+var MIN=[0,2,3,5,7,8,10], MAJ=[0,2,4,5,7,9,11], PROG=[0,-4,3,-2], NZ;
+function hz(s){ return 220*Math.pow(2,s/12); }
+function mTone(f,t,d,type,v,det){
+  var o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.value=f; if(det) o.detune.value=det;
+  o.connect(g); g.connect(musGain);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  o.start(t); o.stop(t+d+0.05);
+}
+function mSlide(f1,f2,t,d,type,v){
+  var o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.setValueAtTime(f1,t);
+  o.frequency.exponentialRampToValueAtTime(f2,t+d);
+  o.connect(g); g.connect(musGain);
+  g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  o.start(t); o.stop(t+d+0.03);
+}
+function mNoise(t,d,v,hp){
+  var sc=AC.createBufferSource(); sc.buffer=NZ;
+  var fl=AC.createBiquadFilter(); fl.type='highpass'; fl.frequency.value=hp;
+  var g=AC.createGain();
+  sc.connect(fl); fl.connect(g); g.connect(musGain);
+  g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  sc.start(t); sc.stop(t+d+0.02);
+}
+function mKick(t){ mSlide(160,42,t,0.2,'sine',0.5); }
+// Web Audio scheduler : we queue 300 ms AHEAD on a 70 ms timer, never at the
+// moment the timer fires. setInterval drifts by tens of milliseconds, the audio
+// clock does not -- that offset is what keeps the beat steady.
+function musTick(){
+  if(!AC||!musOn) return;
+  var ahead=AC.currentTime+0.3;
+  while(musNext<ahead){
+    var i=musStep, bar=i/16|0, b=i%16, r=PROG[bar%4],
+        S=dreamT>0.5?MAJ:MIN, w=musNext;
+    if(b%2===0) mTone(hz(r-24),w,0.17,'sawtooth',0.15);          // basse
+    if(b===0||b===6||b===8||b===14) mKick(w);                     // grosse caisse
+    if(b===4||b===12) mNoise(w,0.15,0.28,1400);                   // caisse claire
+    if(b%2===1) mNoise(w,0.035,0.09,7000);                        // charley
+    if(b===0) for(var k=0;k<3;k++)                                // nappe d accord
+      mTone(hz(r+[0,S[2],S[4]][k]),w,1.8,'triangle',0.045,k*7);
+    if(b%4===0){ var M=[0,S[2],S[4],S[6],12,S[6],S[4],S[2]];      // melodie
+      mTone(hz(r+M[(bar*2+b/4)%8]+12),w,0.5,'square',0.075); }
+    musNext+=STEP16; musStep++;
+  }
+}
+function startMusic(){
+  if(musOn||!ensureAudio()) return;
+  musOn=true; musGain=AC.createGain(); musGain.gain.value=0;
+  musGain.connect(AC.destination);
+  musGain.gain.linearRampToValueAtTime(0.45,AC.currentTime+3);
+  NZ=AC.createBuffer(1,AC.sampleRate/2,AC.sampleRate);
+  var nd=NZ.getChannelData(0);
+  for(var q=0;q<nd.length;q++) nd[q]=Math.random()*2-1;
+  musNext=AC.currentTime+0.1; musStep=0; setInterval(musTick,70);
+}
+
+// ---------- Game data ----------
+// value = strength. 1 (pink) covers EVERYTHING but everything covers it.
+var TL=[0,
+ {c:[255,158,196],d:[201,107,150],n:'PINK',   p:'beat all others'},
+ {c:[255,216,107],d:[201,162,50], n:'YELLOW',  p:'draw 2'},
+ {c:[143,226,138],d:[79,156,86],  n:'GREEN',   p:'replay'},
+ {c:[185,140,255],d:[122,82,201], n:'PURPLE', p:'discard an enemy'},
+ {c:[255,123,107],d:[199,74,62],  n:'RED',  p:'stronger'}];
+var MONN=['','Spider','Skeleton','Zombie','Cavity','Dragon'];
+var DECK=[1,1,1,1,1,1, 2,2,2,2,2,2, 3,3,3,3,3,3, 4,4, 5,5,5,5];
+
+// The board is not a grid: it is a NETWORK of zones linked by paths, like a
+// real board game. Zone 0 = monster camp,
+// last zone = unicorn camp. The mirror of zone i is zone N-1-i,
+// so the board is perfectly fair to both players.
+var N=17, MC=0, PC=16, NP, ED, bid=0;
+// 17 zones: the 2 camps, 11 squares, and 4 side towers that hold no star
+// but open flanking routes.
+var NP0=[            [.50,.07],
+        [.22,.16],              [.78,.16],
+  [.11,.33],  [.36,.29],  [.64,.29],  [.89,.33],
+        [.24,.50],  [.50,.50],  [.76,.50],
+  [.11,.67],  [.36,.71],  [.64,.71],  [.89,.67],
+        [.22,.84],              [.78,.84],
+                    [.50,.93]];
+var ED0=[[0,1],[0,2],[0,4],[0,5],[1,3],[1,4],[2,6],[2,5],[3,7],[6,9],
+        [4,7],[4,8],[5,8],[5,9],[7,10],[7,11],[8,11],[8,12],[9,13],[9,12],
+        [10,14],[13,15],[11,14],[11,16],[12,15],[12,16],[14,16],[15,16]];
+
+// Network B: one big central hub, everything goes through it.
+var NP1=[            [.50,.06],
+         [.20,.18],              [.80,.18],
+   [.09,.38],  [.35,.32],  [.65,.32],  [.91,.38],
+         [.22,.50],  [.50,.50],  [.78,.50],
+   [.09,.62],  [.35,.68],  [.65,.68],  [.91,.62],
+         [.20,.82],              [.80,.82],
+                     [.50,.94]];
+var ED1=[[0,1],[0,2],[1,3],[1,4],[2,5],[2,6],[3,7],[4,5],[4,8],[5,8],[6,9],[7,8],
+         [7,10],[8,9],[8,11],[8,12],[9,13],[10,14],[11,12],[11,14],[12,15],[13,15],
+         [14,16],[15,16]];
+// Network C: two side corridors and a narrow central passage.
+var NP2=[            [.50,.07],
+         [.26,.17],              [.74,.17],
+   [.16,.30],              [.84,.30],
+   [.16,.44],  [.50,.30],  [.84,.44],
+               [.50,.50],
+   [.16,.56],  [.50,.70],  [.84,.56],
+   [.16,.70],              [.84,.70],
+         [.26,.83],              [.74,.83],
+                     [.50,.93]];
+var ED2=[[0,1],[0,2],[0,6],[1,3],[2,4],[1,6],[2,6],[3,5],[4,7],[4,6],[5,8],[7,8],
+         [5,9],[7,11],[6,8],[8,10],[8,9],[8,11],[9,12],[11,13],[10,12],[12,14],
+         [13,15],[10,14],[10,15],[14,16],[15,16],[10,16]];
+
+// Network D: a wide ring along the sides, plus a central diamond.
+var NP3=[            [.50,.06],
+         [.28,.14],              [.72,.14],
+   [.11,.28],                                [.89,.28],
+         [.36,.34],              [.64,.34],
+   [.08,.50],  [.50,.50],  [.92,.50],
+         [.36,.66],              [.64,.66],
+   [.11,.72],                                [.89,.72],
+         [.28,.86],              [.72,.86],
+                     [.50,.94]];
+var ED3=[[0,1],[0,2],[0,5],[0,6],[1,3],[1,5],[2,4],[2,6],[3,7],[4,9],[5,8],[6,8],
+         [7,12],[8,10],[8,11],[9,13],[10,14],[10,16],[11,15],[11,16],[12,14],
+         [13,15],[14,16],[15,16]];
+
+// ct: 0 normal, 1 wall, 2 DRAW zone (+2 tiles), 3 PLAY AGAIN zone.
+// sv: stars held by the zone.
+// np/ed: which network.  pk: the 2 kinds of scenery.  dc: colour of details.
+var BOARDS=[
+ {np:NP0,ed:ED0,n:'THE CLOUD SKY', s:'The big bridge is worth 3 stars!', need:8,
+  ct:[0,0,0,2,0,0,3,0,0,0,3,0,0,2,0,0,0],
+  sv:[0,1,1,0,1,1,0,2,3,2,0,1,1,0,1,1,0], tn:[],
+  sol:[168,146,224], so2:[143,120,204], riv:[42,31,77], pk:[0,0], dc:'#efe6ff'},
+ {np:NP0,ed:ED0,n:'THE PLUSH CASTLE', s:'Two walls and two secret tunnels!', need:6,
+  ct:[0,0,0,0,2,0,0,1,0,1,0,0,2,0,0,0,0],
+  sv:[0,1,1,0,1,1,0,0,3,0,0,1,1,0,1,1,0], tn:[[3,13],[6,10]],
+  sol:[124,168,116], so2:[98,140,92], riv:[74,127,196], pk:[7,3], dc:'#ffe98a'},
+ {np:NP0,ed:ED0,n:'THE CANDY DESERT', s:'The 4 candies let you play again!', need:7,
+  ct:[0,0,0,0,3,3,0,0,0,0,0,3,3,0,0,0,0],
+  sv:[0,1,1,0,1,1,0,1,3,1,0,1,1,0,1,1,0], tn:[],
+  sol:[246,196,214], so2:[222,164,188], riv:[196,88,140], pk:[2,2], dc:'#fff0a0'},
+ {np:NP1,ed:ED1,n:'THE TEDDY FOREST', s:'The 4 clearings give you tiles!', need:9,
+  ct:[0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0],
+  sv:[0,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,0], tn:[],
+  sol:[86,142,88], so2:[64,112,68], riv:[54,110,150], pk:[1,7], dc:'#ffd86b'},
+ {np:NP2,ed:ED2,n:'THE LILY POND', s:'Two currents link the banks!', need:8,
+  ct:[0,0,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0],
+  sv:[0,1,1,0,0,1,2,1,3,1,2,1,0,0,1,1,0], tn:[[3,13],[4,12]],
+  sol:[86,164,196], so2:[64,136,170], riv:[38,96,140], pk:[5,5], dc:'#bff0ff'},
+ {np:NP3,ed:ED3,n:'THE SAND DESERT', s:'Oases are worth double!', need:8,
+  ct:[0,0,0,0,0,0,0,2,0,2,0,0,0,0,0,0,0],
+  sv:[0,1,1,0,0,2,2,0,3,0,2,2,0,0,1,1,0], tn:[],
+  sol:[230,196,132], so2:[204,168,104], riv:[110,180,190], pk:[4,3], dc:'#fff0c0'},
+ {np:NP2,ed:ED2,n:'THE DREAM ICE', s:'The ice has cracked in places!', need:9,
+  ct:[0,0,0,3,0,1,0,0,0,0,0,1,0,3,0,0,0],
+  sv:[0,1,1,1,1,0,2,1,3,1,2,0,1,1,1,1,0], tn:[],
+  sol:[196,224,240], so2:[164,198,222], riv:[70,130,180], pk:[6,6], dc:'#ffffff'},
+ {np:NP0,ed:ED0,n:'THE MARSHMALLOW VOLCANO', s:'Watch out for the warm lava!', need:9,
+  ct:[0,0,0,0,1,0,2,0,0,0,2,0,1,0,0,0,0],
+  sv:[0,1,1,1,0,1,1,2,3,2,1,1,0,1,1,1,0], tn:[],
+  sol:[186,104,96], so2:[152,76,72], riv:[248,152,52], pk:[3,2], dc:'#ffd06a'}];
+
+// ---------- State ----------
+// All the state is parallel arrays indexed by zone (0..N-1) :
+//   ow[i] owner of the zone   -1 nobody, 0 player, 1 monster
+//   ov[i] strength of the tile on it (1..5), 0 if empty
+//   ct[i] cell type   0 normal, 1 wall, 2 DRAW +2, 3 PLAY AGAIN
+//   sv[i] stars the zone is worth      pop[i] placement animation (1 -> 0)
+//   adj[i] neighbours      dMC/dPC[i] distance to monster / player camp (BFS)
+// mode chains 9 screens : title -> intro -> nightmare -> boardintro -> play
+//   (-> remove on a purple tile) -> celebrate -> boardend, or straight to runend
+//   when the night is over.
+//   onTap() below IS the state machine, written in the order you tap.
+var ct=[], sv=[], ow=[], ov=[], pop=[], adj=[], dMC=[], dPC=[], props=[], dets=[], tuns=[], BD;
+var hand=[], deck=[], mHand=[], mDeck=[];
+// sc is the run score, pRec and pDet the two per-board counters that feed it.
+// Measured over 3000 simulated runs: every cumulative counter in this game
+// correlates 0.81 to 0.98 with "how many boards did I clear", because a run
+// stops at the first defeat. So there is ONE score rather than four rankings
+// that would all name the same winner, and its formula deliberately rewards the
+// rare way to win (see boardOver).
+var niv=1, record=0, etoTot=0, sc=0, pRec=0, pDet=0, bi=0, need=8, ord=[0,1,2];
+var turn=0, mode='title', sel=-1, aiT=0, msg='', msgT=0, shake=0, dreamT=0.22, dreamG=0.22;
+var menu=0, fx=[], cut=[], ripple=[], scP=[0,0], scB=[0,0], sOld=[0,0], introStep=0, endWin=false, legendOn=0, lastI=-1, lastO=-1, moves=0;
+var BW=300, BH=440, BX=0, BY=0, NR=26, topH=70, botH=150;
+
+function rng(s){ return function(){ s|=0; s=s+0x6D2B79F5|0;
+  var t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+function nx(i){ return BX+NP[i][0]*BW; }
+function ny(i){ return BY+NP[i][1]*BH; }
+
+function bfsD(src){
+  var d=[], q=[src], h=0, i; d[src]=0;
+  while(h<q.length){ i=q[h++];
+    for(var k=0;k<adj[i].length;k++){ var j=adj[i][k];
+      if(d[j]===undefined&&ct[j]!==1){ d[j]=d[i]+1; q.push(j); } } }
+  for(i=0;i<N;i++) if(d[i]===undefined) d[i]=9;
+  return d;
+}
+function loadBoard(k){
+  var B=BD=BOARDS[k], i; bid=k;
+  NP=B.np; ED=B.ed;
+  ct=B.ct.slice(); sv=B.sv.slice(); tuns=B.tn; need=B.need;
+  ow=[]; ov=[]; pop=[]; adj=[];
+  for(i=0;i<N;i++){ ow[i]=-1; ov[i]=0; pop[i]=0; adj[i]=[]; }
+  function link(a,b){ adj[a].push(b); adj[b].push(a); }
+  for(i=0;i<ED.length;i++) link(ED[i][0],ED[i][1]);
+  for(i=0;i<tuns.length;i++) link(tuns[i][0],tuns[i][1]);
+  dMC=bfsD(MC); dPC=bfsD(PC);
+  // scenery: random, but always identical for a given board
+  var r=rng(k*7919+13); props=[]; dets=[];
+  for(var t=0;t<260&&props.length<34;t++){
+    var x=r(), y=r(), ok=1;
+    if(y>0.41&&y<0.59) continue;                 // nothing in the river
+    for(i=0;i<N;i++){ var dx=x-NP[i][0], dy=(y-NP[i][1])*1.5;
+      if(dx*dx+dy*dy<0.019) ok=0; }
+    if(ok) props.push({x:x,y:y,r:0.027+r()*0.040,k:B.pk[r()<0.6?0:1],s:r()});
+  }
+  for(t=0;t<46;t++) dets.push({x:r(),y:r(),r:0.004+r()*0.008});
+  fx=[]; lastI=-1;
+}
+// A zone's stars belong to whoever sits on it, so they can be STOLEN by
+// covering. That is what makes covering worth doing.
+function score(o){ var t=0, r=net(o).s; for(var i=0;i<N;i++) if(ow[i]===o&&r[i]) t+=sv[i]; return t; }
+
+// ---------- Rules ----------
+function beats(a,b){ return a===1 || a>b; }   // pink (1) covers everything
+function nbrs(i){ return adj[i]; }
+// network = everything linked to your camp through your own tiles
+function net(o){
+  var seen=[], par=[], dep=[], q=[o?MC:PC], h=0;
+  seen[q[0]]=1; par[q[0]]=-1; dep[q[0]]=0;
+  while(h<q.length){
+    var i=q[h++], nb=nbrs(i);
+    for(var k=0;k<nb.length;k++){ var j=nb[k];
+      if(!seen[j] && ow[j]===o){ seen[j]=1; par[j]=i; dep[j]=dep[i]+1; q.push(j); } }
+  }
+  return {s:seen,p:par,d:dep};
+}
+function legalFor(o,v){
+  var nt=net(o).s, out=[], seen=[], own=o?MC:PC, foe=o?PC:MC;
+  for(var i=0;i<N;i++){ if(!nt[i]) continue;
+    var nb=nbrs(i);
+    for(var k=0;k<nb.length;k++){ var j=nb[k];
+      if(seen[j]||ct[j]===1||j===own) continue;
+      // This line is the one exception to the covering rule, and it is not an
+      // oversight : touch the enemy castle with ANY tile and it is yours.
+      // That is the lightning win.
+      if(j===foe){ seen[j]=1; out.push(j); continue; }
+      if(ow[j]===o) continue;
+      if(ow[j]<0 || beats(v,ov[j])){ seen[j]=1; out.push(j); }
+    }
+  }
+  return out;
+}
+function anyLegal(o,hd){
+  for(var k=0;k<hd.length;k++) if(legalFor(o,hd[k]).length) return true;
+  return false;
+}
+function drawTiles(o,n){
+  var hd=o?mHand:hand, dk=o?mDeck:deck, pris=0;
+  for(var k=0;k<n;k++){
+    if(hd.length>=7) break;
+    if(!dk.length){ dk.push.apply(dk,shuffle(DECK.slice())); }
+    var v=dk.pop(); hd.push(v);
+    // the tile flies from the deck to the hand, so the draw is visible
+    if(o) addFly(nx(MC),ny(MC),UX+30,topH*0.5,0.7,0,v,1,pris*0.2);
+    else { var b=drawBtn(); addFly(b.x+b.w/2,b.y+b.h/2,UX+UW/2,H-botH+72,0.55,0,v,0,pris*0.18); }
+    pris++;
+  }
+}
+
+// ---------- Effects ----------
+var fly=[], wait=0, celT=0, celD=0, bT=0;   // bT: when the current board started, for SWIFT_DREAMER
+// k=0: a tile flying to a hand. k=1: a star flying to the score.
+function addFly(x,y,tx,ty,d,k,v,o,dl){ fly.push({x:x,y:y,tx:tx,ty:ty,d:d,t:-(dl||0),k:k,v:v,o:o}); }
+function burst(cx,cy,col,n,sp){
+  for(var i=0;i<n;i++){ var a=Math.random()*TAU, s=(sp||90)*(0.3+Math.random());
+    fx.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:0.4+Math.random()*0.5,c:col,r:2+ri(3)}); }
+}
+function flash(s){ msg=s; msgT=1.4; }
+// Compare the network before/after a move: whatever is no longer linked to the
+// castle stops counting. The hardest rule to notice, so we show it.
+function avant(){ return [net(0).s,net(1).s]; }
+function apres(av){
+  for(var o=0;o<2;o++){
+    var ap=net(o).s, n=0, e=0;
+    for(var i=0;i<N;i++) if(ow[i]===o&&av[o][i]&&!ap[i]){ cut.push({i:i,t:0,o:o}); n++; e+=sv[i]; }
+    if(n) { if(!o){ flash('Your line is cut! '+(e?e+' star'+(e>1?'s':'')+' cut off':'')); msgT=2.4; sBad(); shake=Math.max(shake,9); vib(70); }
+            else { flash('Its line is cut!'); msgT=1.8; sStar(); } }
+  }
+}
+
+// ---------- Placing a tile ----------
+var pendingExtra=false;
+function doPlace(o,v,i){
+  var foe=o?PC:MC, cx=nx(i), cy=ny(i), av=avant();
+  if(ow[i]>=0) burst(cx,cy,rgb(TL[ov[i]].c),12,120);
+  var vol=(ow[i]===1-o)&&sv[i]>0;               // we take the other side's stars
+  if(!o&&ow[i]===1) pRec++;                     // covered an enemy tile: counts for the score
+  ow[i]=o; ov[i]=v; pop[i]=1; lastI=i; lastO=o; sPlace(); shake=Math.min(shake+2,7);
+  vib(o?18:8);
+  if(i===foe){ boardOver(o===0,1); return; }
+  apres(av);
+  var extra=(v===3)||(ct[i]===3);
+  if(sv[i]){ sStar(); burst(cx,cy,'#ffe98a',10+sv[i]*8,150); if(vol) vib(o?[40,40,40]:30);
+    if(vol) flash(o?'The monster steals '+sv[i]+' star'+(sv[i]>1?'s':'')+' !':'You steal '+sv[i]+' star'+(sv[i]>1?'s':'')+' !');
+    if(vol&&!o&&sv[i]>2) trophy('STAR_THIEF'); }
+  if(v===2||ct[i]===2){ drawTiles(o,2);
+    if(ct[i]===2&&v!==2) flash(o?'The monster draws 2 tiles':'You draw 2 unicorns'); }
+  if(v===4){
+    var tg=[]; for(var k=0;k<N;k++) if(ow[k]===(o?0:1)) tg.push(k);
+    if(tg.length){
+      if(o===0){ pendingExtra=extra; mode='remove'; flash('Remove one monster tile!'); return; }
+      tg.sort(function(a,b){ return (sv[b]-sv[a])||(dPC[a]-dPC[b]); });
+      removeTile(tg[0]);
+    }
+  }
+  if(extra){ flash(v===3?'PLAY AGAIN!':'CANDY: PLAY AGAIN!'); if(o===1) aiT=0.7; }
+  else endTurn();
+}
+function removeTile(i){
+  var cx=nx(i), cy=ny(i), av=avant();
+  burst(cx,cy,ow[i]?'#6b5aa0':rgb(TL[ov[i]].c),20,160);
+  ow[i]=-1; ov[i]=0; lastI=i; lastO=2; sBad(); shake=Math.min(shake+5,10); apres(av);
+}
+function endTurn(){
+  sel=-1; moves++;
+  // Safety net, and nothing more. Measured over 300 games x 8 boards : mean
+  // under 60 moves, worst case 125. 110 moves means the game has deadlocked,
+  // so we settle it on stars, then on zones held. Never fires in real play.
+  if(moves>110){
+    var z0=0,z1=0;
+    for(var q=0;q<N;q++){ if(ow[q]===0) z0++; else if(ow[q]===1) z1++; }
+    flash('The child wakes up!');
+    boardOver(score(0)>score(1)||(score(0)===score(1)&&z0>=z1)); return;
+  }
+  var nxt=1-turn;
+  // You win by HOLDING your stars through a full enemy turn.
+  // So the other side always gets one chance to steal them back.
+  if(score(nxt)>=need){ boardOver(nxt===0); return; }
+  turn=nxt;
+  if(turn===1) aiT=0.8;
+}
+
+// ---------- End of a board, end of a run ----------
+// One trophy per level of the night, indexed by niv-1. A table rather than a
+// cascade of ifs: eight ids cost less here than eight branches, and the ladder
+// reads in one glance. The id IS the banner text, underscores become spaces.
+var LVL=['FIRST_DREAM','DRIFTING_OFF','DEEP_SLEEPER','MIDNIGHT_HOUR',
+         'LUCID_DREAMER','NIGHT_WATCH','DAWN_CHASER','DREAM_MASTER'];
+function boardOver(playerWon,parChateau){
+  endWin=playerWon;
+  if(playerWon){
+    etoTot+=score(0); if(niv>record) record=niv;
+    // Stars and the two aggressive moves, times the level, so late boards weigh
+    // more. The 60 is the interesting part: winning on stars instead of storming
+    // the castle happens in only 38 % of runs, against 100 % for the castle, so
+    // it is the rare line and the score is what finally says so.
+    sc+=(score(0)*10+pRec*5+pDet*5+(parChateau?0:60))*niv;
+  }
+  mode='celebrate'; celT=0; celD=1.1; fly=[];
+  var g=playerWon?0:1;
+  if(playerWon) dreamG=1;
+  if(parChateau){
+    var c=nx(playerWon?MC:PC), d=ny(playerWon?MC:PC);
+    burst(c,d,'#fff',60,300); burst(c,d,playerWon?'#ffe98a':'#ff7b6b',40,180);
+    shake=18; celD=1.4;
+    flash(playerWon?"YOU TOOK THE MONSTER'S CASTLE!":'The monster took your castle...');
+    msgT=2.5;
+  } else {
+    // each won star flies to the counter
+    var tx=g?UX+56:UX+UW*0.56, ty=g?topH*0.62:H-botH+24, r=net(g).s, nb=0;
+    for(var i=0;i<N;i++){ if(ow[i]!==g||!r[i]||!sv[i]) continue;
+      for(var q=0;q<sv[i];q++){ addFly(nx(i),ny(i),tx,ty,0.62,1,0,g,nb*0.13); nb++; } }
+    celD=nb*0.13+0.9;
+    flash(playerWon?'YOUR STARS ARE SHINING!':'The monster gathered its stars...');
+    msgT=celD;
+  }
+  if(playerWon){ sWin(); sMagic(); vib([30,50,30,50,80]); } else { sLose(); shake=Math.max(shake,12); vib(180); }
+  // Trophies, ordered from common to rare: they share one banner, so the last
+  // one to fire is the one the player reads.
+  if(playerWon){
+    trophy(LVL[niv-1]);
+    trophy(parChateau?'CASTLE_RAID':'STAR_KEEPER');
+    if(moves<12) trophy('QUICK_DREAM');
+    // 13 seconds, the contest's own number. Measured: a won board costs 6 s of
+    // forced monster delay (aiT + wait) for 5 player moves, so this leaves about
+    // 1.4 s per move -- tight on THE TEDDY FOREST, comfortable everywhere else.
+    if(T-bT<13) trophy('SWIFT_DREAMER');
+    if(parChateau&&ov[MC]===1) trophy('PINK_VICTORY');
+    if(niv===8&&sc>=4500) trophy('NEVER_WAKING');
+  }
+}
+// The night is EIGHT boards long, and then it is won. It used to loop forever
+// on a reshuffled deck of the same eight; measured over 3000 simulated runs, the
+// furthest anyone got was level 13, so levels 14 and beyond were content nobody
+// would ever see, and two trophies hung past the end of the reachable world.
+// A finite run also gives the score a meaning: everybody plays the same eight.
+function nextBoard(){
+  if(!endWin||niv>=8){ mode='runend'; wdScore(); return; }
+  niv++; bi++;
+  startBoard(niv>1?1:0);   // from level 2 on, the monster starts
+}
+// starter: 0 = player starts, 1 = monster starts
+function startBoard(starter){
+  loadBoard(ord[bi]);
+  // The monster earns its big heads level after level: at the start it has
+  // neither PURPLE nor RED, and only becomes truly dangerous later.
+  var lim=Math.min(5,niv+1);
+  deck=shuffle(DECK.slice());
+  mDeck=shuffle(DECK.map(function(v,q){
+    // Three softenings stacked : no tile above niv+1 ; before level 5, every
+    // other GREEN (play again) becomes YELLOW ; after level 6, every other
+    // YELLOW becomes GREEN. This is the deck getting harder, not the AI.
+    return v>lim||(v===3&&q%2&&niv<5)?2:v===2&&q%2&&niv>6?3:v; }));
+  hand=[]; mHand=[];
+  var a=starter===0?3:4, b=starter===0?4:3;   // whoever starts gets one tile FEWER : the first-move tax
+  for(var k=0;k<a;k++) hand.push(deck.pop());
+  for(var k=0;k<b;k++) mHand.push(mDeck.pop());
+  turn=starter; sel=-1; moves=0; pRec=0; pDet=0; dreamG=0; mode='boardintro'; aiT=1;
+  cut=[]; sOld=[score(0),score(1)]; scP=[0,0]; scB=[0,0];
+}
+
+// ---------- Monster AI ----------
+// The monster always shows its next tile (mHand[0]) and must play it.
+// The eleven constants below are not hand-tuned. They come from a genetic
+// search that replayed this exact function against itself over ~500 000
+// games. Almost all of the gain came from LOWERING two of them : the value
+// of a star (34 -> 6) and of stealing one (26 -> 8). The AI was hoarding
+// stars and underplaying position. Only the RATIO between the weights
+// matters, never their absolute size.
+// Measured, 12 000 games, both sides swapped : these weights beat the
+// pre-tuning ones 52.4 % of the time averaged over the eight boards -- a
+// real but modest edge, and worth nothing at all on two of them.
+// aiPlay is dual-purpose : the game only ever calls aiPlay(1). The o=0
+// branch is the sparring partner the tests play against, and the way a
+// mid-game position is staged -- the game has no API to install one, so you
+// loop aiPlay(turn) + update(0.4) about fifteen times, then hand control
+// back to the player with turn=0.
+function aiPlay(o){
+  var hd=o?mHand:hand, foe=o?PC:MC, v=hd[0], opts;
+  if(!v){ drawTiles(o,2); endTurn(); return; }
+  opts=legalFor(o,v);
+  // The monster opens every board from level 2 on, and one chain of PLAY AGAIN
+  // can carry it to the child's camp before the child has touched the board
+  // once -- a defeat with nothing to learn from. Measured here over 28 800
+  // openings, 9 levels x 8 boards: 2.55 % of them, and 18.3 % on the candy
+  // desert, whose two PLAY AGAIN cells sit right next to the monster's camp.
+  // moves stays 0 until a turn has ENDED, and a replay chain never calls
+  // endTurn(), so it marks the opening chain and nothing else. During it the
+  // camp is off the table; with nothing else left the monster falls through to
+  // the draw-or-pass branch just below.
+  if(o&&!moves) opts=opts.filter(function(j){ return j!==foe; });
+  if(!opts.length){
+    if(hd.length<7){ drawTiles(o,2); hd.push(hd.shift());
+      flash('The monster draws 2 tiles'); msgT=2.4; if(o) wait=1.5; endTurn(); }
+    else { flash('The monster cannot play: it passes'); msgT=2.4; if(o) wait=1.4; endTurn(); }
+    return;
+  }
+  var best=-1e9, bi2=opts[0], adv=score(1-o), moi=o?MC:PC, porte=adj[moi];
+  // Difficulty is not search depth, it is NOISE. The monster picks the best
+  // move plus a random number in [0, flou) : 31-niv*2.5, so it
+  // sharpens board after board without ever becoming perfect. Measured over
+  // 2400 simulated games : the player wins ~95 % on board 1, ~75 % on board 2,
+  // and the curve flattens at ~50 % from board 5 on -- level 5 is where the
+  // monster's deck stops being weakened and becomes the player's equal.
+  var flou=o?31-niv*2.5:30;   // niv never exceeds 8, so this stays at 11 or above
+  for(var k=0;k<opts.length;k++){
+    var i=opts[k], s=Math.random()*flou;
+    if(i===foe) s+=5000;
+    if(sv[i]){ s+=6*sv[i]; if(score(o)+sv[i]>=need) s+=3000;
+      if(ow[i]===1-o){ s+=8*sv[i];        // stealing is worth a bit more
+        if(adv>=need&&adv-sv[i]<need) s+=4000; } }   // emergency: break the enemy's win
+    if(ow[i]===1-o) s+=50;
+    s+=(9-(o?dPC[i]:dMC[i]))*32;          // get closer to the enemy camp
+    if(v===3||ct[i]===3) s+=75;
+    if(v===2||ct[i]===2) s+=8;
+    if(v===4) s+=14;
+    if(porte.indexOf(i)>=0&&ow[i]===1-o) s+=2500;   // emergency: kick out the intruder
+    if(s>best){ best=s; bi2=i; }
+  }
+  hd.shift();
+  doPlace(o,v,bi2);
+  if(o&&wait<0.7) wait=0.7;   // a pause so the move can be seen
+}
+
+// ---------- Intro and tutorial ----------
+// The tutorial is a scripted little GAME, not a slideshow. Every move goes
+// through doPlace() -- the very function the real game uses -- so the powers
+// actually fire while the child learns them: the green really replays, the
+// candy spot really replays, the yellow really draws two, the pink really
+// covers a dragon. And the TURNS are real too: the player only plays twice in
+// a row when a replay was actually granted (green tile, candy spot), a draw
+// ends the turn like it does in the game, and the monster answers on its own
+// turn every single time. An earlier version handed the turn back to the child
+// after every move; that taught a rule the game does not have.
+//
+// One step = [playable zones, tile value, what to do, why, monster?]
+//   player step : the zone to tap and the tile the step teaches (0 = none);
+//                 no zone at all means "tap DRAW +2".
+//   monster step: 5th field set. A zone = it drops that tile there, no zone =
+//                 it draws two, exactly what the AI does when it has nothing.
+//   '#' in the hint becomes the star count of the target zone, so the promise
+//   can never drift from the data.
+// The spider sits on 12, on the OTHER side of the castle from the chain. Put it
+// on 11 and covering it hands the child a second road (16-11-7), so the dragon
+// on 14 cuts nothing and the 'your line is cut' banner lies. Measured, not
+// guessed: the play-through showed 4 -> 3 stars where a cut should cost 3.
+var INTRO=[
+ [[14],3,'TAP THE GREEN ONE','green PLAYS AGAIN: you keep the turn'],
+ [[10],5,'NOW THE RED, ON THE CANDY','Some spot plays again too'],
+ [[],0,'TAP   DRAW +2','no unicorn left: take 2'],
+ [[12],1,'THE MONSTER PLAYS','A spider, right next to your castle!',1],
+ [[7],2,'NOW THE YELLOW ONE','Yellow DRAWS 2 more'],
+ [[],0,'THE MONSTER PLAYS','It takes 2 tiles',1],
+ [[12],5,'COVER THE SPIDER','A BIGGER number covers it'],
+ [[14],5,'THE MONSTER PLAYS','A dragon! your line is cut',1],
+ [[14],1,'ONLY PINK CAN','pink beats all others'],
+ [[],0,'THE MONSTER PLAYS','it takes 2 tiles',1],
+ [[4],5,'ONE MORE TO HIS CASTLE','touch it and you win!']];
+// startIntro(1) skips the played tutorial and drops straight into the run. The
+// argument is the SKIP and not the tutorial, so startIntro() with no argument
+// still means what it always meant -- the test suite and the GIF recorder both
+// call it that way. Skipping lands on the exact state the nightmare hands over:
+// same board, monster opening, help card shown once.
+function startIntro(skip){
+  bi=0; niv=1; etoTot=0; sc=0; menu=0;
+  // boards drawn from the 8: every run is different.
+  // The first stays the cloud sky, the tutorial board.
+  ord=[0].concat(shuffle([1,2,3,4,5,6,7]));
+  if(skip){ startBoard(1); legendOn=1; return; }
+  loadBoard(0);
+  deck=shuffle(DECK.slice()); mDeck=shuffle(DECK.slice());
+  // Our deck is scripted from the BOTTOM, because drawTiles() pops: DRAW +2
+  // hands a yellow and a red, the yellow then draws the pink the dragon step
+  // needs. The rest stays shuffled, so the game that follows is a real one.
+  deck.push(5,1,5,2);
+  hand=[3,5]; mHand=[]; introStep=0; turn=0; sel=-1;
+  dreamG=1; mode='intro';
+}
+function introPlace(i){
+  var t=INTRO[introStep], k;
+  // pick the card the step teaches if none is held: keeps the recording
+  // autopilot, and a fat finger, from stalling the tutorial
+  if(sel<0) for(k=0;k<hand.length;k++) if(hand[k]===t[1]) sel=k;
+  if(sel<0) return;
+  var v=hand[sel]; hand.splice(sel,1); sel=-1;
+  doPlace(0,v,i);
+  introNext();
+}
+// The monster's scripted turn, fired by update() once aiT has run out, the
+// same delay the real AI takes.
+function introFoe(){
+  var t=INTRO[introStep];
+  if(t[0].length) doPlace(1,t[1],t[0][0]); else drawTiles(1,2);
+  introNext();
+}
+function introNext(){
+  introStep++; sel=-1;
+  if(introStep>=INTRO.length){ mode='nightmare'; aiT=0; dreamG=0; sBad(); shake=16;
+    flash('THE NIGHTMARE IS COMING!'); return; }
+  // whose turn it is comes from the script, never from what doPlace() decided
+  turn=INTRO[introStep][4]?1:0; aiT=1.3;
+}
+function nightmareTick(dt){
+  aiT+=dt;
+  if(aiT>1.1){
+    // the monster destroys the 3 placed unicorns
+    var got=false;
+    for(var i=0;i<N;i++) if(ow[i]===0){ removeTile(i); got=true; break; }
+    if(got){ aiT=0.75; return; }
+    startBoard(1); legendOn=1;           // the monster starts: it holds 3 tiles, you hold 4
+  }
+}
+
+// ---------- Layout ----------
+// The game lives in ONE centred column, never in the whole window. UW is that
+// column and UX its left edge; on a phone UW === W and nothing moves, on a
+// desktop the column stays as wide as the board instead of drifting apart from
+// it. UQ is the same idea for the full-screen overlays (title, help, panels):
+// bounded by the HEIGHT too, because those screens are tall stacks of text and
+// a 16:9 window starves them vertically long before it starves them in width.
+var UW=390, UX=0, UQ=390;
+function layout(){
+  // 0.68 is the board's fixed aspect ratio : the NP tables are in normalised
+  // 0..1 coordinates, so any other value would distort every zone at once.
+  // The top bar is the tight spot. On the smallest phone tested (320x568) topH
+  // is 62px, which leaves the MONSTER label (y=topH*0.34) and the star counter
+  // (y=topH*0.62) only 17px apart : the counter touches the label at 24px of
+  // font, and it is set to 15. Width is the same balancing act -- the maxw
+  // ceilings are the only thing stopping '0 / 14 stars' from running into the
+  // monster's name.
+  // botH's ceiling is 200 and not 152 : the bottom bar holds THREE stacked
+  // things -- the button row, the horn of a raised card, and the power
+  // pictogram under it -- and 152px only ever fitted them on a small phone.
+  topH=Math.min(78,H*0.11); botH=Math.min(200,H*0.215);
+  var aw=W-16, ah=H-topH-36-botH-14;   // 36px reserved for the banner
+  BH=Math.min(ah,aw/0.68); BW=BH*0.68;
+  if(BW>aw){ BW=aw; BH=BW/0.68; }
+  // Centred between the two bars, full stop. The old formula spent the 36px
+  // banner reserve entirely ABOVE the board and 14 below, which left 43px of sky
+  // on top against 7 underneath -- measured, and visible. The alert and message
+  // banners still sit at topH+2; they are translucent overlays drawn after the
+  // board, so letting them lap over its top edge costs nothing.
+  BX=(W-BW)/2; BY=topH+(H-topH-botH-BH)/2;
+  NR=Math.min(BW,BH)*0.075;
+  UW=Math.min(W,Math.max(BW+44,320)); UX=(W-UW)/2;
+  UQ=Math.min(W,H*0.55);
+}
+// The bottom bar is three bands, and the middle one is invisible: a unicorn's
+// horn sticks out 0.33*s ABOVE its card, and 0.16*s more when the card is
+// raised by a tap. Ignoring it is what made the star counter sit on the horns.
+//   8..40   buttons and the star counter
+//   48..    the horn clearance, then the card, then the pictogram
+// which needs 56 + 1.48*s of height, hence the third ceiling on s.
+function handRects(){
+  var n=Math.max(1,hand.length), g=5,
+      s=Math.min(NR*2.2,(UW-26-(n-1)*g)/Math.max(5,n),(botH-60)/1.5)|0;
+  var tw=n*s+(n-1)*g, x0=UX+(UW-tw)/2, y=H-botH+48+s*0.33;
+  var r=[]; for(var k=0;k<n;k++) r.push({x:x0+k*(s+g),y:y,s:s});
+  return r;
+}
+function drawBtn(){ var w=Math.min(150,UW*0.42); return {x:UX+12,y:H-botH+8,w:w,h:32}; }
+function hlpBtn(){ return {x:UX+UW-38,y:H-botH+8,w:28,h:28}; }
+function sonBtn(){ return {x:UX+UW-74,y:H-botH+8,w:28,h:28}; }
+// The two title buttons. Stacked, not side by side: on a 320px phone a pair of
+// side-by-side pills leaves ~140px each, and 'START NOW' no longer fits.
+// The gap is a fraction of the BUTTON, not of the window: pitching them at
+// H*0.11 while their height came from UQ meant the gap grew on its own on a
+// tall window -- measured at 55px between two 74px buttons -- and pushed the
+// second one down into the monsters lurking in the mist, by 6px.
+function menuBtn(k){ var w=Math.min(UQ*0.66,320), h=UQ*0.115;
+  return {x:W/2-w/2,y:H*0.7+k*h*1.3,w:w,h:h}; }
+function inR(px,py,r){ return px>=r.x&&px<=r.x+(r.w||r.s)&&py>=r.y&&py<=r.y+(r.h||r.s); }
+
+// ---------- Input ----------
+function onTap(px,py){
+  ripple.push({x:px,y:py,t:0});
+  ensureAudio(); startMusic();
+  if(legendOn){ legendOn=0; return; }
+  if(mode==='title'){
+    if(!menu){ menu=1; return; }
+    if(inR(px,py,menuBtn(0))) startIntro();        // le tutoriel joue
+    else if(inR(px,py,menuBtn(1))) startIntro(1);  // droit au jeu
+    return; }
+  if(mode==='celebrate'){ mode='boardend'; return; }
+  if(mode==='boardintro'){ mode='play'; bT=T; if(turn===1) aiT=0.6; return; }
+  if(mode==='boardend'){ nextBoard(); return; }
+  if(mode==='runend'){ mode='title'; menu=0; dreamG=0.22; return; }
+  if(inR(px,py,hlpBtn())){ legendOn=1; return; }
+  if(inR(px,py,sonBtn())){ setMute(!muted); return; }
+  if(mode==='remove'){
+    var i=cellAt(px,py);
+    if(i>=0 && ow[i]===1){ removeTile(i); pDet++;
+      if(pendingExtra){ mode='play'; flash('PLAY AGAIN!'); } else { mode='play'; endTurn(); } }
+    return;
+  }
+  if(mode!=='play'&&mode!=='intro') return;
+  if(turn!==0||wait>0) return;
+
+  // tu is the tutorial step, or 0 in a real game -- every gate below reads it
+  var tu=mode==='intro'?INTRO[introStep]:0;
+  // a step with no playable zone IS the draw step: that is when DRAW +2 opens
+  if(inR(px,py,drawBtn())&&(!tu||!tu[0].length)){
+    drawTiles(0,2); flash('You draw 2 unicorns');
+    if(tu) introNext(); else endTurn(); return; }
+  var hr=handRects();
+  for(var k=0;k<hand.length;k++) if(inR(px,py,hr[k])){
+    if(tu&&tu[1]&&hand[k]!==tu[1]) return;   // only the card the step teaches can be picked
+    sel=(sel===k?-1:k); sPop(); return; }
+  var i=cellAt(px,py);
+  if(i<0||sel<0) return;
+  if(tu){ if(tu[0].indexOf(i)>=0) introPlace(i); return; }
+  if(legalFor(0,hand[sel]).indexOf(i)>=0){ var v=hand[sel]; hand.splice(sel,1); sel=-1; doPlace(0,v,i); }
+}
+// Touch radius 45 % wider than the drawn zone, and we take the NEAREST zone,
+// not the one the finger is inside. This game is aimed at a child on a
+// phone : missing a cell hurts more than hitting the wrong one.
+function cellAt(px,py){
+  var best=-1, bd=NR*1.45;
+  for(var i=0;i<N;i++){
+    var d=Math.hypot(px-nx(i),py-ny(i));
+    if(d<bd){ bd=d; best=i; }
+  }
+  return best;
+}
+addEventListener('pointerdown',function(e){ e.preventDefault(); onTap(e.clientX,e.clientY); },{passive:false});
+addEventListener('keydown',function(e){ if(e.key==='m'||e.key==='M') setMute(!muted); });
+
+// ---------- Drawing: the plush look ----------
+function unicorn(cx,cy,s,v,sc,nb){
+  var t=TL[v], c=rgb(t.c), d=rgb(t.d);
+  X.save(); X.translate(cx,cy); X.scale(sc,sc);
+  var h=s*0.5;
+  // corps peluche
+  X.fillStyle='rgba(0,0,0,.22)'; rr(-h*0.86,-h*0.78+s*0.07,h*1.72,h*1.56,s*0.26); X.fill();
+  X.fillStyle=c; rr(-h*0.86,-h*0.78,h*1.72,h*1.56,s*0.26); X.fill();
+  // oreilles
+  X.fillStyle=d; X.beginPath(); X.moveTo(-h*0.62,-h*0.7); X.lineTo(-h*0.34,-h*0.95); X.lineTo(-h*0.26,-h*0.6); X.fill();
+  X.beginPath(); X.moveTo(h*0.62,-h*0.7); X.lineTo(h*0.34,-h*0.95); X.lineTo(h*0.26,-h*0.6); X.fill();
+  // corne arc-en-ciel
+  var g=X.createLinearGradient(0,-h*1.35,0,-h*0.6);
+  g.addColorStop(0,'#ffe98a'); g.addColorStop(0.5,'#ff9ec4'); g.addColorStop(1,'#8fd3ff');
+  X.fillStyle=g; X.beginPath(); X.moveTo(0,-h*1.42); X.lineTo(h*0.20,-h*0.66); X.lineTo(-h*0.20,-h*0.66); X.fill();
+  // criniere
+  X.fillStyle='rgba(255,255,255,.55)';
+  X.beginPath(); X.arc(-h*0.66,-h*0.16,h*0.28,0,TAU); X.arc(-h*0.60,h*0.26,h*0.22,0,TAU); X.fill();
+  // yeux + joues
+  X.fillStyle='#3a2c55';
+  X.beginPath(); X.arc(-h*0.3,0,h*0.12,0,TAU); X.arc(h*0.3,0,h*0.12,0,TAU); X.fill();
+  X.fillStyle='rgba(255,120,160,.45)';
+  X.beginPath(); X.arc(-h*0.55,h*0.28,h*0.14,0,TAU); X.arc(h*0.55,h*0.28,h*0.14,0,TAU); X.fill();
+  // sourire
+  X.strokeStyle='#3a2c55'; X.lineWidth=s*0.035; X.lineCap='round';
+  X.beginPath(); X.arc(0,h*0.16,h*0.2,0.25*PI,0.75*PI); X.stroke();
+  // chiffre de force
+  if(!nb){ X.fillStyle='rgba(255,255,255,.92)'; X.beginPath(); X.arc(h*0.68,h*0.66,h*0.30,0,TAU); X.fill();
+    txt(''+v,h*0.68,h*0.69,s*0.30,rgb(t.d)); }
+  X.restore();
+}
+function monster(cx,cy,s,v,sc){
+  var t=TL[v], glow=rgb(t.c);
+  X.save(); X.translate(cx,cy); X.scale(sc,sc);
+  var h=s*0.5;
+  X.fillStyle='rgba(0,0,0,.3)'; rr(-h*0.86,-h*0.74+s*0.06,h*1.72,h*1.5,s*0.24); X.fill();
+  X.fillStyle='#2b2242'; rr(-h*0.86,-h*0.74,h*1.72,h*1.5,s*0.24); X.fill();
+  X.fillStyle='#3b3059'; rr(-h*0.76,-h*0.64,h*1.52,h*0.62,s*0.18); X.fill();
+  X.strokeStyle=glow; X.lineWidth=s*0.045; X.lineCap='round'; X.lineJoin='round';
+  X.fillStyle=glow;
+  if(v===1){ // araignee
+    for(var k=0;k<4;k++){ var a=0.5+k*0.4;
+      X.beginPath(); X.moveTo(-h*0.2,0); X.lineTo(-h*0.75,-h*0.5+k*h*0.33); X.stroke();
+      X.beginPath(); X.moveTo(h*0.2,0); X.lineTo(h*0.75,-h*0.5+k*h*0.33); X.stroke(); }
+    X.beginPath(); X.arc(0,h*0.05,h*0.34,0,TAU); X.fill();
+    X.fillStyle='#2b2242'; X.beginPath(); X.arc(-h*0.12,-h*0.02,h*0.07,0,TAU); X.arc(h*0.12,-h*0.02,h*0.07,0,TAU); X.fill();
+  } else if(v===2){ // squelette
+    X.beginPath(); X.arc(0,-h*0.08,h*0.44,0,TAU); X.fill();
+    X.fillStyle='#1a1430';
+    X.beginPath(); X.arc(-h*0.17,-h*0.12,h*0.13,0,TAU); X.arc(h*0.17,-h*0.12,h*0.13,0,TAU); X.fill();
+    X.fillRect(-h*0.3,h*0.32,h*0.6,h*0.1);
+    X.strokeStyle='#1a1430'; X.lineWidth=s*0.03;
+    for(var k=-2;k<3;k++){ X.beginPath(); X.moveTo(k*h*0.14,h*0.30); X.lineTo(k*h*0.14,h*0.44); X.stroke(); }
+  } else if(v===3){ // zombie
+    X.beginPath(); rr(-h*0.44,-h*0.5,h*0.88,h*0.9,h*0.2); X.fill();
+    X.fillStyle='#1a1430';
+    X.beginPath(); X.arc(-h*0.18,-h*0.2,h*0.11,0,TAU); X.fill();
+    X.fillRect(h*0.06,-h*0.28,h*0.22,h*0.1);
+    X.strokeStyle='#1a1430'; X.lineWidth=s*0.035;
+    X.beginPath(); X.moveTo(-h*0.3,h*0.18); X.lineTo(h*0.3,h*0.1); X.stroke();
+    for(var k=-2;k<3;k++){ X.beginPath(); X.moveTo(k*h*0.14,h*0.06); X.lineTo(k*h*0.14,h*0.22); X.stroke(); }
+  } else if(v===4){ // carie (dent trouee)
+    X.beginPath(); X.moveTo(-h*0.42,-h*0.44); X.lineTo(h*0.42,-h*0.44);
+    X.lineTo(h*0.3,h*0.5); X.lineTo(h*0.05,h*0.05); X.lineTo(-h*0.3,h*0.5); X.closePath(); X.fill();
+    X.fillStyle='#150f2a'; X.beginPath(); X.arc(h*0.04,-h*0.14,h*0.19,0,TAU); X.fill();
+    X.fillStyle='#150f2a'; X.beginPath(); X.arc(-h*0.22,h*0.02,h*0.08,0,TAU); X.fill();
+  } else { // dragon
+    X.beginPath(); X.moveTo(-h*0.5,h*0.1); X.lineTo(-h*0.1,-h*0.5); X.lineTo(h*0.5,-h*0.2);
+    X.lineTo(h*0.55,h*0.4); X.lineTo(-h*0.2,h*0.5); X.closePath(); X.fill();
+    X.fillStyle='#1a1430';
+    X.beginPath(); X.arc(h*0.1,-h*0.14,h*0.10,0,TAU); X.fill();
+    X.strokeStyle='#1a1430'; X.lineWidth=s*0.05;
+    X.beginPath(); X.moveTo(h*0.5,-h*0.34); X.lineTo(h*0.72,-h*0.6); X.stroke();
+    X.beginPath(); X.moveTo(-h*0.1,-h*0.5); X.lineTo(-h*0.2,-h*0.78); X.stroke();
+    X.fillStyle='#1a1430';
+    for(var k=0;k<3;k++){ X.beginPath(); X.moveTo(h*(0.0+k*0.2),h*0.36); X.lineTo(h*(0.1+k*0.2),h*0.5); X.lineTo(h*(-0.1+k*0.2),h*0.5); X.fill(); }
+  }
+  X.fillStyle='rgba(255,255,255,.9)'; X.beginPath(); X.arc(h*0.68,h*0.62,h*0.28,0,TAU); X.fill();
+  txt(''+v,h*0.68,h*0.65,s*0.28,'#2b2242');
+  X.restore();
+}
+function star(cx,cy,r,a,al,col){
+  X.save(); X.translate(cx,cy); X.rotate(a||0); X.globalAlpha=al===undefined?1:al;
+  X.beginPath();
+  for(var k=0;k<10;k++){ var rad=k%2?r*0.44:r, an=-PI/2+k*PI/5;
+    X[k?'lineTo':'moveTo'](Math.cos(an)*rad,Math.sin(an)*rad); }
+  X.closePath(); X.fillStyle=col||'#ffe98a'; X.fill();
+  X.strokeStyle=col?'#6b52a8':'#e0a93c'; X.lineWidth=r*0.16; X.stroke(); X.restore();
+}
+
+// Pointing hand (variant 4, built on the real SVG proportions):
+// index finger centred, tip at (0,-0.90*s), landing right on the target.
+function doigt(cx,top,bas,w){
+  X.beginPath(); X.moveTo(cx-w,bas); X.lineTo(cx-w,top+w);
+  X.arc(cx,top+w,w,PI,0); X.lineTo(cx+w,bas); X.closePath();
+  X.fill(); X.stroke();
+}
+function pointer(cx,cy,s){
+  X.save(); X.translate(cx,cy+Math.sin(T*4)*s*0.13);
+  X.fillStyle='#fff'; X.strokeStyle='#3a2c55';
+  X.lineWidth=s*0.10; X.lineJoin='round'; X.lineCap='round';
+  X.shadowColor='rgba(0,0,0,.45)'; X.shadowBlur=s*0.3; X.shadowOffsetY=s*0.1;
+  var b=0.16*s, w=0.125*s, F=[[-0.21,-0.44],[-0.40,-0.40],[-0.57,-0.32]];
+  for(var k=0;k<3;k++) doigt(F[k][0]*s,F[k][1]*s,b,w);   // doigts replies
+  doigt(0,-0.90*s,b,0.145*s);                            // index
+  X.beginPath();                                         // paume
+  X.moveTo(-0.68*s,-0.10*s);
+  X.quadraticCurveTo(-0.70*s,0.52*s,-0.24*s,0.60*s);
+  X.quadraticCurveTo(0.24*s,0.66*s,0.32*s,0.24*s);
+  X.quadraticCurveTo(0.38*s,-0.14*s,0.16*s,-0.24*s);
+  X.quadraticCurveTo(-0.30*s,-0.34*s,-0.68*s,-0.10*s);
+  X.closePath(); X.fill(); X.shadowColor='transparent'; X.stroke();
+  X.lineWidth=s*0.09;                                    // pouce
+  X.beginPath(); X.moveTo(-0.12*s,0.04*s); X.lineTo(0.14*s,0.12*s); X.stroke();
+  X.restore();
+}
+
+// ---------- Palettes ----------
+var NB=[[26,20,48],[45,28,74],[16,12,32]];      // cauchemar
+var DB=[[255,214,231],[186,214,255],[255,246,214]]; // reve
+function bgCols(){ return [mix(NB[0],DB[0],dreamT),mix(NB[1],DB[1],dreamT),mix(NB[2],DB[2],dreamT)]; }
+
+// ---------- Rendering ----------
+// Top-down scenery. Every prop casts an offset shadow, as if the light came
+// from the upper left: that is what gives the depth.
+function prop(x,y,r,k,sd){
+  var w=Math.sin(T*0.7+sd*9)*r*0.05, i, a2;
+  X.fillStyle='rgba(0,0,0,.2)';
+  X.beginPath(); X.ellipse(x+r*0.16,y+r*0.2,r*0.85,r*0.68,0,0,TAU); X.fill();
+  if(k===0){                                   // nuage
+    X.fillStyle='#f2ebff';
+    X.beginPath(); X.arc(x-r*.5,y+w,r*.5,0,TAU); X.arc(x+r*.45,y+w,r*.42,0,TAU);
+    X.arc(x,y-r*.28+w,r*.6,0,TAU); X.fill();
+  } else if(k===1){                            // arbre vu de dessus
+    X.fillStyle='#3d7a44';
+    X.beginPath(); X.arc(x,y+w,r*.85,0,TAU); X.fill();
+    X.fillStyle='#5aa862';
+    for(i=0;i<5;i++){ a2=i*1.257+sd*6;
+      X.beginPath(); X.arc(x+Math.cos(a2)*r*.34,y+w+Math.sin(a2)*r*.34,r*.4,0,TAU); X.fill(); }
+    X.fillStyle='rgba(255,255,255,.25)';
+    X.beginPath(); X.arc(x-r*.26,y-r*.26+w,r*.28,0,TAU); X.fill();
+  } else if(k===2){                            // lollipop
+    X.fillStyle='#e8dcc0'; X.fillRect(x-r*.06,y+r*.2+w,r*.12,r*.55);
+    X.fillStyle=sd<0.5?'#ff8fb8':'#8fd8ff';
+    X.beginPath(); X.arc(x,y-r*.1+w,r*.6,0,TAU); X.fill();
+    X.strokeStyle='rgba(255,255,255,.9)'; X.lineWidth=r*.18; X.lineCap='round';
+    X.beginPath(); X.arc(x,y-r*.1+w,r*.3,sd*6,sd*6+2.6); X.stroke();
+  } else if(k===3){                            // rocher
+    X.fillStyle='#8d879e'; X.beginPath();
+    for(i=0;i<7;i++){ a2=i/7*TAU+sd*4;
+      var rr2=r*(.5+((i*7+(sd*30|0))%3)*.13);
+      X[i?'lineTo':'moveTo'](x+Math.cos(a2)*rr2,y+w+Math.sin(a2)*rr2*.82); }
+    X.closePath(); X.fill();
+    X.fillStyle='rgba(255,255,255,.32)';
+    X.beginPath(); X.ellipse(x-r*.18,y-r*.2+w,r*.3,r*.19,-.5,0,TAU); X.fill();
+  } else if(k===4){                            // cactus vu de dessus
+    X.strokeStyle='#2d6b42'; X.lineWidth=r*.13; X.lineCap='round';
+    X.beginPath();
+    for(i=0;i<8;i++){ a2=i/8*TAU+sd*3;
+      X.moveTo(x+Math.cos(a2)*r*.4,y+w+Math.sin(a2)*r*.4);
+      X.lineTo(x+Math.cos(a2)*r*.72,y+w+Math.sin(a2)*r*.72); }
+    X.stroke();
+    X.fillStyle='#3f8f5a'; X.beginPath(); X.arc(x,y+w,r*.5,0,TAU); X.fill();
+    X.fillStyle='#5cb87a'; X.beginPath(); X.arc(x-r*.1,y-r*.1+w,r*.26,0,TAU); X.fill();
+  } else if(k===5){                            // nenuphar
+    X.fillStyle='#3f8f52';
+    X.beginPath(); X.arc(x,y+w,r*.8,sd*6+.45,sd*6+TAU-.45); X.closePath(); X.fill();
+    X.fillStyle='rgba(255,255,255,.22)';
+    X.beginPath(); X.arc(x-r*.2,y-r*.2+w,r*.3,0,TAU); X.fill();
+    X.fillStyle='#ff9ec4'; X.beginPath(); X.arc(x+r*.22,y-r*.08+w,r*.24,0,TAU); X.fill();
+    X.fillStyle='#ffe98a'; X.beginPath(); X.arc(x+r*.22,y-r*.08+w,r*.09,0,TAU); X.fill();
+  } else if(k===6){                            // bloc de glace
+    X.fillStyle='#cfe8ff'; X.beginPath();
+    X.moveTo(x,y-r*.72+w); X.lineTo(x+r*.72,y-r*.08+w);
+    X.lineTo(x+r*.3,y+r*.7+w); X.lineTo(x-r*.62,y+r*.32+w); X.closePath(); X.fill();
+    X.fillStyle='rgba(255,255,255,.7)'; X.beginPath();
+    X.moveTo(x,y-r*.72+w); X.lineTo(x+r*.72,y-r*.08+w); X.lineTo(x,y+r*.1+w); X.closePath(); X.fill();
+  } else {                                     // buisson
+    X.fillStyle='#4f9c5c';
+    X.beginPath(); X.arc(x-r*.42,y+w,r*.45,0,TAU); X.arc(x+r*.42,y+w,r*.4,0,TAU);
+    X.arc(x,y-r*.32+w,r*.55,0,TAU); X.fill();
+    X.fillStyle='rgba(255,255,255,.26)';
+    X.beginPath(); X.arc(x-r*.2,y-r*.46+w,r*.22,0,TAU); X.fill();
+  }
+}
+// Each path is bent by a fixed amount derived from its two endpoints. The
+// min/max matters : the same path is drawn TWICE -- once as the trail in ED
+// order, once as the rainbow ribbon parent -> child -- and both passes must
+// land on exactly the same curve.
+function ctrlPt(a,b){
+  var ax=nx(a), ay=ny(a), bx=nx(b), by=ny(b);
+  var lo=Math.min(a,b), hi=Math.max(a,b);
+  var k=((lo*7+hi*13)%5-2)*0.07;
+  return [(ax+bx)/2-(by-ay)*k,(ay+by)/2+(bx-ax)*k];
+}
+function curve(a,b){
+  var c=ctrlPt(a,b);
+  X.beginPath(); X.moveTo(nx(a),ny(a)); X.quadraticCurveTo(c[0],c[1],nx(b),ny(b));
+}
+// 1, 2 ou 3 etoiles disposees en grappe plutot qu'en ligne
+var GRP=[[],[[0,0]],[[-.36,0],[.36,0]],[[0,-.38],[-.4,.26],[.4,.26]]];
+function grappe(cx,cy,r,n,sr,al,col){
+  var g=GRP[n]; if(!g) return;
+  for(var k=0;k<g.length;k++)
+    star(cx+g[k][0]*r,cy+g[k][1]*r,sr,Math.sin(T*1.1+k+cx*0.01)*0.18,al,col);
+}
+function nodeRing(cx,cy,r,col,al,dots){
+  for(var k=0;k<(dots||12);k++){
+    var a=k*TAU/(dots||12)+T*0.12;
+    X.globalAlpha=al*(0.65+0.35*Math.sin(T*2.4+k*0.7));
+    X.fillStyle=col;
+    X.beginPath(); X.arc(cx+Math.cos(a)*r,cy+Math.sin(a)*r,r*0.085,0,TAU); X.fill();
+  }
+  X.globalAlpha=1;
+}
+// Six arcs, one function, two very different jobs: the huge one on the title
+// screen, and the faint one that arches BEHIND the board in game so that the
+// empty margins of a wide window get the theme's colours instead of grey.
+function rbow(cx,cy,R,al,sp){
+  X.lineWidth=R*0.045; X.lineCap='round'; X.globalAlpha=al; sp=sp||0;
+  for(var k=0;k<6;k++){ X.strokeStyle='hsl('+[0,35,58,120,215,275][k]+',95%,72%)';
+    X.beginPath(); X.arc(cx,cy,R-k*R*0.045,PI*(1+sp),PI*(2-sp)); X.stroke(); }
+  X.globalAlpha=1;
+}
+function castle(cx,cy,b,k){
+  X.fillStyle='rgba(0,0,0,.28)';
+  X.beginPath(); X.ellipse(cx,cy+b*0.55,b*0.85,b*0.3,0,0,TAU); X.fill();
+  if(!k){
+    X.fillStyle='#ffe1ee'; rr(cx-b,cy-b*0.7,b*2,b*1.35,b*0.35); X.fill();
+    X.fillStyle='#ff9ec4';
+    X.beginPath(); X.arc(cx-b*0.28,cy-b*0.15,b*0.3,0,TAU);
+    X.arc(cx+b*0.28,cy-b*0.15,b*0.3,0,TAU); X.fill();
+    X.beginPath(); X.moveTo(cx-b*0.55,cy-b*0.02); X.lineTo(cx,cy+b*0.55);
+    X.lineTo(cx+b*0.55,cy-b*0.02); X.fill();
+  } else if(k===1){
+    X.fillStyle='#2b2242'; rr(cx-b,cy-b*0.7,b*2,b*1.35,b*0.35); X.fill();
+    X.fillStyle='#120c26';
+    X.beginPath(); X.arc(cx,cy+b*0.35,b*0.6,PI,0); X.fill();
+    X.fillStyle='#ff7b6b';
+    X.beginPath(); X.arc(cx-b*0.2,cy+b*0.1,b*0.11,0,TAU);
+    X.arc(cx+b*0.2,cy+b*0.1,b*0.11,0,TAU); X.fill();
+  } else { X.fillStyle='#efe4f6'; rr(cx-b,cy-b*0.7,b*2,b*1.35,b*0.35); X.fill(); }
+}
+function drawBoard(){
+  var nt0=net(0), nt1=net(1), i, k;
+  var lg=[];
+  if(mode==='play'&&turn===0&&sel>=0) lg=legalFor(0,hand[sel]);
+  if(mode==='intro'&&sel>=0) lg=INTRO[introStep][0];
+
+  // ---- board ground ----
+  // No drop shadow. It was offset downwards like every prop on the board, so on
+  // a tall window it slid under the bottom bar and showed as a grey smear -- the
+  // rounded card plus the sky behind it already read as depth.
+  X.save();
+  rr(BX,BY,BW,BH,Math.min(BW,BH)*0.06); X.clip();
+  X.fillStyle=rgb(BD.sol); X.fillRect(BX,BY,BW,BH);
+  var r2=rng(bid*31+5);
+  for(k=0;k<22;k++){                            // taches de relief
+    X.fillStyle=rgb(BD.so2); X.globalAlpha=0.5;
+    X.beginPath(); X.ellipse(BX+r2()*BW,BY+r2()*BH,BW*(0.06+r2()*0.11),BH*(0.02+r2()*0.045),0,0,TAU); X.fill();
+  }
+  X.globalAlpha=1;
+  for(k=0;k<dets.length;k++){                   // small details scattered on the ground
+    var dt=dets[k]; X.globalAlpha=0.5+0.4*Math.sin(T*2+k);
+    X.fillStyle=BD.dc;
+    X.beginPath(); X.arc(BX+dt.x*BW,BY+dt.y*BH,Math.min(BW,BH)*dt.r,0,TAU); X.fill();
+  }
+  X.globalAlpha=1;
+  // ---- the middle river ----
+  X.fillStyle=rgb(BD.riv); X.fillRect(BX,BY+BH*0.435,BW,BH*0.13);
+  X.fillStyle='rgba(255,255,255,.16)';          // berges
+  X.fillRect(BX,BY+BH*0.435,BW,BH*0.012); X.fillRect(BX,BY+BH*0.553,BW,BH*0.012);
+  X.strokeStyle='rgba(255,255,255,.3)'; X.lineWidth=BH*0.006;
+  for(k=0;k<3;k++){
+    var yy=BY+BH*(0.465+k*0.035);
+    X.beginPath();
+    for(var q=0;q<=20;q++) X[q?'lineTo':'moveTo'](BX+q*BW/20,yy+Math.sin(q*0.9+T*1.4+k)*BH*0.006);
+    X.stroke();
+  }
+  // ---- scenery ----
+  for(k=0;k<props.length;k++){ var pr=props[k];
+    prop(BX+pr.x*BW,BY+pr.y*BH,Math.min(BW,BH)*pr.r,pr.k,pr.s); }
+  // ---- paths ----
+  for(k=0;k<ED.length;k++){
+    var A=ED[k][0], B=ED[k][1];
+    if(ct[A]===1||ct[B]===1) continue;
+    X.lineCap='round'; X.lineWidth=NR*0.44; X.strokeStyle='rgba(70,45,20,.3)';
+    X.save(); X.translate(0,NR*0.09); curve(A,B); X.stroke(); X.restore();
+    X.lineWidth=NR*0.32; X.strokeStyle='#f2e0b6'; curve(A,B); X.stroke();
+  }
+  // ---- secret tunnels ----
+  for(k=0;k<tuns.length;k++){
+    var A=tuns[k][0], B=tuns[k][1];
+    X.save(); X.globalAlpha=0.7; X.lineWidth=NR*0.2; X.setLineDash([NR*0.3,NR*0.3]);
+    X.strokeStyle='#8fe8ff'; X.lineDashOffset=-T*14;
+    X.beginPath(); X.moveTo(nx(A),ny(A)); X.lineTo(nx(B),ny(B)); X.stroke();
+    X.setLineDash([]); X.restore();
+  }
+  // ---- nightmare veil ----
+  X.fillStyle='rgba(16,10,36,'+(0.38*(1-dreamT))+')'; X.fillRect(BX,BY,BW,BH);
+  X.restore();
+  X.strokeStyle='rgba(255,255,255,.18)'; X.lineWidth=2;
+  rr(BX,BY,BW,BH,Math.min(BW,BH)*0.06); X.stroke();
+
+  // ---- ribbons: player's rainbow, monster's ink ----
+  X.lineCap='round';
+  for(var o=0;o<2;o++){
+    var nt=o?nt1:nt0;
+    for(i=0;i<N;i++){
+      if(ow[i]!==o||!nt.s[i]) continue;
+      var pnt=nt.p[i]; if(pnt===undefined||pnt<0) continue;
+      X.lineWidth=NR*0.36;
+      X.strokeStyle=o?'#40306e':'hsl('+((nt.d[i]*38+T*30)%360)+',95%,64%)';
+      curve(i,pnt); X.stroke();
+      X.lineWidth=NR*0.12;
+      X.strokeStyle=o?'rgba(155,125,225,.8)':'rgba(255,255,255,.65)';
+      curve(i,pnt); X.stroke();
+    }
+  }
+
+  // ---- where the right to place comes from: an animated line from your network ----
+  if(lg.length&&(mode==='play'||mode==='intro')){
+    X.save(); X.lineWidth=NR*0.15; X.setLineDash([NR*0.2,NR*0.24]);
+    X.lineDashOffset=-T*26; X.strokeStyle='rgba(190,255,240,.9)';
+    for(k=0;k<lg.length;k++){
+      var lj=lg[k], src=-1;
+      for(var m=0;m<adj[lj].length;m++) if(nt0.s[adj[lj][m]]){ src=adj[lj][m]; break; }
+      if(src>=0){ curve(src,lj); X.stroke(); }
+    }
+    X.setLineDash([]); X.restore();
+  }
+
+  // ---- zones ----
+  for(i=0;i<N;i++){
+    var cx=nx(i), cy=ny(i), fl=Math.sin(T*1.5+i*0.9)*NR*0.04;
+    cy+=fl;
+    if(ct[i]===1){                              // mur
+      X.fillStyle='rgba(0,0,0,.3)';
+      X.beginPath(); X.arc(cx,cy+NR*0.1,NR*0.8,0,TAU); X.fill();
+      X.fillStyle='#7d7695';
+      X.beginPath(); X.arc(cx,cy,NR*0.78,0,TAU); X.fill();
+      X.strokeStyle='rgba(255,255,255,.25)'; X.lineWidth=NR*0.09;
+      X.beginPath(); X.moveTo(cx-NR*0.5,cy-NR*0.15); X.lineTo(cx+NR*0.5,cy-NR*0.15);
+      X.moveTo(cx-NR*0.2,cy-NR*0.15); X.lineTo(cx-NR*0.2,cy+NR*0.5);
+      X.moveTo(cx+NR*0.25,cy-NR*0.15); X.lineTo(cx+NR*0.25,cy+NR*0.5); X.stroke();
+      continue;
+    }
+    if(i===PC||i===MC){                         // the two camps
+      var big=NR*1.25;
+      castle(cx,cy,big,i===PC?0:mode==='intro'?2:1);
+      // alert: someone has reached the foot of a castle
+      var att=i===MC?0:1, menace=adj[i].some(function(j){ return ow[j]===att; });
+      if(menace){
+        X.save(); X.globalCompositeOperation='lighter';
+        var gc=att?'255,110,100':'255,233,138', pp=0.3+0.3*Math.sin(T*6);
+        var sg2=X.createRadialGradient(cx,cy,big*0.3,cx,cy,big*2.3);
+        sg2.addColorStop(0,'rgba('+gc+','+pp+')'); sg2.addColorStop(1,'rgba('+gc+',0)');
+        X.fillStyle=sg2; X.beginPath(); X.arc(cx,cy,big*2.3,0,TAU); X.fill(); X.restore();
+      }
+      if(lg.indexOf(i)>=0) nodeRing(cx,cy,big*1.05,'#fff',1,16);
+      continue;
+    }
+    if(ct[i]===2||ct[i]===3){                   // bonus zone: play again or draw
+      var bo=ct[i]===3;
+      X.fillStyle=bo?'rgba(255,158,196,.3)':'rgba(255,216,107,.28)';
+      X.beginPath(); X.arc(cx,cy,NR*1.02,0,TAU); X.fill();
+    }
+    var occ=ow[i]>=0, leg=lg.indexOf(i)>=0;
+    if(!occ){
+      // empty zone: a subtle hollow, dots around it, and the stars at stake
+      X.fillStyle='rgba(0,0,0,.14)';
+      X.beginPath(); X.arc(cx,cy,NR*0.86,0,TAU); X.fill();
+      if(leg){
+        X.save(); X.globalCompositeOperation='lighter';
+        var gl=X.createRadialGradient(cx,cy,NR*0.2,cx,cy,NR*1.5), pg=0.35+0.3*Math.sin(T*4.5);
+        gl.addColorStop(0,'rgba(180,255,235,'+pg+')'); gl.addColorStop(1,'rgba(180,255,235,0)');
+        X.fillStyle=gl; X.beginPath(); X.arc(cx,cy,NR*1.5,0,TAU); X.fill(); X.restore();
+      }
+      nodeRing(cx,cy,NR,leg?'#fff':'rgba(255,255,255,.6)',leg?1:0.55);
+      if(ct[i]===2||ct[i]===3){                 // the zone's power, clearly readable
+        X.globalAlpha=0.7+0.25*Math.sin(T*2.5+i);
+        pic(ct[i],cx,cy,NR*0.62,ct[i]===3?'#ffb8d4':'#ffd86b'); X.globalAlpha=1;
+      }
+      grappe(cx,cy,NR,sv[i],NR*0.30,0.85,0);
+    } else {
+      var cn=(ow[i]?nt1:nt0).s[i];
+      nodeRing(cx,cy,NR*1.08,cn?(ow[i]?'#8f7ad0':'#ffe98a'):'#6b6480',leg?0.9:0.5);
+      var sc=1+0.45*pop[i];
+      X.globalAlpha=cn?1:0.45;
+      if(ow[i]===0) unicorn(cx,cy,NR*1.7,ov[i],sc); else monster(cx,cy,NR*1.7,ov[i],sc);
+      X.globalAlpha=1;
+      for(k=0;k<sv[i];k++)
+        star(cx+(k-(sv[i]-1)/2)*NR*0.44,cy-NR*1.42,NR*0.21,0,cn?1:0.5,
+             cn?(ow[i]?'#b9a0f0':0):'#6b6480');
+      if(!cn){                                   // broken chain: the link is severed
+        X.strokeStyle='#ff6b6b'; X.lineWidth=NR*0.13; X.lineCap='round';
+        X.beginPath(); X.arc(cx-NR*0.9,cy+NR*0.9,NR*0.22,-1.2,1.6); X.stroke();
+        X.beginPath(); X.arc(cx-NR*0.42,cy+NR*1.24,NR*0.22,2,4.8); X.stroke();
+      }
+    }
+    if(i===lastI){
+      var pu=0.5+0.5*Math.sin(T*3.2);
+      X.strokeStyle=(lastO===1?'rgba(255,120,120,':lastO===2?'rgba(255,200,90,':'rgba(160,255,220,')+(0.45+0.45*pu)+')';
+      X.lineWidth=NR*0.11;
+      X.beginPath(); X.arc(cx,cy,NR*1.24,0,TAU); X.stroke();
+    }
+    if(mode==='remove'&&ow[i]===1){
+      var pu=0.5+0.5*Math.sin(T*7);
+      X.strokeStyle='rgba(255,110,110,'+(0.4+0.5*pu)+')'; X.lineWidth=NR*0.13;
+      X.beginPath(); X.arc(cx,cy,NR*1.22,0,TAU); X.stroke();
+    }
+  }
+}
+function drawHUD(){
+  var dark=dreamT<0.5, ink=dark?'#efe4f6':'#4a3b6b';
+  // top: the monster
+  X.fillStyle='rgba(0,0,0,'+(0.25+0.15*(1-dreamT))+')'; X.fillRect(0,0,W,topH);
+  if(mode==='intro'){ txt("The child's dream",W/2,topH*0.55,15,'#fff');
+    // The instruction is a toast in the MIDDLE of the screen, sized on the
+    // column, and it goes away the moment a card is picked: from there the
+    // glowing zone and the pointing hand say where, and the previous toast
+    // already said why. A second line for the placement was pure repetition.
+    if(sel<0){
+      var t=INTRO[introStep], ty=H*0.5, tw=UW*0.92, th=UW*0.21;
+      // Opaque, not a 72% veil: the board underneath is paths, stars and clouds,
+      // and every one of them was still showing through the letters. The outline
+      // is what detaches the card from a scene of the same size and softness.
+      X.fillStyle='#140d2e';
+      rr(W*0.5-tw/2,ty-th/2,tw,th,UW*0.055); X.fill();
+      X.strokeStyle='rgba(255,233,138,.55)'; X.lineWidth=Math.max(2,UW*0.005);
+      rr(W*0.5-tw/2,ty-th/2,tw,th,UW*0.055); X.stroke();
+      // the pulse never dips below 0.88: blinking text is not readable text
+      X.globalAlpha=0.88+0.12*Math.sin(T*4);
+      txt(t[2],W/2,ty-UW*0.042,UW*0.062,'#ffe98a','center','bold',UW*0.82); X.globalAlpha=1;
+      txt(t[3].replace('#',sv[t[0][0]]),W/2,ty+UW*0.05,UW*0.043,'#fff','center','600',UW*0.82);
+    }
+  }
+  else{
+  X.save(); X.translate(UX+30,topH*0.5); X.scale(0.8,0.8);
+  monster(0,0,34,mHand.length?mHand[0]:5,1); X.restore();
+  txt('MONSTER',UX+56,topH*0.34,12,'#c9b7e6','left');
+  var s1=score(1), pq1=(s1===need-1);
+  if(scB[1]){ scB[1]=0; burst(UX+80,topH*0.62,'#ff9e9e',10,110); }
+  X.globalAlpha=pq1?0.65+0.35*Math.sin(T*7):1;
+  txt(s1+' / '+need+' stars',UX+56,topH*0.62,15,
+    scP[1]>0?'#fff':(pq1?'#ff9e9e':'#ffe98a'),'left','bold',UW*0.38);
+  X.globalAlpha=1;
+  // the monster's next tile
+  if(mHand.length){
+    txt('its next tile',UX+UW-14,topH*0.30,11,'#c9b7e6','right','600');
+    X.save(); X.translate(UX+UW-30,topH*0.66); monster(0,0,30,mHand[0],1); X.restore();
+    txt(MONN[mHand[0]],UX+UW-52,topH*0.66,12,rgb(TL[mHand[0]].c),'right','bold',UW*0.3);
+  }
+  }
+  // one dot per level cleared
+  var px0=W*0.5-(niv-1)*7;
+  for(var k=0;k<niv;k++){
+    var en=(k===niv-1);
+    X.fillStyle=en?'#fff':'#ff9ec4';
+    X.beginPath(); X.arc(px0+k*14,12,en?5+Math.sin(T*4)*1.2:4,0,TAU); X.fill();
+  }
+  // bas
+  X.fillStyle='rgba(0,0,0,'+(0.28+0.15*(1-dreamT))+')'; X.fillRect(0,H-botH,W,botH);
+  var b=drawBtn(), can=(mode==='play'&&turn===0);
+  X.fillStyle=can?'#7a52c9':'rgba(120,100,160,.4)'; rr(b.x,b.y,b.w,b.h,16); X.fill();
+  txt('DRAW  +2',b.x+b.w/2,b.y+b.h/2,14,'#fff');
+  var hb=hlpBtn(); X.fillStyle='rgba(0,0,0,.3)'; rr(hb.x,hb.y,hb.w,hb.h,14); X.fill();
+  txt('?',hb.x+hb.w/2,hb.y+hb.h/2,17,'#fff');
+  var sb=sonBtn(); X.fillStyle='rgba(0,0,0,.3)'; rr(sb.x,sb.y,sb.w,sb.h,14); X.fill();
+  var scx=sb.x+sb.w/2, scy=sb.y+sb.h/2;
+  X.fillStyle='#fff'; X.beginPath();
+  X.moveTo(scx-7,scy-3); X.lineTo(scx-3,scy-3); X.lineTo(scx+1,scy-7);
+  X.lineTo(scx+1,scy+7); X.lineTo(scx-3,scy+3); X.lineTo(scx-7,scy+3); X.closePath(); X.fill();
+  X.strokeStyle='#fff'; X.lineWidth=2; X.lineCap='round';
+  if(muted){ X.beginPath(); X.moveTo(scx+4,scy-4); X.lineTo(scx+9,scy+4);
+    X.moveTo(scx+9,scy-4); X.lineTo(scx+4,scy+4); X.stroke(); }
+  else { X.beginPath(); X.arc(scx+2,scy,6,-0.9,0.9); X.stroke(); }
+  star(UX+UW*0.56,H-botH+24,12,T*0.5);
+  var s0=score(0), pq0=(s0===need-1);
+  if(scB[0]){ scB[0]=0; burst(UX+UW*0.56+34,H-botH+24,'#b6ff9e',14,130); }
+  X.globalAlpha=pq0?0.6+0.4*Math.sin(T*7):1;
+  txt(s0+' / '+need,UX+UW*0.56+18,H-botH+24,20,
+    scP[0]>0?'#fff':(pq0?'#b6ff9e':'#ffe98a'),'left');
+  X.globalAlpha=1;
+  // main
+  var hr=handRects();
+  for(var k=0;k<hand.length;k++){
+    var r=hr[k], up=(sel===k)?r.s*0.16:0;
+    X.save();
+    if(sel===k){ X.shadowColor='#fff'; X.shadowBlur=16; }
+    unicorn(r.x+r.s/2,r.y+r.s/2-up,r.s*0.94,hand[k],1);
+    X.restore();
+    pic(hand[k],r.x+r.s/2,r.y+r.s+8,r.s*0.24,'#e8dcff');
+  }
+  if(!hand.length) txt('Your hand is empty: draw!',W/2,H-botH*0.45,15,'#e8dcff');
+  // alert: someone holds the goal, only one turn left to react
+  var s0=score(0), s1=score(1), al='';
+  if(mode==='play'||mode==='remove'){
+    if(s1>=need) al='THE MONSTER IS WINNING! Steal a star, quick!';
+    else if(s0>=need) al='HOLD ON ONE TURN AND YOU WIN!';
+  }
+  if(al){
+    var pu=0.6+0.4*Math.sin(T*6);
+    X.fillStyle=(s1>=need?'rgba(150,20,40,':'rgba(120,80,10,')+(0.65+0.25*pu)+')';
+    rr(W*0.5-UW*0.46,topH+2,UW*0.92,32,16); X.fill();
+    txt(al,W/2,topH+18,15,s1>=need?'#ffd0d0':'#ffe98a','center','bold',UW*0.88);
+  }
+  // message
+  if(!al&&msgT>0){
+    X.globalAlpha=Math.min(1,msgT*2);
+    X.fillStyle='rgba(0,0,0,.55)'; rr(W*0.5-UW*0.45,topH+2,UW*0.9,32,16); X.fill();
+    txt(msg,W/2,topH+18,15,'#fff','center','bold',UW*0.86); X.globalAlpha=1;
+  }
+  if(mode==='play'&&turn===1){
+    X.globalAlpha=0.6+0.4*Math.sin(T*6);
+    txt('the monster is thinking...',W/2,H-botH-16,14,'#ffb3b3'); X.globalAlpha=1;
+  }
+}
+// a row of small unicorns: one per level cleared
+function echelle(y){
+  var s2=UQ*0.075, gp=s2*1.15, x0=W/2-(niv-1)*gp/2;
+  for(var k=0;k<niv;k++){
+    // endWin seul, et non 'boardend && endWin' : a la fin d'une nuit GAGNEE le
+    // huitieme plateau est gagne lui aussi, et il s'affichait en monstre grise.
+    var gagne=k<niv-1||endWin,
+        a=Math.max(0,Math.min(1,(celT-celD-k*0.11)*5)),   // apparition en cascade
+        e=a<1?1.6-0.6*a:1;                                // a small bounce
+    if(!a) continue;
+    X.save(); X.translate(x0+k*gp,y); X.scale(e,e); X.globalAlpha=gagne?a:a*0.3;
+    if(gagne) unicorn(0,0,s2,(k%5)+1,1); else monster(0,0,s2,5,1);
+    X.restore(); X.globalAlpha=1;
+  }
+}
+// Power pictograms. The same drawing is used under the tile, on the board zone
+// granting that power, and in the legend. No text, no language.
+//  1 crown = beats all    2 two tiles = draw 2    3 round arrow = play again
+//  4 cross    = remove 1   5 double chevron = strongest
+function pic(k,cx,cy,s,col){
+  X.save(); X.translate(cx,cy); X.strokeStyle=col; X.fillStyle=col;
+  X.lineWidth=s*0.16; X.lineCap='round'; X.lineJoin='round';
+  if(k===1){                                   // crown
+    X.beginPath();
+    X.moveTo(-s*0.5,s*0.34); X.lineTo(-s*0.62,-s*0.4); X.lineTo(-s*0.2,-s*0.02);
+    X.lineTo(0,-s*0.48); X.lineTo(s*0.2,-s*0.02); X.lineTo(s*0.62,-s*0.4);
+    X.lineTo(s*0.5,s*0.34); X.closePath(); X.fill();
+  } else if(k===2){                            // two tiles: the lower one
+    X.lineWidth=s*0.13;                        // outlined, the upper one filled
+    rr(-s*0.1,-s*0.62,s*0.62,s*0.86,s*0.16); X.stroke();
+    rr(-s*0.64,-s*0.24,s*0.62,s*0.86,s*0.16); X.fill();
+  } else if(k===3){                            // arrow going all the way round
+    X.beginPath(); X.arc(0,0,s*0.44,PI*0.28,PI*1.76); X.stroke();
+    X.beginPath(); X.moveTo(s*0.1,-s*0.62); X.lineTo(s*0.64,-s*0.3);
+    X.lineTo(s*0.1,-s*0.1); X.closePath(); X.fill();
+  } else if(k===4){                            // cross: remove
+    X.beginPath();
+    X.moveTo(-s*0.42,-s*0.42); X.lineTo(s*0.42,s*0.42);
+    X.moveTo(s*0.42,-s*0.42); X.lineTo(-s*0.42,s*0.42); X.stroke();
+  } else {                                     // double chevron: the strongest
+    for(var q=0;q<2;q++){ X.beginPath();
+      X.moveTo(-s*0.42,s*0.16+q*s*0.36); X.lineTo(0,-s*0.26+q*s*0.36);
+      X.lineTo(s*0.42,s*0.16+q*s*0.36); X.stroke(); }
+  }
+  X.restore();
+}
+// A veil alone cannot do both jobs. On the victory screen with the dream palette
+// the title reached 2.6:1 against the busiest pixels of the board showing
+// through, under the 3:1 large text needs, and the background luminance swung by
+// 0.389 UNDER the letters -- that is the crawling. Taking the veil to .92 fixed
+// the text and erased the dream the player had just built.
+// So: a light veil, and a near-opaque PLATE under the text block only. The board
+// stays visible all around it. The plate is a shade LIGHTER than the veil rather
+// than darker, so it reads as a card laid on the scene instead of a hole in it.
+// Beware of judging the dark one by contrast ratio: WCAG's +0.05 offset flattens
+// exactly the differences that matter down there, and scored this screen as fine
+// while yellow paths were showing straight through the yellow button. Look at it.
+// Every screen built on panel() keeps its content between 0.27H and 0.77H.
+function panel(title,sub,btn,cols,clair,by){
+  X.fillStyle=clair?'rgba(255,238,248,.6)':'rgba(10,6,26,.7)'; X.fillRect(0,0,W,H);
+  X.fillStyle=clair?'rgba(255,250,253,.97)':'rgba(28,20,56,.97)';
+  // The plate stops just under the button rather than at a fixed height: `by`
+  // already marks the bottom of the block, so the level intro (three lines) gets
+  // a short card and the end of a run (six) a tall one, from the same call.
+  rr(W/2-UQ*0.47,H*0.27,UQ*0.94,H*((by||0.6)-0.2),UQ*0.05); X.fill();
+  // Every line is capped at the PLATE, not at the window. txt() falls back to
+  // W*0.92 when no width is given, and the plate is only UQ*0.94 wide: on a
+  // phone UQ === W so nothing showed, but on any wider window the long titles
+  // ran out over the edge of the card -- measured at 58px for THE MARSHMALLOW
+  // VOLCANO. That is the text that looked like it was bleeding.
+  var pw=UQ*0.86;
+  txt(title,W/2,H*0.35,UQ*0.068,cols||'#fff','center','bold',pw);
+  if(sub) txt(sub,W/2,H*0.44,UQ*0.042,clair?'#8a4a7a':'#e8dcff','center','600',pw);
+  if(btn){ X.globalAlpha=0.7+0.3*Math.sin(T*3.5);
+    txt(btn,W/2,H*(by||0.6),UQ*0.048,clair?'#c2185b':'#ffe98a','center','bold',pw); X.globalAlpha=1; }
+}
+// Every size and every x here is a fraction of UQ, the overlay column, and not
+// of W : that single change is what stops the help sheet from being a phone
+// layout stranded on the left of a wide window with its right half empty.
+// The row pitch keeps a second ceiling on H, because a 16:9 window runs out of
+// height long before it runs out of width and the rows would collide.
+// The help is ONE card: the five unicorns and what they do, with the win rule
+// under it. Everything else the child has just LIVED in the intro -- covering,
+// the pink, DRAW +2, the cut chain, the stars, and the nightmare itself, one
+// step from the castle -- so it no longer needs telling. It opens on the '?'
+// and once on its own, right after that nightmare, as the roster for the real
+// game that starts.
+function drawLegend(){
+  var Q=UQ, cx=W/2, v, y;
+  X.fillStyle='#0a061a'; X.fillRect(0,0,W,H);
+  txt('THE 5 UNICORNS',cx,H*0.13,Q*0.062,'#fff');
+  var us=Q*0.145, gp=Math.min(Q*0.19,H*0.135);
+  for(v=1;v<6;v++){ y=H*0.26+(v-1)*gp;
+    unicorn(cx-Q*0.31,y,us,v,1);
+    txt(TL[v].n,cx-Q*0.16,y-Q*0.032,Q*0.05,rgb(TL[v].c),'left','bold',Q*0.55);
+    pic(v,cx-Q*0.133,y+Q*0.043,Q*0.036,'#e8dcff');
+    txt(TL[v].p,cx-Q*0.085,y+Q*0.043,Q*0.041,'#e8dcff','left','600',Q*0.48);
+  }
+  txt('hold your stars a turn, or reach his castle',cx,H*0.85,Q*0.045,'#e8dcff','center','600',Q*0.96);
+  txt('tap to go back',cx,H*0.93,Q*0.04,'#ffe98a');
+}
+function drawFx(){
+  for(var k=0;k<fx.length;k++){ var p=fx[k];
+    X.globalAlpha=Math.min(1,p.l*3); X.fillStyle=p.c;
+    X.beginPath(); X.arc(p.x,p.y,p.r,0,TAU); X.fill(); }
+  X.globalAlpha=1;
+}
+function render(){
+  layout();
+  if(legendOn){ drawLegend(); return; }
+  var bc=bgCols();
+  var g=X.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,rgb(bc[1])); g.addColorStop(0.55,rgb(bc[0])); g.addColorStop(1,rgb(bc[2]));
+  X.fillStyle=g; X.fillRect(0,0,W,H);
+  // etoiles / bulles de fond. 26 was a phone count: on a 16:9 window that is
+  // 12 specks per megapixel against 79 on the phone, which is why the sides
+  // read as flat paint. The count follows the area now, capped so a very wide
+  // window does not turn into confetti.
+  var NS=Math.min(96,W*H/13000|0);
+  for(var k=0;k<NS;k++){
+    var sx=(k*97.3%W), sy=((k*61.7+T*8)%H), r=1+(k%3);
+    X.globalAlpha=0.25+0.25*Math.sin(T*2+k);
+    X.fillStyle=dreamT>0.5?'#fff':'#cdbbe6';
+    X.beginPath(); X.arc(sx,sy,r,0,TAU); X.fill();
+  }
+  X.globalAlpha=1;
+  // ---- the sky on either side of the board ----
+  // Only drawn when the window is wider than the board, i.e. exactly when the
+  // margins would otherwise be flat gradient. The rainbow is centred on the
+  // board and wide enough that only its two shoulders come out from behind it,
+  // and the clouds are the SAME prop() the board uses, so nothing new is drawn.
+  if(BX>150&&mode!=='title'){
+    // The arc is sized so its crown passes BEHIND the board and only the two
+    // shoulders come out in the margins: the board sits at the end of a rainbow.
+    // Centre the arc ON the top edge of the bottom bar, not on a fraction of the
+    // board: its two ends are exactly at that height, so the bar hides them by
+    // construction whatever the window. Deriving it from BH left them poking out
+    // above the bar on a short wide window.
+    rbow(W/2,H-botH+8,BW*0.52+BX*0.45,0.22);
+    // Clouds, not prop()'s clouds: prop() carries a hard offset shadow that is
+    // right on the board's ground and reads as a grey smear against the sky.
+    var cc=rgb(mix([206,188,255],[168,140,226],dreamT)), cw=Math.min(BX*0.3-4,90);
+    X.globalAlpha=0.30-0.06*dreamT; X.fillStyle=cc;
+    for(k=0;k<10;k++){
+      var cr=cw*(0.55+(k%3)*0.22),
+          cx2=(k&1?W-BX*0.5:BX*0.5)+Math.sin(T*0.22+k*2)*BX*0.2,
+          cy2=H*(0.05+(k*3%10)*0.1)+Math.cos(T*0.28+k)*7;
+      // moveTo before each arc, otherwise canvas joins the three circles with
+      // straight lines and fills the armpit between them with a hard wedge --
+      // invisible on the board's small props, glaring at cloud size.
+      X.beginPath(); X.arc(cx2-cr*0.5,cy2,cr*0.5,0,TAU);
+      X.moveTo(cx2+cr*0.87,cy2); X.arc(cx2+cr*0.45,cy2,cr*0.42,0,TAU);
+      X.moveTo(cx2+cr*0.6,cy2-cr*0.28); X.arc(cx2,cy2-cr*0.28,cr*0.6,0,TAU); X.fill();
+    }
+    X.globalAlpha=1;
+  }
+  if(mode==='title'){
+    // A big rainbow: it is the contest theme, it has to be seen at once.
+    // Its radius drives EVERY size on this screen -- logo, unicorns, captions --
+    // so the whole composition scales as one block. Anchoring them to W instead
+    // is what turned the arc into a 1190px band with a 64px logo lost inside it.
+    var R=UQ*0.62, rcy=H*0.26+R;
+    rbow(W/2,rcy,R,0.85,0.15);
+    // the five unicorns ride the rainbow, each at its own pace
+    var us=R*0.24;
+    for(k=0;k<5;k++){ var a=-PI*(0.74-k*0.12), b=Math.sin(T*3+k*1.3);
+      X.save(); X.translate(W/2+Math.cos(a)*R*0.985,rcy+Math.sin(a)*R*0.985-us*0.55-Math.abs(b)*us*0.18);
+      X.rotate((a+PI/2)*0.5); unicorn(0,0,us,k+1,1,1); X.restore(); }
+    // the nightmare mist rises from below, monsters lurking in it
+    var fg=X.createLinearGradient(0,H*0.74,0,H);
+    fg.addColorStop(0,'rgba(12,6,30,0)'); fg.addColorStop(1,'rgba(12,6,30,.95)');
+    X.fillStyle=fg; X.fillRect(0,H*0.74,W,H*0.26);
+    for(k=0;k<5;k++){ var mx=W*(0.14+k*0.18), my=H*0.925+Math.sin(T*1.6+k*2)*H*0.012;
+      X.globalAlpha=0.55+0.15*Math.sin(T*2+k); monster(mx,my,us*0.9,k+1,1); }
+    X.globalAlpha=1;
+    // the logo: white, outlined, shadowed, slightly tilted
+    X.save(); X.translate(W/2,H*0.55); X.rotate(-0.04);
+    fnt(R*0.265,'900'); X.textAlign='center'; X.textBaseline='middle';
+    X.lineJoin='round'; X.lineWidth=R*0.05; X.strokeStyle='#3a2c55';
+    X.strokeText('UNICORN',0,5); X.strokeText('UNICORN',0,0); X.fillStyle='#fff'; X.fillText('UNICORN',0,0);
+    fnt(R*0.112,'900'); X.lineWidth=R*0.029;
+    X.strokeText('vs the NIGHTMARES',0,R*0.207);
+    X.fillStyle='#ffe98a'; X.fillText('vs the NIGHTMARES',0,R*0.207);
+    X.restore();
+    txt('a game by Raphael',W/2,H*0.668,R*0.062,'#c9b7e6','center','600');
+    if(menu){
+      for(k=0;k<2;k++){ var mb=menuBtn(k);
+        X.fillStyle=k?'rgba(255,255,255,.2)':'#7a52c9';
+        rr(mb.x,mb.y,mb.w,mb.h,mb.h/2); X.fill();
+        txt(k?'START NOW':'TUTORIAL',W/2,mb.y+mb.h/2,R*0.082,'#fff'); }
+    } else {
+      X.globalAlpha=0.7+0.3*Math.sin(T*3.5);
+      txt('TAP TO PLAY',W/2,H*0.735,R*0.1,'#fff'); X.globalAlpha=1;
+      if(record>1) txt('Best run: '+record+' levels',W/2,H*0.785,R*0.058,'#ffe98a','center','600');
+    }
+    drawFx();
+    return;
+  }
+  X.save();
+  if(shake>0){ X.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake); }
+  drawBoard();
+  // zones just cut off from the castle blink
+  for(var k=0;k<cut.length;k++){ var c=cut[k], u=c.t/1.6;
+    var rd=NR*(1+u*0.9), al=(1-u)*(0.5+0.5*Math.sin(c.t*16));
+    X.globalAlpha=al; X.strokeStyle=c.o?'#9ef0b6':'#ff6b6b'; X.lineWidth=3;
+    X.beginPath(); X.arc(nx(c.i),ny(c.i),rd,0,TAU); X.stroke();
+    X.beginPath(); X.moveTo(nx(c.i)-8,ny(c.i)-8); X.lineTo(nx(c.i)+8,ny(c.i)+8);
+    X.moveTo(nx(c.i)+8,ny(c.i)-8); X.lineTo(nx(c.i)-8,ny(c.i)+8); X.stroke();
+    X.globalAlpha=1;
+  }
+  X.restore();
+  drawFx();
+  drawHUD();
+  for(var k=0;k<ripple.length;k++){ var rp=ripple[k], u=rp.t/0.45;
+    X.globalAlpha=(1-u)*0.5; X.strokeStyle='#fff'; X.lineWidth=2;
+    X.beginPath(); X.arc(rp.x,rp.y,8+u*26,0,TAU); X.stroke(); X.globalAlpha=1;
+  }
+  // projectiles, above everything else
+  for(var k=0;k<fly.length;k++){ var f=fly[k]; if(f.t<0) continue;
+    var u=Math.min(1,f.t/f.d), e=u*u*(3-2*u);
+    var fx2=lerp(f.x,f.tx,e), fy2=lerp(f.y,f.ty,e)-Math.sin(u*PI)*Math.min(70,H*0.09);
+    var fs=1-0.35*u;
+    if(f.k) star(fx2,fy2,16*fs,u*7,1);
+    else if(f.o) monster(fx2,fy2,34*fs,f.v,1); else unicorn(fx2,fy2,34*fs,f.v,1);
+  }
+
+  if(mode==='boardintro'){
+    // The star goal is its own line: panel() draws sub as ONE txt() and txt()
+    // never wraps, it only shrinks, so gluing the two sentences together made
+    // both of them smaller on a narrow window instead of stacking them.
+    panel(BOARDS[ord[bi]].n,BOARDS[ord[bi]].s,'TAP TO START');
+    txt('You need '+need+' stars.',W/2,H*0.49,UQ*0.042,'#e8dcff','center','600',UQ*0.86);
+    txt('LEVEL '+niv,W/2,H*0.30,UQ*0.042,'#ffe98a','center','bold',UQ*0.8);
+  }
+  // Only ever reached on a WON board that is not the last one: a defeat and the
+  // eighth win both go straight to runend.
+  if(mode==='boardend'){
+    var rec=(niv===record&&niv>1);
+    panel('LEVEL '+niv+' CLEARED!','','TAP FOR LEVEL '+(niv+1),'#d81b60',1,0.69);
+    txt(rec?'NEW RECORD!':'The nightmare becomes a dream.',
+      W/2,H*0.42,UQ*0.04,rec?'#c2185b':'#8a4a7a','center','bold',UQ*0.86);
+    echelle(H*0.515);
+    txt('⭐ '+etoTot+' stars   ✦ '+sc+' points',W/2,H*0.61,UQ*0.037,'#8a4a7a','center','600',UQ*0.8);
+  }
+  if(mode==='runend'){
+    var fait=endWin?niv:niv-1;
+    panel(endWin?'THE NIGHT IS YOURS!':fait?'THE MONSTER STOPPED YOU':'THE MONSTER GOT YOU!',
+      '','TAP TO PLAY AGAIN',endWin?'#b6ff9e':'#ff9e9e',0,0.70);
+    txt(endWin?'All 8 dreams saved. The child sleeps.':
+        fait?'You saved '+fait+(fait>1?' dreams in a row!':' dream!'):'Try again, you can do it!',
+      W/2,H*0.42,UQ*0.047,'#ffe98a','center','bold',UQ*0.86);
+    if(fait) echelle(H*0.515);
+    if(etoTot) txt('⭐ '+etoTot+' stars   ✦ '+sc+' points',W/2,H*0.60,UQ*0.037,'#e8dcff','center','600',UQ*0.8);
+    if(record>1) txt('Your record: '+record+' levels',W/2,H*0.645,UQ*0.035,
+      fait>=record?'#ffe98a':'#c9b7e6','center','bold',UQ*0.8);
+  }
+  if(mode==='intro'&&!legendOn&&!turn){
+    var ti=INTRO[introStep], ps, k3, hp;
+    if(!ti[0].length){ var b3=drawBtn(); ps=b3.h*0.62;         // ... on the DRAW button
+      pointer(b3.x+b3.w*0.5,b3.y+b3.h+0.90*ps,ps); }
+    else if(sel<0){ hp=handRects();
+      for(k3=0;k3<hand.length&&hand[k3]!==ti[1];k3++);         // ... on the card it teaches
+      if(k3<hp.length){ ps=hp[k3].s*0.44;
+        pointer(hp[k3].x+hp[k3].s*0.7,hp[k3].y+hp[k3].s*0.65+0.90*ps,ps); } }
+    else { var tg2=ti[0][0]; ps=NR*0.95;                       // ... on the zone
+      pointer(nx(tg2),ny(tg2)+NR*1.25+0.90*ps,ps); }
+  }
+}
+
+// ---------- Wavedash ----------
+// The platform injects a `Wavedash` global before the game runs. Nothing is
+// loaded from the network, so this breaks no js13k rule, and on js13kgames.com
+// the whole block is inert: WD stays undefined and only the banner remains.
+// One guard PER call, never a shared one: a single missing method in a grouped
+// try/catch would take the other calls down with it.
+var WD=self.Wavedash, wdGot={};
+if(WD) try{ WD.init(); }catch(e){}
+// setAchievement() silently does nothing until requestStats() has answered:
+// the SDK gates it behind loaded.stats, and returns false without a word.
+if(WD) try{ WD.requestStats(); }catch(e){}
+// The banner is drawn by the game itself, so trophies show up EVERYWHERE,
+// including where there is no Wavedash at all. The label is derived from the
+// id rather than carried in a second table, which is why the ids read well
+// once the underscores become spaces.
+// getOrCreateLeaderboard(name, sortOrder, displayType) then upload by _id, not by
+// name: signatures read from the SDK's own .d.ts. Sort order DESC is 1, numeric
+// display is 0, and keepBest is a BOOLEAN, which is why booleans_as_integers has
+// to stay out of the terser options.
+function wdScore(){
+  if(WD&&sc) try{ WD.getOrCreateLeaderboard('score',1,0).then(function(r){
+    var l=r&&(r.data||r);
+    if(l&&l._id) WD.uploadLeaderboardScore(l._id,sc,true);
+  }); }catch(e){}
+}
+function trophy(i){
+  if(wdGot[i]) return;
+  wdGot[i]=1;
+  flash('TROPHY!  '+i.replace(/_/g,' ')); msgT=2.6; sMagic();
+  if(WD) try{ WD.setAchievement(i,true); }catch(e){}
+}
+
+// ---------- Main loop ----------
+function update(dt){
+  T+=dt;
+  if(mode==='title'&&Math.random()<0.25){                // rainbow sparkles
+    var a=PI*(1.2+Math.random()*0.6), R=W*0.62;
+    burst(W/2+Math.cos(a)*R,H*0.26+R+Math.sin(a)*R,'#fff',1,30); }
+  for(var o=0;o<2;o++){                       // the counter pops when it changes
+    var sc=score(o);
+    if(sc!==sOld[o]){ sOld[o]=sc; scP[o]=1; scB[o]=1; }
+    if(scP[o]>0){ scP[o]-=dt*2.6; if(scP[o]<0) scP[o]=0; }
+  }
+  for(var k=cut.length-1;k>=0;k--){ cut[k].t+=dt; if(cut[k].t>1.6) cut.splice(k,1); }
+  for(var k=ripple.length-1;k>=0;k--){ ripple[k].t+=dt; if(ripple[k].t>0.45) ripple.splice(k,1); }
+  dreamT+=(dreamG-dreamT)*Math.min(1,dt*1.5);
+  if(shake>0){ shake-=dt*22; if(shake<0) shake=0; }
+  if(msgT>0) msgT-=dt;
+  for(var i=0;i<N;i++) if(pop[i]>0){ pop[i]-=dt*3.5; if(pop[i]<0) pop[i]=0; }
+  if(wait>0) wait-=dt;
+  for(var k=fly.length-1;k>=0;k--){ var f=fly[k]; f.t+=dt;
+    if(f.t>=f.d){ if(f.k){ sStar(); burst(f.tx,f.ty,'#ffe98a',9,110); } else sPop();
+      fly.splice(k,1); } }
+  // When the night is over -- a defeat, or the eighth board won -- the run screen
+  // says everything the board screen would have said, so we skip straight to it
+  // rather than making the player tap through two panels that repeat each other.
+  if(mode==='celebrate'){ celT+=dt; if(celT>celD){ if(!endWin||niv>=8) nextBoard(); else mode='boardend'; } }
+  if(mode==='boardend'||mode==='runend') celT+=dt;
+  for(var k=fx.length-1;k>=0;k--){ var p=fx[k]; p.l-=dt;
+    if(p.l<=0){ fx.splice(k,1); continue; }
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=180*dt; }
+  if(mode==='nightmare'){ nightmareTick(dt); return; }
+  if(mode==='intro'&&turn===1){ aiT-=dt; if(aiT<=0) introFoe(); }
+  if(mode==='play'&&turn===1&&wait<=0){
+    aiT-=dt;
+    if(aiT<=0){ if(mHand.length) aiPlay(1); else { drawTiles(1,2); endTurn(); } }
+  }
+  if(mode==='play'&&turn===0){
+    // escape hatch: no legal move left
+    if(hand.length>=7&&!anyLegal(0,hand)){ flash('No move possible, you pass'); endTurn(); }
+  }
+}
+loadBoard(0);
+var last=0;
+function loop(t){
+  var dt=Math.min(0.05,(t-last)/1000)||0; last=t;
+  update(dt); render(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script></body></html>

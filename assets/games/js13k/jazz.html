@@ -1,0 +1,488 @@
+<script>let pl_synth_wasm_init=(A,g)=>{let I=null,C=0,t=A=>{let g=C+2*A*4,t=Math.ceil(g/65536),e=Math.ceil(I.memory.buffer.byteLength/65536);return t>e&&I.memory.grow(t-e),[new Float32Array(I.memory.buffer,C,A),new Float32Array(I.memory.buffer,C+4*A,A)]},e=A=>{for(let g=0;g<A.length;g++)A[g]=Array.isArray(A[g])?e(A[g]):A[g]??0;return A},Q=(A,g)=>{let I=A[20]*g>>1,C=A[21]/255,t=Math.ceil(Math.log(.1)/Math.log(C));return A[13]+A[14]+A[15]+t*I},E=(A,g,C,t)=>{let e=t[20]*C>>1,Q=t[21]/255;Q&&I.delay(A.byteOffset,g.byteOffset,A.length,e,Q)},f=(g,C=147,f=5513)=>{g=e(g);let B=Q(g,f),i=A.createBuffer(2,B,44100),l=i.getChannelData(0),a=i.getChannelData(1),[h,s]=t(B);return I.clear(h.byteOffset,h.length),I.clear(s.byteOffset,s.length),I.gen(h.byteOffset,s.byteOffset,0,f,C,...g),E(h,s,f,g),l.set(h),a.set(s),i},B=g=>{let C=(g=e(g))[0],f=g[1],B=0;for(let A of f){let g=A[1].length*C*32+Q(A[0],C);g>B&&(B=g)}let i=A.createBuffer(2,B,44100),l=i.getChannelData(0),a=i.getChannelData(1),[h,s]=t(B);for(let A of f){let g=A[0],t=A[1],e=0,Q=B;I.clear(h.byteOffset,h.length),I.clear(s.byteOffset,s.length);for(let E of t)for(let t=0;t<32;t++){let f=A[2][E-1]?.[t];f&&(Q=Math.min(Q,e),I.gen(h.byteOffset,s.byteOffset,e,C,f,...g)),e+=C}E(h,s,C,g);for(let A=Q;A<B;A++)l[A]+=h[A],a[A]+=s[A]}return i},i=atob("AGFzbQEAAAABQQZgAX0BfWACfX0BfWAAAGAif39/f39/f39/f39/f39/f39/f39/f39/f39/f39/f39/fwBgAn9/AGAFf39/f30AAhUCA2VudgNzaW4AAANlbnYDcG93AAEDBgUCAgMEBQUDAQADBiwHfwFBkIgIC38AQYAIC38AQZCIBAt/AEGACAt/AEGQiAgLfwBBAAt/AEEBCweUAQwGbWVtb3J5AgARX193YXNtX2NhbGxfY3RvcnMAAgRpbml0AAMDZ2VuAAQFY2xlYXIABQVkZWxheQAGDF9fZHNvX2hhbmRsZQMBCl9fZGF0YV9lbmQDAg1fX2dsb2JhbF9iYXNlAwMLX19oZWFwX2Jhc2UDBA1fX21lbW9yeV9iYXNlAwUMX190YWJsZV9iYXNlAwYKiwwFAgAL1AEFAX8BfAF/An0BfEEAIQBEAAAAAAAAAAAhAUGAgH8hAgNAIACyIgND2A/JOpQQgICAgAAhBCACQZCIg4AAaiADQwAAgDmUQwAAAL+SOAIAIAJBkIiBgABqIAQ4AgAgAkGQiISAAGogAUQAAAAAAABQP6IiBUQAAAAAAADwv6BEAAAAAAAACEAgBaEgAEGAEEkbtjgCACACQZCIgoAAakMAAIC/QwAAgD8gBEMAAAAAXRs4AgAgAEEBaiEAIAFEAAAAAAAA8D+gIQEgAkEEaiICDQALC68JBgF/En0CfAJ9AXwBfSOAgICAAEEgayIiJICAgIAAQwAAAEAgG0F4arIQgYCAgAAhI0MAAABAIB9BeGqyEIGAgIAAISRDfZyHPyAFQQxsIARBoH5qIhtqIAZqshCBgICAACElQ32chz8gC0EMbCAbaiAMarIQgYCAgAAhJgJAIBMgEmoiCyAUakF/akEASA0AICW7RAAAAAAAAHA/oiAHs0MXt1E6lEMAAIA/kruitiEnICa7RAAAAAAAAHA/oiANs0MXt1E6lEMAAIA/kruitiEoIByzQwAAADuUISkgILNDAAAAO5QhKkMAAIA/IBSzlSErQwAAgD8gErOVISwgEbNDAAAAMJQhLSAYs0MAAH9DlSEuICMgA7IiJZUhLyAkICWVITAgFEF/aiEMIAsgAmohHyAVs0PG+Rs7lCExIAEgFCATaiASaiACakECdEF8aiITaiEUIAAgE2ohEyAiQQxqIBZBAnRqIQAgD7MhMiAJsyEzIBezITRBACgCgIiAgAAhAkQAAAAAAAAAACE1ICFBDnQhBiAKQQ50IQUgEEEOdCEERAAAAAAAAAAAITZDAAAAACEmQwAAAAAhNwNAAkACQCAwIB8gDGqyIjiUQwAAgEWUIiOLQwAAAE9dRQ0AICOoIRsMAQtBgICAgHghGwsgBiAbQf8fcUECdHJBkIiAgABqKgIAICqUQwAAAD+SISUCQAJAIAsgDGoiGyASTw0AICwgG7KUISMMAQtDAACAPyEjIBsgC0kNAEMAAIA/IAyzICuUkyEjCwJAAkAgNSAlQwAAgD8gHRsgJ5QgIyAjlCIkQwAAgD8gCBuUu6AiNUQAAAAAAACwQKIiOZlEAAAAAAAA4EFjRQ0AIDmqIRsMAQtBgICAgHghGwsgBSAbQf8fcUECdHJBkIiAgABqKgIAIDOUQwAAAACSIToCQAJAIDYgJEMAAIA/IA4bICiUu6AiNkQAAAAAAACwQKIiOZlEAAAAAAAA4EFjRQ0AIDmqIRsMAQtBgICAgHghGwsgBCAbQf8fcUECdHJBkIiAgABqKgIAIDKUIDqSISQCQCAtQwAAAABbDQBBACACQQ10IAJzIhtBEXYgG3MiG0EFdCAbcyIbNgKAiICAACAtIAKylCAjlCAkkiEkIBshAgsgI0OBgIA7lCAklCEjAkAgFkUNAAJAAkAgJUMAAIA/IB4bIDSUQ8Y3PjeUQwAAgEWUIiSLQwAAAE9dRQ0AICSoIRsMAQtBgICAgHghGwsgIiAbQf8fcUECdEGQiICAAGoqAgBDAADAP5QiJCA3lCAmkiImOAIUICIgIzgCDCAiIC4gIyA3k5QgJpMiIzgCECAiICYgI5I4AhwgIiAkICOUIDeSIjc4AhggACoCACEjCyAxICOUISMCQAJAIC8gOJRDAACARZQiJItDAAAAT11FDQAgJKghGwwBC0GAgICAeCEbCyATICNDAACAPyAbQf8fcUECdEGQiICAAGoqAgAgKZRDAAAAP5IiJJOUIBMqAgCSOAIAIBQgIyAklCAUKgIAkjgCACAUQXxqIRQgE0F8aiETIAsgDEF/aiIMakF/Sg0ACwsgIkEgaiSAgICAAAsYAAJAIAFBAUgNACAAQQAgAUECdPwLAAsLZgEBfwJAIAIgA0wNACADQQJ0IQUgAiADayEDA0AgACAFaiICIAEqAgAgBJQgAioCAJI4AgAgASAFaiICIAAqAgAgBJQgAioCAJI4AgAgAEEEaiEAIAFBBGohASADQX9qIgMNAAsLCwsLAQBBgAgLBKVU9dgAZARuYW1lAT8HAAdqc19zaW5mAQdqc19wb3dmAhFfX3dhc21fY2FsbF9jdG9ycwMEaW5pdAQDZ2VuBQVjbGVhcgYFZGVsYXkHEgEAD19fc3RhY2tfcG9pbnRlcgkIAQAFLmRhdGEAOAlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQEMVWJ1bnR1IGNsYW5nETE0LjAuMC0xdWJ1bnR1MS4xAB4PdGFyZ2V0X2ZlYXR1cmVzASsLYnVsay1tZW1vcnk="),l=new Uint8Array(i.length);for(let A=0;A<i.length;A++)l[A]=i.charCodeAt(A);WebAssembly.instantiate(l,{env:{pow:Math.pow,sin:Math.sin}}).then((A=>{I=A.instance.exports,I.init(),C=I.memory.buffer.byteLength,g&&g({sound:f,song:B})}))};</script>
+<script>function loadMusic(){
+
+
+
+
+const song=
+[5513,
+[
+[
+[7,0,0,0,192,2,7,0,0,0,192,2,0,0,0,20000,192,0,0,0,0,121,0,0,0,0,0,0,0],
+[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+[
+[132,,,,,,,,130,,,,,,,,128,,,,,,,,127]]]]];
+
+
+
+
+
+return new Promise((resolve)=>{
+  let audioContext=new AudioContext();
+  pl_synth_wasm_init(audioContext,(synth)=>{
+    const buffer=synth.song(song);
+    const source=audioContext.createBufferSource();
+    source.buffer=buffer;
+    source.loop=true;
+    source.connect(audioContext.destination);
+    resolve({source,context:audioContext,buffer});
+  });
+});
+
+}
+
+</script>
+<script>function generateCat(){
+
+let {sin,cos,PI,hypot,max,floor}=Math;
+let frameCount=30;
+let size=0.3;
+let leg={upperLength:90,lowerLength:90,upperSwing:55*PI/180,lowerMin:10*PI/180,lowerMax:70*PI/180,lowerDelay:1,thick:14,bulge:0.5};
+let arm={upperLength:60,lowerLength:60,thick:12,bulge:0.5,swing:45*PI/180};
+let torso={length:100,thick:18,bulge:0.4};
+let preRenderedImages=[];
+
+function computeLeg(h,p,l,s){
+let u=sin(p)*l.upperSwing,
+k={x:h.x+sin(u)*l.upperLength*s,y:h.y+cos(u)*l.upperLength*s},
+t=(sin(p-l.lowerDelay)+1)/2,
+e=t<.5?2*t*t:-1+(4-2*t)*t,
+f={x:k.x+sin(u+l.lowerMin+(l.lowerMax-l.lowerMin)*e)*l.lowerLength*s,y:k.y+cos(u+l.lowerMin+(l.lowerMax-l.lowerMin)*e)*l.lowerLength*s};
+return {k,f};
+}
+
+function computeArm(s,p,a,c){
+let b=PI/2,
+w=sin(p)*a.swing,
+A=b+w,
+e={x:s.x+cos(A)*a.upperLength*c,y:s.y+sin(A)*a.upperLength*c},
+dx=e.x-s.x,
+dy=e.y-s.y,
+l=hypot(dx,dy),
+nx=dx/l,
+ny=dy/l,
+h={x:e.x-ny*a.lowerLength*c,y:e.y+nx*a.lowerLength*c};
+return{e,h};
+}
+
+function makeOval(x1,y1,x2,y2,t,c,s){
+let dx=x2-x1,dy=y2-y1,l=hypot(dx,dy)||1,nx=-dy/l,ny=dx/l,h=t/2*s,b=l*0.2*c,p=new Path2D();
+p.moveTo(x1+nx*h,y1+ny*h);
+p.bezierCurveTo(x1+nx*h+dx/2+nx*b,y1+ny*h+dy/2+ny*b,x2+nx*h-dx/2+nx*b,y2+ny*h-dy/2+ny*b,x2+nx*h,y2+ny*h);
+p.lineTo(x2-nx*h,y2-ny*h);
+p.bezierCurveTo(x2-nx*h-dx/2-nx*b,y2-ny*h-dy/2-ny*b,x1-nx*h+dx/2-nx*b,y1-ny*h+dy/2-ny*b,x1-nx*h,y1-ny*h);
+p.closePath();
+return p;
+}
+
+function torsoPath(h,t,s){
+let c={x:h.x,y:h.y-t.length*s},p=makeOval(h.x,h.y,c.x,c.y,t.thick,t.bulge,s);
+return{path:p,chest:c};
+}
+
+function headPath(c){
+let s=size,p=new Path2D(),r=25*s,g=4*s,hx=c.x,hy=c.y-r-g;
+p.arc(hx,hy,r,0,7);
+let eD=290,eH=13*s,eBW=12*s,aR=eD*PI/180,bX=hx+r*cos(aR),bY=hy+r*sin(aR),tX=hx+(r+eH)*cos(aR),tY=hy+(r+eH)*sin(aR),pA=aR+PI/2,lX=bX+(eBW/2)*cos(pA),lY=bY+(eBW/2)*sin(pA),rX=bX-(eBW/2)*cos(pA),rY=bY-(eBW/2)*sin(pA),e=new Path2D();
+e.moveTo(lX,lY);
+e.lineTo(tX,tY);
+e.lineTo(rX,rY);
+e.closePath();
+p.addPath(e);
+let eyD=190,eyR=8*s,eyA=eyD*PI/180,eyX=hx+15*s*cos(eyA),eyY=hy+15*s*sin(eyA);
+return{path:p,eye:{x:eyX,y:eyY,r:eyR*.6}};
+}
+
+function legPath(h,p,d,s){
+let {k,f}=computeLeg(h,p,d,s),P=new Path2D();
+P.addPath(makeOval(h.x,h.y,k.x,k.y,d.thick,d.bulge,s));
+P.addPath(makeOval(k.x,k.y,f.x,f.y,d.thick,d.bulge,s));
+return P;
+}
+
+function armPath(s,p,d,c){
+let {e,h}=computeArm(s,p,d,c),P=new Path2D();
+P.addPath(makeOval(s.x,s.y,e.x,e.y,d.thick,d.bulge,c));
+P.addPath(makeOval(e.x,e.y,h.x,h.y,d.thick,d.bulge,c));
+return P;
+}
+
+function tailPath(h,s){
+let P=new Path2D(),l=100*s,cp1X=h.x+l*.5,cp1Y=h.y-25*s,cp2X=h.x+l*.6,cp2Y=h.y+35*s,endX=h.x+l;
+P.moveTo(h.x,h.y);
+P.bezierCurveTo(cp1X,cp1Y,cp2X,cp2Y,endX,h.y);
+return P;
+}
+
+function drawFrameToCtx(c,p0,p1,h){
+let b=sin(p0*2+PI/4)*6*size,h0={x:h[0].x,y:h[0].y+b},h1={x:h[1].x,y:h[1].y+b},{path:tP,chest:ch}=torsoPath(h0,torso,size),hR=headPath(ch);
+c.fillStyle='black';
+c.fill(tP);
+c.fill(armPath(ch,p0,arm,size));
+c.fill(armPath(ch,p1,arm,size));
+c.fill(legPath(h0,p0,leg,size));
+c.fill(legPath(h1,p1,leg,size));
+c.fill(hR.path);
+let tS=tailPath(h0,size);
+c.lineWidth=9*size;
+c.strokeStyle='black';
+c.lineCap='round';
+c.stroke(tS);
+c.beginPath();
+c.fillStyle='yellow';
+c.arc(hR.eye.x,hR.eye.y,max(hR.eye.r,0.8),0,7);
+c.fill();
+return hR.eye;
+}
+
+function buildFrames(){
+preRenderedImages=[];
+let c=document.createElement('canvas');
+c.width=innerWidth;
+c.height=innerHeight;
+let o=c.getContext('2d'),h=[{x:0,y:0},{x:0,y:0}],l=(leg.upperLength+leg.lowerLength)*size;
+for(let i=0;i<frameCount;i++){
+o.clearRect(0,0,c.width,c.height);
+o.save();
+o.translate(c.width/2,c.height-l);
+o.scale(-1,1);
+let p0=-PI/2+(i/frameCount)*PI*2,p1=p0+PI;
+drawFrameToCtx(o,p0,p1,h);
+o.restore();
+let img=new Image();
+img.src=c.toDataURL();
+preRenderedImages.push(img);
+}
+}
+
+function draw(ctx,x,y,i,frame){
+frame=floor(i)%frameCount;
+let img=preRenderedImages[frame];
+ctx.save();
+ctx.translate(x,y);
+ctx.drawImage(img,-img.width/2,-img.height);
+ctx.restore();
+}
+
+buildFrames();
+
+return {draw};
+
+}
+
+</script>
+<script>onload=()=>{
+
+document.title="J A Z Z";
+document.head.appendChild(document.createElement("style")).textContent=" *{margin:0;padding:0;position:fixed;box-sizing:border-box;touch-action:none;user-select:none;} canvas{background:indigo;} body{background:black;} ";
+
+document.addEventListener("contextmenu",(e)=>e.preventDefault());
+
+let canvas=document.body.appendChild(document.createElement("canvas"));
+let ctx=canvas.getContext("2d");
+
+let source=null;
+let context=null;
+let buffer=null;
+let isPlaying=false;
+
+loadMusic().then(a=>{
+  ({source,context,buffer}=a);
+  source.start();
+  isPlaying=true;
+});
+
+canvas.addEventListener("pointerdown",(e)=>{
+  if(e.offsetY<canvas.height*0.1){
+    if(source){
+      if(isPlaying){
+        mute=true;
+//         alert("Stopping music");
+        source.stop();
+        isPlaying=false;
+      }else{
+        mute=false;
+//         alert("Starting music");
+        source=context.createBufferSource();
+        source.buffer=buffer;
+        source.loop=true;
+        source.connect(context.destination);
+        source.start();
+        isPlaying=true;
+      }
+    }
+  }else{
+    if(context&&context.state==="suspended"){
+      context.resume();
+    }
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const x = (e.clientX - rect.left) * scaleX;
+    const note = notes[Math.min( Math.floor(x / (GAME_W / notes.length)), notes.length - 1)];
+    if(!mute)sound(note);
+    if(!jumping && note==150){
+      velocityY=velocityYoriginal;
+      jumping=true;
+    }
+
+  }
+});
+
+
+
+let mute=false;
+let notes=[144, 147, 149, 150, 151, 154, 156];
+let piano=[7,0,0,0,192,2,7,0,0,0,192,2,0,0,0,20000,192,0,0,0,0,121,0,0,0,0,0,0,0];
+let A=new AudioContext();
+let M=pl_synth_wasm_init;
+function sound(note) {
+M(A, m => {
+  let s = A.createBufferSource();
+  s.buffer = m.sound( piano, note);
+  s.connect(A.destination);
+  s.start();
+});
+}
+
+
+
+
+let rooftopY=1000;
+let catX=300;
+let catY;
+let jumpHeight=30;
+let jumpWidth=200;
+let scrollSpeed=3;
+let minGap=jumpWidth*0.5;
+let maxGap=jumpWidth*0.9;
+let t_air=jumpWidth/scrollSpeed;
+let t_up=t_air/2;
+let gravity=(2*jumpHeight)/(t_up*t_up);
+let velocityYoriginal=-gravity*t_up;
+let velocityY=0;
+let jumpY=0;
+let jumping=false;
+let currentFrame=0;
+let prevt=performance.now();
+let playbackIndex=0;
+let playbackSpeed=0.3;
+let GAME_W=900;
+let GAME_H=1600;
+canvas.width=GAME_W;
+canvas.height=GAME_H;
+let scale=1,
+offsetX=0,
+offsetY=0;
+let resize=()=>{
+let ratio=9/16;
+let vw=innerWidth,
+vh=innerHeight;
+if(vw/vh>ratio){
+  scale=vh/GAME_H;
+  offsetX=(vw-GAME_W*scale)/2;
+  offsetY=0;
+}else{
+  scale=vw/GAME_W;
+  offsetX=0;
+  offsetY=(vh-GAME_H*scale)/2;
+}
+canvas.style.width=GAME_W*scale+"px";
+canvas.style.height=GAME_H*scale+"px";
+canvas.style.left=offsetX+"px";
+canvas.style.top=offsetY+"px";
+};
+onresize=resize;
+resize();
+
+catY=rooftopY;
+
+let cat=generateCat();
+let rooftop=generateRooftops({GAME_W,GAME_H,minGap,maxGap,rooftopY});
+let buildings=generateBuildings({GAME_W,GAME_H});
+let snow=generateSnow({GAME_W,GAME_H});
+
+requestAnimationFrame(animate);
+
+function animate(time){
+let delta=(time-prevt)/16.6667;
+prevt=time;
+delta=Math.min(delta,3);
+rooftop.update({scrollSpeed,delta});
+let land=null;
+for(let r of rooftop.rooftops){if(catX>=r.x&&catX<=r.x+r.width){land=r;break;}}
+jumpY+=velocityY*delta;
+velocityY+=gravity*delta;
+if(land&&jumpY>=0&&velocityY>=0){jumpY=0;velocityY=0;jumping=false;}
+if(!land&&!jumping&&velocityY>=0){jumping=true;}
+catY=(land?land.y:rooftopY)+jumpY;
+ctx.clearRect(0,0,canvas.width,canvas.height);
+buildings.draw(ctx,{scrollSpeed,delta});
+rooftop.draw(ctx);
+snow.draw(ctx,{scrollSpeed,delta});
+cat.draw(ctx,catX,catY,playbackIndex,currentFrame);
+playbackIndex+=playbackSpeed;
+requestAnimationFrame(animate);
+}
+
+};
+
+</script>
+<script>function generateRooftops({GAME_W:W,GAME_H:H,minGap,maxGap,rooftopY}){
+
+function rnd(min,max){return min+Math.random()*(max-min);}
+
+let rooftops=[];
+let minw=250;
+let maxw=600;
+
+function drawRoundedRect(C,x,y,width,height,radius){
+C.beginPath();C.moveTo(x+radius,y);
+C.lineTo(x+width-radius,y);C.quadraticCurveTo(x+width,y,x+width,y+radius);C.lineTo(x+width,y+height);C.lineTo(x,y+height);C.lineTo(x,y+radius);C.quadraticCurveTo(x,y,x+radius,y);
+C.closePath();
+}
+
+function generateInitialRooftops(){
+rooftops=[];
+let x=0;
+while(x<W*2){
+  let width=rnd(minw,maxw);
+  let gap=rnd(minGap,maxGap);
+  rooftops.push({x,width,y:rooftopY});
+  x+=width+gap;
+}
+}
+
+function update({scrollSpeed,delta}){
+for(let r of rooftops)r.x-=scrollSpeed*delta;
+if(rooftops.length&&rooftops[0].x+rooftops[0].width<0)rooftops.shift();
+while(rooftops.length&&rooftops[rooftops.length-1].x<W){
+  let last=rooftops[rooftops.length-1];
+  let width=rnd(minw,maxw);
+  let gap=rnd(minGap,maxGap);
+  rooftops.push({x:last.x+last.width+gap,width,y:rooftopY});
+}
+}
+
+function draw(C){
+let radius=5;
+for(let r of rooftops){
+  let gradient=C.createLinearGradient(0,H,0,r.y);
+  gradient.addColorStop(0.00,"hsl(0, 0%, 30%)");
+  gradient.addColorStop(0.98,"hsl(0, 0%, 10%)");
+  gradient.addColorStop(0.98,"hsl(0, 0%, 70%)");
+  gradient.addColorStop(1.00,"hsl(0, 0%, 30%)");
+  C.fillStyle=gradient;
+  drawRoundedRect(C,r.x,r.y,r.width,H-r.y,radius);
+  C.fill();
+}
+}
+
+generateInitialRooftops();
+
+return {rooftops,update,draw};
+
+}
+
+</script>
+<script>function generateSnow({GAME_W:W,GAME_H:H}){
+
+function rnd(min,max){return min+Math.random()*(max-min);}
+
+let color="#FFFFFF";
+let count=150;
+let speedmin=0.2;
+let speedmax=1;
+let sizemin=2;
+let sizemax=4;
+let particles=[];
+
+function init(){
+for(let i=0;i<count;i++){
+  particles.push({
+    x:rnd(0,W),
+    y:rnd(0,H),
+    size:rnd(sizemin,sizemax),
+    speed:rnd(speedmin,speedmax)
+  });
+}
+}
+
+function draw(C,{scrollSpeed:S,delta:D}){
+C.fillStyle=color;
+for(let p of particles){
+  p.y+=p.speed*D;
+  p.x-=S*D;
+  C.beginPath();
+  C.arc(p.x,p.y,p.size,0,Math.PI*2);
+  C.fill();
+  if(p.y>H){
+    p.y=-p.size;
+    p.x=rnd(0,W);
+  }else if(p.x<-p.size){
+    p.x=W+p.size;
+    p.y=rnd(0,H);
+  }
+}
+}
+
+init();
+return {draw};
+
+}
+</script>
+<script>function generateBuildings({GAME_W:W,GAME_H:H}){
+
+function rnd(min,max){return min+Math.random()*(max-min);}
+
+let B=[];
+let minw=350;
+let maxw=700;
+let mingap=20;
+let maxgap=70;
+let minh=300;
+let maxh=H;
+let winw=100;
+let winh=300;
+let wingap=10;
+let bcolor="black";
+let wcolor="yellow";
+
+function buildings(){
+B=[];
+let x=0;
+while(x<W*2){
+  let width=rnd(minw,maxw);let gap=rnd(mingap,maxgap);let height=rnd(minh,maxh);
+  B.push({x,width,height,color:bcolor});
+  x+=width+gap;
+}
+}
+
+function draw(ctx,{scrollSpeed,delta}){
+for(let r of B){
+  r.x-=scrollSpeed*0.5*delta;
+  ctx.fillStyle=r.color;
+  ctx.fillRect(r.x,H-r.height,r.width,r.height);
+  drawWindows(ctx,r.x,H-r.height,r.width,r.height);
+}
+if(B.length&&B[0].x+B[0].width<0){B.shift();}
+while(B.length&&B[B.length-1].x<W){
+  let last=B[B.length-1];
+  let width=rnd(minw,maxw);let gap=rnd(mingap,maxgap);let height=rnd(minh,maxh);
+  B.push({x:last.x+last.width+gap,width,height,color:bcolor});
+}
+}
+
+function drawWindows(ctx,x,y,width,height){
+ctx.fillStyle=wcolor;
+for(let i=wingap;i+winw<=width-wingap;i+=winw+wingap){
+  for(let j=wingap;j+winh<=height-wingap;j+=winh+wingap){
+    ctx.fillRect(x+i,y+j,winw,winh);
+  }
+}
+}
+
+buildings();
+
+return {draw};
+}
+</script>

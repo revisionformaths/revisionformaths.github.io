@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Star-Crasher js13k 2018</title>
+	<meta charset="utf-8">
+	<meta name="description" content="Star Crasher game for js13k 2018">
+	<meta name="author" content="Luke Nickerson using some algorithms by Sebastian Macke and Hunter Loftis">
+	<style>html, body {
+	margin: 0; height: 100%; overflow: hidden;
+	font-family: monospace;
+	background: #3B3753;
+}
+canvas { width: 100%; height: 100%; }
+b {
+	display: block;
+}
+i {
+	position: absolute;
+	display: block;
+	left: 0; right: 0;
+	margin: 0;
+	padding: 0;
+	font-style: normal;
+}
+.splash #terrain {
+	filter: blur(10px);
+}
+.splash #ship {
+	filter: blur(5px);
+}
+#splash {
+	opacity: 0.2;
+	transform: scale(0);
+	transition: transform 6s linear, opacity 6s linear, filter 6s;
+	font-size: 600%;
+	position: absolute;
+	top: 10%;
+	left: 0; right: 0;
+	text-align: center;
+	z-index: 10;
+	background-color: rgba(0,0,0,0.4);
+	color: white;
+	text-transform: uppercase;
+	padding: 1em 0;
+	cursor: pointer;
+	filter: blur(5px);
+}
+.splash #splash {
+	opacity: 1;
+	transform: scale(1);
+	filter: blur(0px);
+}
+#splash div {
+	font-size: 50%;
+}
+
+#terrain {
+	transition: filter 10s linear;
+}
+
+#ship {
+	top: 0; bottom: 0;
+	transition: filter 4s linear;
+}
+h2 {
+	font-size: 100%;
+	color: rgba(0,0,0,0.3);
+	text-transform: uppercase;
+	margin: 0;
+	text-shadow: inset 0 0 2px rgba(0,0,0,0.6);
+}
+svg {
+	position: absolute;
+	left: 0; right: 0;
+	top: 0; bottom: 0;
+}
+polygon {
+	fill: #303639;
+}
+#screen {
+	top: 0;
+	bottom: 200px;
+	box-shadow: inset 0 0 200px rgba(0,0,0,0.8);
+}
+#dashboard {
+	display: flex;
+	flex-direction: row;
+	position: absolute;
+	height: 200px;
+	bottom: 0;
+	background: #303639;
+	color: rgba(255,255,255,0.6);
+	font-size: 12px;
+}
+#inner-dashboard {
+	display: flex;
+	flex-direction: row;
+	width: 800px;
+	margin: 0 auto;
+}
+#inner-dashboard > b {
+	display: flex;
+	flex-direction: column;
+	border: solid 1px rgba(0,0,0,0.2);
+	padding: 1em;
+	box-shadow: inset .05em .3em .3em rgba(255,255,255,0.2), inset -.05em -.3em .3em rgba(0,0,0,0.3);
+	background: #404649;
+}
+#overhead {
+	width: 200px;
+	margin: 0 auto;
+	background: #404649;
+	box-shadow: inset .05em .3em .3em rgba(255,255,255,0.2), inset -.05em -.3em .3em rgba(0,0,0,0.3);
+	padding: 1em;
+}
+#fuel, #cargo {
+	text-align: center;
+	width: 50px;
+}
+#engines {
+	width: 100px;
+}
+#nav {
+	width: 300px;
+}
+#systems {
+	width: 300px;
+}
+#systems li {
+	display: flex;
+	padding: 0;
+}
+#systems li span {
+	flex: 1;
+}
+.console,
+#repair-info.console {
+	border: inset 2px rgba(255,255,255,0.5);
+	padding: 0.25em;
+	min-height: 1em;
+	box-shadow: inset 0 0 1em black;
+	background: #133;
+	color: #66ffff;
+}
+.offline .console {
+	background: #011;
+	color: transparent;
+}
+.offline .console * {
+	opacity: 0;
+}
+.v-bar {
+	flex-grow: 1;
+	width: 1em;
+	margin: 0 auto;
+	padding: 0;
+	word-break: break-all;
+}
+ul {
+	list-style: none;
+	padding: 0;
+}
+button {
+	border: solid 2px #111;
+	background-color: #222;
+	width: 1.5em;
+	height: 1.5em;
+	margin: 0.1em auto;
+	border-radius: 5em;
+	box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 .2em .2em rgba(0,0,0,0.5);
+	cursor: pointer;
+	outline: none;
+	transition: background 0.2s;
+}
+button:active {
+	box-shadow: inset 0 1px 1px rgba(255,255,255,0.3);
+}
+button.on {
+	background: #77ff77;
+	box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 0 1em #77ff77;
+}
+button.working {
+	background: #eeee77;
+}
+button.alert {
+	background: #ff8877;
+}</style>
+</head>
+<body scroll="no" class="splash">
+
+<canvas id=terrain width=800 height=600></canvas>
+
+<i id=ship class=offline>
+	<i id=screen>
+	</i>
+	<svg width=100% height=100% viewBox="0 0 800 600">
+		<polygon points="0 600, 0 450,
+			100 400, 0 0, 20 0, 120 400,
+			680 400, 780 0, 800 0, 700 400,
+			800 450, 800 600" />
+	</svg>
+
+	<i id=overhead>
+		<h2>Energy</h2>
+		<button title="Deploy solar panels" id=deploy-solar></button>
+		<b class="console h-needle" id=energy-rate><b></b></b>
+		<b class="console h-bar" id=energy><b></b></b>
+	</i>
+	<i id=dashboard>
+		<b id=inner-dashboard>
+			<b id=fuel>
+				<h2>Fuel</h2>
+				<button id=load-fuel title="Load fuel from nearby depot"></button>
+				<b class="console v-bar" id=fuel-gauge><b></b></b>
+			</b>
+			<b id=engines>
+				<h2>Throttle</h2>
+				<b id=throttle>
+					<b class=console id=speed></b>
+					<!-- <b class="console h-bar"><b></b></b> -->
+				</b>
+				<h2>Launch</h2>
+				<button id=rockets></button>
+			</b>
+			<b id=systems>
+				<h2>Systems</h2>
+				<b class="console" id=repair-info></b>
+				<ul>
+					<li id=sys-so>Solar Panels <span></span> <button title="Repair"></button></li>
+					<li id=sys-ca>Cargo Loader <span></span> <button title="Repair"></button></li>
+					<li id=sys-fu>Fuel Loader <span></span> <button title="Repair"></button></li>
+					<li id=sys-ov>Overdrive <span></span> <button title="Repair"></button></li>
+					<li id=sys-ho>Hover <span></span> <button title="Repair"></button></li>
+					<li id=sys-ro>Rockets <span></span> <button title="Repair"></button></li>
+				</ul>
+			</b>
+			<b id=nav>
+				<h2>Guidance</h2>
+				<b class="console h-needle" id=depot-distance></b>
+				<b class=console>
+					Fly controls
+					<ul>
+						<li>WASD or Cursor Keys = move
+						<li>R/F = up/down
+						<li>Q/E = pitch
+					</ul>
+					<label for="distancerangew">Distance</label>
+					<input id="distancerange" type="range" min="100" max="3000" step="1" onchange="g.camera.distance = this.value">
+					<b id="fps"></b>
+				</b>
+			</b>
+			<b id=cargo>
+				<h2>Cargo</h2>
+				<button id=load-parts title="Load parts from nearby depot"></button>
+				<b class="console v-bar" id=parts-gauge><b></b></b>
+			</b>
+		</b>
+	</i>
+</i>
+
+<div id=splash>
+	Star-Crasher
+	<div id=sub-title>Loading...</div>
+</div>
+
+<script>var map = (function(){
+return {
+	width:		1024,
+	height:		1024,
+	shift:		10,  // power of two: 2^10 = 1024
+	altitude:	new Uint8Array(1024*1024), // 1024 * 1024 byte array with height information
+	color:		new Uint32Array(1024*1024), // 1024 * 1024 int array with RGB colors
+	depots: [],
+	setup: setupMap
+};
+
+function setupMap() {
+	const baseAlt = 10;
+	for(let i = 0; i < map.altitude.length; i++) {
+		setAltitudeAtIndex(i, baseAlt);
+	}
+	generateTerrain(0.7, 2000);
+	console.time('set mountains and holes');
+	setMountains();
+	setHoles();
+	console.timeEnd('set mountains and holes');
+	console.time('smooth');
+	// smoothMap(1);
+	smoothMap(5);
+	smoothMap(2);
+	console.timeEnd('smooth');
+	// altitude o - 118 .... set to ~200
+	console.time('set color and depots');
+	setMapColor();
+	setDepots();
+	console.timeEnd('set color and depots');
+}
+
+
+function generateTerrain(roughness = 0.7, altScale = 1000) {
+	// http://www.playfuljs.com/realistic-terrain-in-130-lines/
+	console.time('generateTerrain');
+	const max = map.width - 1;
+	let seed = 9;
+	setAltitude(0, 0, altScale);
+	setAltitude(max, 0, altScale / 2);
+	setAltitude(max, max, altScale / 2);
+	setAltitude(0, max, altScale / 2);
+	divide(max, altScale);
+
+	function divide(size, altSize) {
+	  let x, y; 
+	  const half = size / 2;
+	  const scale = roughness * altSize;
+	  if (half < 1) {
+	  	return;
+	  }
+	  for (y = half; y < max; y += size) {
+	    for (x = half; x < max; x += size) {
+	      square(x, y, half, getAlt(++seed, scale));
+	    }
+	  }
+	  for (y = 0; y <= max; y += half) {
+	    for (x = (y + half) % size; x <= max; x += size) {
+	      diamond(x, y, half, getAlt(++seed, scale));
+	    }
+	  }
+	  divide(half, altSize / 2);
+	}
+
+	function getAlt(seed, scale) {
+		return getPseudoRandom(++seed) * (scale * 2) - scale;
+	}
+
+	function average(values) {
+	  var valid = values.filter(function(val) { return val !== -1; });
+	  var total = valid.reduce(function(sum, val) { return sum + val; }, 0);
+	  return total / valid.length;
+	}
+
+	function square(x, y, size, offset) {
+	  const avg = average([
+	    getAltitude(x - size, y - size),   // upper left
+	    getAltitude(x + size, y - size),   // upper right
+	    getAltitude(x + size, y + size),   // lower right
+	    getAltitude(x - size, y + size)    // lower left
+	  ]);
+	  setAltitude(x, y, avg + offset);
+	}
+
+	function diamond(x, y, size, offset) {
+	  const avg = average([
+	    getAltitude(x, y - size),      // top
+	    getAltitude(x + size, y),      // right
+	    getAltitude(x, y + size),      // bottom
+	    getAltitude(x - size, y)       // left
+	  ]);
+	  setAltitude(x, y, avg + offset);
+	}
+	console.timeEnd('generateTerrain');
+}
+
+
+function setMountains() {
+	const mtSize = 200;
+	let seed = 100;
+	const radiusScale = 200;
+	for(let m = 0; m < 50; m++) {
+		seed += m;
+		const x = getPseudoRandomInt(seed, map.width);
+		const y = getPseudoRandomInt(++seed, map.height);
+		const mAlt = getPseudoRandomInt(++seed, mtSize);
+		const radius = getPseudoRandomInt(++seed, radiusScale);
+		loopCircle(x, y, radius, (x, y) => {
+			let alt = getAltitude(x, y);
+			alt = Math.max(alt, mAlt/3);
+			setAltitude(x, y, alt);
+		});
+		loopCircle(x, y, radius/2, (x, y) => {
+			let alt = getAltitude(x, y);
+			alt = (alt + mAlt/2) / 2;
+			setAltitude(x, y, alt);
+		});
+		loopCircle(x, y, radius/3, (x, y) => {
+			let alt = getAltitude(x, y);
+			alt = (alt + mAlt + mAlt) / 3;
+			setAltitude(x, y, alt);
+		});
+	}
+}
+
+function setHoles() {
+	let seed = 4;
+	const radiusScale = 100;
+	for(let m = 0; m < 30; m++) {
+		seed += m;
+		const x = getPseudoRandomInt(seed, map.width);
+		const y = getPseudoRandomInt(++seed, map.height);
+		const radius = getPseudoRandomInt(++seed, radiusScale);
+		const water = getPseudoRandom(++seed) < 0.3;
+		loopCircle(x, y, radius, (x, y) => {
+			let alt = getAltitude(x, y);
+			alt /= 2;
+			setAltitude(x, y, alt);
+		});
+		loopCircle(x, y, radius/2, (x, y) => {
+			let alt = getAltitude(x, y);
+			alt = water ? 0 : alt/3;
+			setAltitude(x, y, alt);
+		});
+	}
+}
+
+function smoothMap(radius = 5) {
+	// TODO: Should use something like https://github.com/flozz/StackBlur/blob/master/src/stackblur.js
+	for(let i = 0; i < map.altitude.length; i++) {
+		let y = Math.floor(i / map.width);
+		let x = i - (y * map.width);
+		const alts = [map.altitude[i]];
+		loopSquare(x, y, radius, (x, y) => {
+			alts.push(getAltitude(x, y));
+		});
+		const sumReducer = (acc, curr) => acc + curr;
+		const sum = alts.reduce((acc, curr) => acc + curr);
+		const smoothedAlt = sum / alts.length;
+		setAltitudeAtIndex(i, smoothedAlt);
+	}
+}
+
+function getAltitude(x, y) {
+	let i = getXYIndex(x, y);
+	if (i < 0) { i = map.altitude.length - i; }
+	else if (i >= map.altitude.length) { i -= map.altitude.length; }
+	return map.altitude[i];
+}
+
+function getXYIndex(x, y) {
+	return Math.round(x + y * map.height);
+}
+
+function setAltitude(x, y, n) {
+	setAltitudeAtIndex(getXYIndex(x, y), n);
+}
+
+function setAltitudeAtIndex(i, n) {
+	map.altitude[i] = n ? Math.round(n) : 0;
+}
+
+function setMapColor() {
+	const maxColor = 200;
+	for(let y = 0; y < map.height; y++) {
+		let shadow = 0;
+		for (let x = 0; x < map.width; x++) {
+			const i = x + (y * map.height);
+			const altitude = map.altitude[i];
+			let a = 40 + altitude * 1.1;
+			if (map.altitude[i] < map.altitude[i - 1]) {
+				if (shadow === 0) {
+					shadow += 10;
+				}
+				shadow += 4;
+			} else {
+				shadow -= 7;
+			}
+			shadow = Math.min(70, Math.max(shadow, 0));
+			a -= shadow;
+			a = Math.max(a, 0);
+			let r = a + (Math.random() * 5);
+			let g = (altitude === 0) ? 100 + (Math.random() * 15) : a;
+			let b = a * 1.5;
+			r = Math.min(r, maxColor);
+			g = Math.min(g, maxColor);
+			b = Math.min(b, maxColor);
+			map.color[i] = 0xFF000000 | (b << 16) | (g << 8) | r;
+		}
+	}
+}
+
+function setDepots() {
+	map.depots.length = 0;
+	let seed = 2;
+	for (let d = 0; d < 2; d++) {
+		const depot = {
+			x: getPseudoRandomInt(++seed, map.width),
+			y: getPseudoRandomInt(++seed, map.height),
+			radius: 8,
+			topRadius: 4,
+			baseAltitude: 0,
+			topAltitude: 0,
+			baseColor: 0xFFaaaa44,
+			topColor: (d == 1) ? 0xFF779999 : 0xFF999977,
+			type: (d == 1) ? 'fuel' : 'parts',
+			quantity: 100,
+		};
+		depot.baseAltitude = getAltitude(depot.x, depot.y) + 6;
+		depot.topAltitude = depot.baseAltitude + 10;
+		map.depots.push(depot);
+		setSquare(depot.x, depot.y, depot.baseColor, depot.baseAltitude, depot.radius);
+		setSquare(depot.x, depot.y, depot.topColor, depot.topAltitude, depot.topRadius);
+	}
+}
+
+function setSquare(baseX, baseY, color, alt, radius) {
+	loopSquare(baseX, baseY, radius, (x, y) => {
+		const i = getXYIndex(x, y);
+		map.altitude[i] = alt;
+		map.color[i] = color;
+	});
+}
+
+function loopSquare(baseX, baseY, radius, callback) {
+	for (let x = baseX - radius; x <= baseX + radius; x++) {
+		for (let y = baseY - radius; y <= baseY + radius; y++) {
+			callback(x, y);
+		}
+	}
+}
+
+function loopCircle(baseX, baseY, radius, callback) {
+	loopSquare(baseX, baseY, radius, (x, y) => {
+		if (distanceBetweenPoints(baseX, baseY, x, y) <= radius) {
+			callback(x, y);
+		}
+	});
+}
+
+function distanceBetweenPoints(x1, y1, x2, y2) {
+	return Math.sqrt( Math.pow( (x1 - x2), 2) + Math.pow( (y1 - y2), 2) );
+}
+
+// Helpers
+
+function getPseudoRandomInt(seed, n) {
+	return Math.round(getPseudoRandom(seed) * n);
+}
+
+function getPseudoRandom(seed) {
+	// http://stackoverflow.com/a/19303725/1766230
+	var x = Math.sin(seed) * 10000;
+	return x - Math.floor(x);
+}
+
+})();</script>
+<script>class Ship {
+	constructor() {
+		var s = this;
+		s.parts = 0;
+		s.partsMax = 255;
+		s.energy = 0;
+		s.energyMax = 255;
+		s.fuel = 0;
+		s.fuelMax = 255;
+		s.distanceToDepots = [];
+		s.solarPanelsOpen = false;
+		s.lastUpdate = null;
+		s.repairingSystem = null;
+		s.systemList = ['so','ca','fu','ov','ho','ro'];
+		s.systems = {
+			so: 0,
+			ca: 0,
+			fu: 0,
+			ov: 0,
+			ho: 0,
+			ro: 0,
+		};
+		s.repairEnergy = 8;
+		s.repairParts = 7;
+		s.speed = 0;
+		s.loading = null;
+	}
+	deploySolar() {
+		this.solarPanelsOpen = (this.systems.so === 0) ? false : !this.solarPanelsOpen;
+	}
+	stop() {
+		this.speed = 0;
+	}
+	accelerate(t) {
+		let a = t;
+		let boost = (this.fuel > t) ? 0.5 : 0;
+		let m = 0.2 + boost + (this.systems.ov/100) * 2;
+		this.fuel -= t;
+		this.fuel = Math.max(0, this.fuel);
+		this.speed += (a * m);
+		this.speed = Math.min(this.speed, this.getMaxSpeed());
+	}
+	getMaxSpeed() {
+		let boost = (this.fuel > 0) ? 5 : 0;
+		let spd = 10;
+		if (this.systems.ov === 100) {
+			spd = 20;
+			boost = (this.fuel > 0) ? 15 : 0;
+		}
+		return spd + boost;
+	}
+	getEnergyRate() {
+		var s = this;
+		let input = s.solarPanelsOpen ? (s.systems.so/10) : 0;
+		let output = s.repairingSystem ? s.repairEnergy : 0;
+		output += (s.loading) ? 1 : 0;
+		let rate = input - output;
+		return rate;
+	}
+	getHeightOffset() {
+		return this.systems.ho === 100 ? 20 : 10;
+	}
+	advance() {
+		var s = this;
+		let ms = 1;
+		if (s.lastUpdate) {
+			let now = new Date();
+			ms = now - s.lastUpdate;
+			s.lastUpdate = now;
+		}
+		let t = ms / 1000;
+		s.lastUpdate = new Date();
+		s.energy += s.getEnergyRate() * t;
+		s.energy = Math.max(0, Math.min(s.energy, s.energyMax));
+		s.repairSystem(s.repairingSystem, t);
+		return t;
+	}
+	canRepair(sys) {
+		var s = this;
+		return (
+			(sys === 'so' && s.systems.so < 50)
+			|| (sys === 'ca' && s.energy >= s.repairEnergy)
+			|| (s.energy > s.repairEnergy && s.parts >= s.repairParts)
+		);
+	}
+	repairSystem(sys, t) {
+		if (!sys) { return; }
+		var s = this;
+		let rr = t * 4;
+		if (!s.canRepair(sys)) {
+			return;
+		}
+		s.systems[s.repairingSystem] += rr;
+		s.systems[s.repairingSystem] = Math.min(s.systems[s.repairingSystem], 100);
+		if (s.systems[s.repairingSystem] >= 100) {
+			s.repairingSystem = null;
+		}
+		s.parts -= s.repairParts * t; // FIXME
+		s.parts = Math.max(0, s.parts);
+	}
+	repair(sys) {
+		this.repairingSystem = this.repairingSystem === sys ? null : sys;
+	}
+	getRepairInfo() {
+		var s = this;
+		let sys = s.repairingSystem;
+		if (!sys) {
+			let p = 0;
+			s.systemList.forEach((sys) => { p += s.systems[sys]; });
+			if (p === 0) {
+				return 'ALL SYSTEMS OFFLINE';
+			}
+			return 'Total Repair Progress: ' + Math.floor((p / (s.systemList.length * 100)) * 100) + '%';
+		}
+		if (s.systems[sys] >= 100) {
+			return 'Online - Repaired 100%'
+		}
+		if (s.canRepair(sys)) {
+			return 'Repairing {' + sys.toUpperCase() + '} ' + Math.floor(s.systems[sys]) + '%';
+		}
+		return 'Need Energy/Parts to Repair';
+	}
+	getSystemButtonClass(sys) {
+		let system = this.systems[sys];
+		if (system >= 100) {
+			return 'on';
+		}
+		if (this.repairingSystem === sys) {
+			if (this.canRepair(sys)) {
+				return 'working';
+			}
+			return 'alert';
+		}
+		return 'off';
+	}
+	setLoading(type) {
+		this.loading = (type === this.loading) ? null : type;
+	}
+	load(n) {
+		if (this.loading === 'fuel') {
+			let m = (this.systems.fu === 100) ? 3 : 1;
+			this.fuel += (n * m);
+			this.fuel = Math.min(this.fuel, this.fuelMax);
+		} else if (this.loading === 'parts') {
+			let m = (this.systems.ca === 100) ? 3 : 1;
+			this.parts += (n * m);
+			this.parts = Math.min(this.parts, this.partsMax);
+		}
+	}
+	isHoverOn() {
+		return this.systems.ho === 100;
+	}
+}</script>
+<script>class Input {
+	constructor() {
+		this.forwardBackward = 0;
+		this.leftRight 		= 0;
+		this.upDown 		= 0;
+		this.lookUp 		= false;
+		this.lookDown 		= false;
+		this.mousePosition 	= null;
+		this.keyPressed 	= false;
+		this.keyInstructions = {
+			'a':			'left',
+			65:				'left',
+			'ArrowLeft': 	'left',
+			37:				'left',
+			'd':			'right',
+			68:				'right',
+			'ArrowRight':	'right',
+			39:				'right',
+			'w':			'forward',
+			87:				'forward',
+			'ArrowUp':		'forward',
+			38:				'forward',
+			's':			'backward',
+			83:				'backward',
+			'ArrowDown':	'backward',
+			40:				'backward',
+			'r':			'up',
+			82:				'up',
+			'f':			'down',
+			70:				'down',
+			'e':			'lookUp',
+			69:				'lookUp',
+			'q':			'lookDown',
+			81:				'lookDown',
+			'z':			'zAction',
+			90:				'zAction'
+		};
+		this.anyKeyDownAction = function() {};
+		this.updateCameraHorizon = function() {};
+		this.zAction = function() {};
+	}
+
+	init(canvas, document) {
+		canvas.onmousedown	= this.detectMouseDown.bind(this);
+		canvas.onmouseup	= this.detectMouseUp.bind(this);
+		canvas.onmousemove	= this.detectMouseMove.bind(this);
+		canvas.ontouchstart	= this.detectMouseDown.bind(this);
+		canvas.ontouchend	= this.detectMouseUp.bind(this);
+		canvas.ontouchmove	= this.detectMouseMove.bind(this);
+		document.addEventListener('keydown', this.detectKeysDown.bind(this));
+		document.addEventListener('keyup', this.detectKeysUp.bind(this));
+	}
+
+	getMousePosition(e) {
+		// fix for Chrome
+		if (e.type.startsWith('touch')) {
+			return [e.targetTouches[0].pageX, e.targetTouches[0].pageY];
+		} else {
+			return [e.pageX, e.pageY];
+		}
+	}
+
+	detectMouseDown(e) {
+		this.forwardBackward = 1.;
+		this.mousePosition = this.getMousePosition(e);
+		this.anyKeyDownAction();
+		return;
+	}
+
+	detectMouseUp() {
+		this.mousePosition = null;
+		this.forwardBackward = 0;
+		this.leftRight = 0;
+		this.upDown = 0;
+		return;
+	}
+
+	detectMouseMove(e) {
+		e.preventDefault();
+		if (this.mousePosition == null) { return; }
+		if (this.forwardBackward == 0) { return; }
+
+		const currentMousePosition = this.getMousePosition(e);
+
+		this.leftRight = (this.mousePosition[0] - currentMousePosition[0]) / window.innerWidth * 2;
+		this.upDown    = (this.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 10;
+
+		const cameraHorizon  = 100 + (this.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 500;
+		this.updateCameraHorizon(cameraHorizon);
+	}
+
+	getEventKeyInstruction(e) {
+		const key = e.key || e.keyCode;
+		const instruction = this.keyInstructions[key];
+		return instruction;	
+	}
+
+	detectKeysDown(e) {
+		this.keyPressed = true;
+		switch(this.getEventKeyInstruction(e)) {
+			case 'left':
+				this.leftRight = +1.;
+				break;
+			case 'right':
+				this.leftRight = -1.;
+				break;
+			case 'forward':
+				this.forwardBackward = 1.;
+				break;
+			case 'backward':
+				this.forwardBackward = -1.;
+				break;
+			case 'up':
+				this.upDown = +2.;
+				break;
+			case 'down':
+				this.upDown = -2.;
+				break;
+			case 'lookUp':
+				this.lookUp = true;
+				break;
+			case 'lookDown':
+				this.lookDown = true;
+				break;
+			default:
+				return;
+				break;
+		}
+		this.anyKeyDownAction();
+		e.preventDefault();
+		return false;
+	}
+
+	detectKeysUp(e) {
+		switch(this.getEventKeyInstruction(e)) {
+			case 'left':
+			case 'right':
+				this.leftRight = 0;
+				break;
+			case 'forward':
+			case 'backward':
+				this.forwardBackward = 0;
+				break;
+			case 'up':
+			case 'down':
+				this.upDown = 0;
+				break;
+			case 'lookUp':
+				this.lookUp = false;
+				break;
+			case 'lookDown':
+				this.lookDown = false;
+				break;
+			case 'zAction':
+				this.zAction();
+			default:
+				return;
+				break;
+		}
+		return false;
+	}
+}</script>
+<script>var g = (function(){
+
+// ---------------------------------------------
+// Viewer information
+
+const camera = {
+	x:			512., // x position on the map
+	y:			800., // y position on the map
+	height:		78., // height of the camera
+	//heightOffset: 10, // distance above ground
+	angle:		0., // direction of the camera
+	horizon:	100., // horizon position (look up and down)
+	baseHorizon: 100.,
+	distance:	800   // distance of map
+};
+
+// ---------------------------------------------
+// Screen data
+
+const screen = {
+	canvas:		null,
+	context:	null,
+	imageData:	null,
+
+	bufArray:	null, // color data
+	buf8:		null, // the same array but with bytes
+	buf32:		null, // the same array but with 32-Bit words
+
+	backgroundColor: 0xFF400030 // 0xFFE09090
+};
+
+const ship = new Ship();
+const buttons = {};
+const elts = {};
+
+// ---------------------------------------------
+// Keyboard and mouse interaction
+
+const input = new Input();
+
+input.anyKeyDownAction = startDrawFrameLoop;
+input.updateCameraHorizon = (h) => camera.horizon = h;
+input.zAction = () => setGravityOn(!gravityOn);
+
+let gravityAcceleration = 0;
+let gravityOn = true;
+let updateRunning = false;
+let time = new Date().getTime();
+let timeLastFrame = new Date().getTime(); // for fps display
+let frames = 0;
+
+init();
+
+return {
+	camera, map, screen, input,
+	setGravityOn, ship
+};
+
+function setGravityOn(on) {
+	gravityOn = on;
+	startDrawFrameLoop();
+}
+
+// Update the camera for next frame. Dependent on keypresses
+function updateCamera(input) {
+	const current = new Date().getTime();
+	const movementScale = 0.03;
+	const deltaTime = current - time;
+	const deltaMovement = deltaTime * movementScale;
+	const original = {x: camera.x, y: camera.y, height: camera.height};
+	const moved = (input.forwardBackward !== 0);
+	if (moved) {
+		ship.accelerate(.1);
+	} else {
+		ship.stop();
+	}
+
+	if (input.leftRight != 0) {
+		camera.angle += input.leftRight * 0.1 * deltaMovement;
+	}
+	if (moved) {
+		const spd = input.forwardBackward * (ship.speed / 20);
+		camera.x -= spd * Math.sin(camera.angle) * deltaMovement;
+		camera.y -= spd * Math.cos(camera.angle) * deltaMovement;
+	}
+	if (input.upDown != 0) {
+		camera.height += input.upDown * deltaMovement;
+	}
+	if (input.lookUp) {
+		camera.horizon += 4 * deltaMovement;
+	}
+	if (input.lookDown) {
+		camera.horizon -= 4 * deltaMovement;
+	}
+	
+	// Collision detection. Don't fly below the surface.
+	const minZ = getMapZ(camera.x, camera.y) + ship.getHeightOffset();
+	if (gravityOn && camera.height > minZ) {
+		const m = 0.0002 / (ship.isHoverOn() ? 2 : 1)
+		gravityAcceleration -= 0.0002 * deltaTime;
+		camera.height += gravityAcceleration * deltaTime;
+	} else {
+		gravityAcceleration = 0;
+	}
+	if (minZ > camera.height) {
+		camera.height = minZ;
+	}
+	if (minZ === camera.height && gravityOn && moved) {
+		if (original.height === camera.height) { // level
+			camera.horizon += (camera.horizon - camera.baseHorizon) / -10;
+			camera.horizon = Math.round(camera.horizon);
+		} else {
+			camera.horizon += (camera.height - original.height) * 3;
+		}
+	}
+
+	time = current;
+}
+
+function getMapZ(x, y) {
+	const mapOffset = ((Math.floor(y) & (map.width-1)) << map.shift) + (Math.floor(x) & (map.height-1))|0;
+	return map.altitude[mapOffset];
+}
+
+// ---------------------------------------------
+// Fast way to draw vertical lines
+
+function drawVerticalLine(x, ytop, ybottom, col) {
+	x = x|0;
+	ytop = ytop|0;
+	ybottom = ybottom|0;
+	col = col|0;
+	const buf32 = screen.buf32;
+	const screenWidth = screen.canvas.width|0;
+	if (ytop < 0) { ytop = 0; }
+	if (ytop > ybottom) { return; }
+
+	// get offset on screen for the vertical line
+	let offset = ((ytop * screenWidth) + x)|0;
+	for (let k = ytop|0; k < ybottom|0; k=k+1|0) {
+		buf32[offset|0] = col|0;
+		offset = offset + screenWidth|0;
+	}
+}
+
+// ---------------------------------------------
+// Basic screen handling
+
+function drawBackground() {
+	const buf32 = screen.buf32;
+	const color = screen.backgroundColor|0;
+	for (let i = 0; i < buf32.length; i++) {
+		buf32[i] = color|0;
+	}
+}
+
+// Show the back buffer on screen
+function flip() {
+	screen.imageData.data.set(screen.buf8);
+	screen.context.putImageData(screen.imageData, 0, 0);
+}
+
+// ---------------------------------------------
+// The main render routine
+
+function render(screen, map, camera) {
+	const mapWidthPeriod = map.width - 1;
+	const mapHeightPeriod = map.height - 1;
+
+	const screenWidth = screen.canvas.width|0;
+	const sinAng = Math.sin(camera.angle);
+	const cosAng = Math.cos(camera.angle);
+
+	const hiddenY = new Int32Array(screenWidth);
+	for(let i=0; i<screen.canvas.width|0; i=i+1|0) {
+		hiddenY[i] = screen.canvas.height;
+	}
+
+	let deltaZ = 1.;
+
+	// draw from front to back
+	for(let z=1; z<camera.distance; z+=deltaZ) {
+		// 90 degree field of view
+		let plx =  -cosAng * z - sinAng * z;
+		let ply =   sinAng * z - cosAng * z;
+		const prx =   cosAng * z - sinAng * z;
+		const pry =  -sinAng * z - cosAng * z;
+
+		const dx = (prx - plx) / screenWidth;
+		const dy = (pry - ply) / screenWidth;
+		plx += camera.x;
+		ply += camera.y;
+		const invz = 1. / z * 240.;
+		for(let i=0; i<screenWidth|0; i=i+1|0) {
+			const mapOffset = ((Math.floor(ply) & mapWidthPeriod) << map.shift) + (Math.floor(plx) & mapHeightPeriod)|0;
+			let heightOnScreen = (camera.height - map.altitude[mapOffset]) * invz + camera.horizon|0;
+			drawVerticalLine(i, heightOnScreen|0, hiddenY[i], map.color[mapOffset]);
+			if (heightOnScreen < hiddenY[i]) {
+				hiddenY[i] = heightOnScreen;
+			}
+			plx += dx;
+			ply += dy;
+		}
+		deltaZ += 0.005;
+	}
+}
+
+function interactWithDepots(t) {
+	let nearbyDepot;
+	ship.distanceToDepots.length = 0;
+	map.depots.forEach((depot, i) => {
+		let d = distanceBetweenPoints(depot.x, depot.y, camera.x, camera.y);
+		ship.distanceToDepots.push(Math.round(d));
+		if (d <= (depot.radius * 1.5)) {
+			nearbyDepot = depot;
+		}
+	});
+	if (nearbyDepot && ship.loading === nearbyDepot.type) {
+		const amount = t * 3;
+		nearbyDepot.quantity -= amount;
+		ship.load(amount);
+	}
+}
+
+function distanceBetweenPoints(x1, y1, x2, y2) {
+	return Math.sqrt( Math.pow( (x1 - x2), 2) + Math.pow( (y1 - y2), 2) );
+}
+
+
+// ---------------------------------------------
+// draw the next frame
+
+function drawFrame() {
+	updateRunning = true;
+	updateCamera(input);
+	drawBackground();
+	render(screen, map, camera);
+	flip();
+	frames++;
+
+	if (!input.keyPressed) {
+		updateRunning = false;
+	} else {
+		window.setTimeout(drawFrame, 0);
+	}
+}
+
+function startDrawFrameLoop() {
+	if (!updateRunning) {
+		time = new Date().getTime();
+		drawFrame();
+	}
+}
+
+function updateLoop() {
+	updateShip();
+	let t = ship.advance();
+	interactWithDepots(t);	
+}
+
+function updateShip() {
+	buttons.ds.className = ship.solarPanelsOpen ? 'on' : 'off';
+	buttons.so.className = ship.getSystemButtonClass('so');
+	buttons.ca.className = ship.getSystemButtonClass('ca');
+	buttons.fu.className = ship.getSystemButtonClass('fu');
+	buttons.ov.className = ship.getSystemButtonClass('ov');
+	buttons.ho.className = ship.getSystemButtonClass('ho');
+	buttons.ro.className = ship.getSystemButtonClass('ro');
+	buttons.loadFuel.className = ship.loading === 'fuel' ? 'working' : 'off';
+	buttons.loadParts.className = ship.loading === 'parts' ? 'working' : 'off';
+	buttons.rockets.className = gravityOn ? 'off' : 'on';
+	elts.energyRate.innerHTML = Math.floor(ship.getEnergyRate());
+	elts.energy.innerHTML = Math.floor(ship.energy);
+	elts.repairInfo.innerHTML = ship.getRepairInfo();
+	elts.speed.innerHTML = Math.round(ship.speed * 10)/10;
+	elts.fuel.innerHTML = Math.floor(ship.fuel);
+	elts.parts.innerHTML = Math.floor(ship.parts);
+	elts.depotDistance.innerHTML = 'Depots: ' + ship.distanceToDepots.join(' | ');
+	elts.ship.className = ship.energy > 0 ? 'powered' : 'offline';
+}
+
+// ---------------------------------------------
+
+function onResizeWindow() {
+	setupScreen();
+}
+
+function setupScreen() {
+	screen.canvas = document.getElementById('terrain');
+
+	const aspect = window.innerWidth / window.innerHeight;
+
+	screen.canvas.width = window.innerWidth<800?window.innerWidth:800;
+	screen.canvas.height = screen.canvas.width / aspect;
+
+	if (screen.canvas.getContext) {
+		screen.context = screen.canvas.getContext('2d');
+		screen.imageData = screen.context.createImageData(screen.canvas.width, screen.canvas.height);
+		screen.canvas.style.filter = 'blur(20px)';
+		// screen.context.filter = 'blur(4px)';
+	}
+
+	screen.bufArray = new ArrayBuffer(screen.imageData.width * screen.imageData.height * 4);
+	screen.buf8     = new Uint8Array(screen.bufArray);
+	screen.buf32    = new Uint32Array(screen.bufArray);
+	drawFrame();
+}
+
+function setupDashboard() {
+	let e = (x) => document.querySelector(x);
+	buttons.ds = e('#deploy-solar');
+	buttons.so = e('#sys-so button');
+	buttons.ca = e('#sys-ca button');
+	buttons.fu = e('#sys-fu button');
+	buttons.ov = e('#sys-ov button');
+	buttons.ho = e('#sys-ho button');
+	buttons.ro = e('#sys-ro button');
+	buttons.ds.onclick = () => { ship.deploySolar(); updateShip(); };
+	buttons.so.onclick = () => ship.repair('so');
+	buttons.ca.onclick = () => ship.repair('ca');
+	buttons.fu.onclick = () => ship.repair('fu');
+	buttons.ov.onclick = () => ship.repair('ov');
+	buttons.ho.onclick = () => ship.repair('ho');
+	buttons.ro.onclick = () => ship.repair('ro');
+	buttons.loadFuel = e('#load-fuel');
+	buttons.loadParts = e('#load-parts');
+	buttons.loadFuel.onclick = () => { ship.setLoading('fuel'); };
+	buttons.loadParts.onclick = () => { ship.setLoading('parts'); };
+	buttons.rockets = e('#rockets');
+	buttons.rockets.onclick = () => {
+		if (ship.systems.ro === 100) {
+			setGravityOn(!gravityOn);
+		}
+		if (ship.fuel >= 255 && ship.systems.ro === 100) {
+			alert("You blast off! YOU WIN!");
+		}
+	};
+	elts.ship = e('#ship');
+	elts.energy = e('#energy');
+	elts.energyRate = e('#energy-rate');
+	elts.repairInfo = e('#repair-info');
+	elts.speed = e('#speed');
+	elts.fuel = e('#fuel-gauge');
+	elts.parts = e('#parts-gauge');
+	elts.depotDistance = e('#depot-distance');
+
+	elts.splash = e('#splash');
+	elts.splash.onclick = () => {
+		screen.canvas.style.filter = 'blur(1px)';
+		document.body.classList.remove('splash');
+	};
+	elts.subTitle = e('#sub-title');
+	elts.subTitle.innerHTML = 'Loading...';
+}
+
+function init() {
+	setupDashboard();
+	map.setup();
+	setupScreen();
+	drawFrame();
+
+	// set event handlers for keyboard, mouse, touchscreen and window resize
+	const canvas = document.getElementById("terrain");
+	input.init(canvas, document);
+
+	window.onresize = onResizeWindow;
+	window.setInterval(updateFramesPerSecond, 2000);
+	window.setInterval(updateLoop, 20);
+	startDrawFrameLoop();
+	elts.subTitle.innerHTML = 'All Systems Offline';
+}
+
+function updateFramesPerSecond() {
+	const current = new Date().getTime();
+	document.getElementById('fps').innerText = (frames / (current-timeLastFrame) * 1000).toFixed(1) + " fps";
+	frames = 0;
+	timeLastFrame = current;	
+}
+
+
+})();</script>
+
+</body>
+</html>
