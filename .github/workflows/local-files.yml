@@ -26,7 +26,7 @@ concurrency:
 jobs:
   play:
     runs-on: ubuntu-latest
-    # 135 files, several of them tens of megabytes, each opened in its own tab.
+    # 129 files, several of them tens of megabytes, each opened in its own tab.
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -36,12 +36,7 @@ jobs:
       - run: npx playwright install chromium --with-deps
       - name: Serve the site
         run: python3 -m http.server 8765 --bind 127.0.0.1 &
-      - name: Open a slice of the local files
-        env:
-          # The pack is opened every run; the imported files are sampled, so a
-          # run stays under the job timeout and the whole library is covered
-          # over a handful of runs.
-          PROBE_MAX: 420
+      - name: Open every local file
         run: |
           sleep 2
           node scripts/probe-files.mjs; true
