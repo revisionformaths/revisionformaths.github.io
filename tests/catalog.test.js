@@ -644,7 +644,30 @@ check(
   })()
 );
 check("offline support is implemented as a static service worker", fs.existsSync(path.join(ROOT, "sw.js")) && /addEventListener\("fetch"/.test(fs.readFileSync(path.join(ROOT, "sw.js"), "utf8")));
-check("offline copies are user-selected, not bulk downloaded", /CACHE_GAME/.test(fs.readFileSync(path.join(ROOT, "sw.js"), "utf8")) && /Save offline/.test(filesPage));
+check(
+  "one file can be saved offline",
+  /CACHE_GAME/.test(fs.readFileSync(path.join(ROOT, "sw.js"), "utf8")) && /Save offline/.test(filesPage)
+);
+/* The site is expected to keep working when the address is blocked, so a
+   navigation a browser has already seen is answered from its own cache: the
+   request never leaves the machine, and the address on screen never changes. */
+check(
+  "a page this browser has opened is served from its own cache",
+  (() => {
+    const src = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+    const navigate = src.indexOf('request.mode === "navigate"');
+    const branch = navigate === -1 ? "" : src.slice(navigate, navigate + 1200);
+    return /cache\.match\(request, \{ ignoreSearch: true \}\)/.test(branch) &&
+      /cached \|\| fresh/.test(branch) &&
+      /fetch\(request\)/.test(branch);
+  })()
+);
+check(
+  "every file can be kept on the device in one go",
+  /data-save-all/.test(filesPage) &&
+    /data-save-all/.test(fs.readFileSync(path.join(ROOT, "assets/js/pwa.js"), "utf8")) &&
+    /CACHE_GAME/.test(fs.readFileSync(path.join(ROOT, "assets/js/pwa.js"), "utf8"))
+);
 check("problem reports go to GitHub issues", /github\.com\/funclassroom\/funclassroom\.github\.io\/issues/.test(index) && fs.existsSync(path.join(ROOT, ".github/ISSUE_TEMPLATE/bug_report.md")));
 check("the main page offers local-data export and import", /data-export/.test(index) && /data-import/.test(index));
 check("the old game files are gone", !fs.existsSync(path.join(ROOT, "assets/js/games")));

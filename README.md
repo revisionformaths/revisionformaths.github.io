@@ -27,6 +27,28 @@ its screenshot under `assets/img/pack/`, add one entry to the JSON, then run
 **Minecraft is not bundled.** It was a 76 MB single file — more than every
 other title put together — so it was removed and it is not on the site at all.
 
+## When the address itself is blocked
+
+A filter that refuses this domain refuses the *first* visit, and nothing on this
+side can change that — no cloak, no proxy, no keyword trick, and none of those
+are wanted. What the site can do is make sure a browser only ever needs that
+first visit once.
+
+- **`sw.js` answers navigations from the browser's own cache** and refreshes
+  the page behind the scenes. After one successful load, opening
+  `index.html` or `files.html` never leaves the machine, so a block page never
+  gets the chance to appear — and the address in the bar never changes.
+- **Save all for offline** on `files.html` walks the whole list and keeps all
+  129 files in Cache Storage (about 530 MB, once). After that the entire
+  library plays with the wi-fi off, or with the network answering something
+  else entirely.
+- The copies live in the browser, not on a server: there is no account, no
+  proxy and nothing to log in to.
+
+The honest limit: a browser with no copy yet, or one that has cleared its site
+data, still needs the address once. If a school blocks it, the way in is the
+school's own allow-list for a classroom resource.
+
 ### One runtime, not twenty-six
 
 The pack exports every Flash title as a self-contained page, so 26 of them each
