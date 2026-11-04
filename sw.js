@@ -1,5 +1,5 @@
 /* GitHub Pages-only offline shell and explicitly saved local games. */
-const VERSION = "classroom-shell-v17";
+const VERSION = "classroom-shell-v18";
 const GAME_CACHE = "classroom-offline-games-v1";
 /* Ad and auction networks that came bundled inside some of the game files
    (doubleclick, googlesyndication and adnxs are all present today). Blocking
@@ -43,6 +43,22 @@ const BLOCKED_HOSTS = [
 ];
 const isBlocked = (host) => BLOCKED_HOSTS.some((blocked) => host === blocked || host.slice(-blocked.length - 1) === "." + blocked);
 
+/* Last resort: shown only if a page was never stored and the network answers
+   with nothing usable. Same skin, same way back. */
+const OFFLINE_PAGE = [
+  "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">",
+  "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
+  "<title>Saved later - Classroom</title><style>",
+  "body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#fbfbfc;color:#16181d;",
+  "display:grid;place-items:center;min-height:100vh;padding:24px}",
+  "main{max-width:34rem}a{color:#1a6ee0}</style></head><body><main>",
+  "<h1>This page is not on this device yet.</h1>",
+  "<p>Open the site once with the network on, then use <b>Save all for offline</b> ",
+  "on the files page and every G@M£$ comes with it.</p>",
+  "<p><a href=\"./\">Back to the list</a></p>",
+  "</main></body></html>",
+].join("");
+
 const SHELL = ["./", "index.html", "files.html", "manifest.webmanifest", "assets/css/app.css", "assets/js/local-games.js", "assets/js/app.js", "assets/js/feedback.js", "assets/js/pwa.js", "assets/js/attribution.js", "assets/img/app-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -74,16 +90,41 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).then((response) => {
+    // A page this browser has already opened is served from its own cache and
+    // refreshed in the background. That is the promise the site makes: once it
+    // has been loaded, it opens whether the network is slow, absent, or
+    // answering with a page that is not this one. The address is unchanged and
+    // nothing is disguised - the browser simply does not ask again.
+    const fresh = fetch(request).then((response) => {
       if (response && response.ok) caches.open(VERSION).then((cache) => cache.put(request, response.clone()));
       return response;
-    }).catch(() => caches.match(request, { ignoreSearch: true }).then((cached) => cached || caches.match(new URL("index.html", scope).href))));
+    }).catch(() => null);
+    event.waitUntil(fresh);
+    event.respondWith(caches.open(VERSION).then((cache) =>
+      cache.match(request, { ignoreSearch: true }).then((cached) =>
+        cached || fresh.then((response) =>
+          response ||
+          cache.match(new URL("index.html", scope).href, { ignoreSearch: true }).then((shell) =>
+            shell || new Response(OFFLINE_PAGE, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })
+          )
+        )
+      )
+    ));
     return;
   }
-  event.respondWith(caches.match(request, { ignoreSearch: true }).then((cached) => cached || fetch(request).then((response) => {
-    if (response && response.ok) caches.open(VERSION).then((cache) => cache.put(request, response.clone()));
-    return response;
-  })));
+  // Same rule for the page's own files: answer from the copy this browser
+  // already has and refresh it behind the scenes, so a deploy reaches people
+  // on their next visit instead of never.
+  event.respondWith(caches.open(VERSION).then((cache) =>
+    cache.match(request, { ignoreSearch: true }).then((cached) => {
+      const fresh = fetch(request).then((response) => {
+        if (response && response.ok) cache.put(request, response.clone());
+        return response;
+      }).catch(() => null);
+      if (cached) { event.waitUntil(fresh); return cached; }
+      return fresh.then((response) => response || Response.error());
+    })
+  ));
 });
 
 self.addEventListener("message", (event) => {
