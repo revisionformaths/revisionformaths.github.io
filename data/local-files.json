@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Source of truth for files.html. scripts/build-local-list.py renders assets/js/local-games.js from it. Every entry is a file under assets/games/.",
+  "note": "Source of truth for both pages. scripts/build-local-list.py renders assets/js/local-games.js from it. Every entry is a file under assets/games/; entries may name a series (with their place in it) and mark a title two people can play on one keyboard.",
   "entries": [
     {
       "file": "assets/games/2048.html",
@@ -9,7 +9,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "tile-2048",
+      "order": 1
     },
     {
       "file": "assets/games/bit-planes.htm",
@@ -171,7 +173,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "retro-bowl",
+      "order": 1
     },
     {
       "file": "assets/games/ovo.html",
@@ -180,7 +184,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "ovo",
+      "order": 1
     },
     {
       "file": "assets/games/stickman-hook.html",
@@ -234,7 +240,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "fireboy-watergirl",
+      "order": 1,
+      "players": 2
     },
     {
       "file": "assets/games/bad-piggies.html",
@@ -279,7 +288,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "random-sports",
+      "order": 1,
+      "players": 2
     },
     {
       "file": "assets/games/jumping-shell.html",
@@ -306,7 +318,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "random-sports",
+      "order": 2,
+      "players": 2
     },
     {
       "file": "assets/games/idle-breakout.html",
@@ -333,7 +348,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "ovo",
+      "order": 2
     },
     {
       "file": "assets/games/unicycle-hero.html",
@@ -351,7 +368,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "tile-2048",
+      "order": 2
     },
     {
       "file": "assets/games/trivia-crack.html",
@@ -369,7 +388,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "big-tower-tiny-square",
+      "order": 2
     },
     {
       "file": "assets/games/google-baseball.html",
@@ -396,7 +417,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "circloo",
+      "order": 1
     },
     {
       "file": "assets/games/monster-tracks.html",
@@ -414,7 +437,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/choppy-orc.html",
@@ -450,7 +474,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "random-sports",
+      "order": 3,
+      "players": 2
     },
     {
       "file": "assets/games/big-tower-tiny-square.html",
@@ -459,7 +486,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "big-tower-tiny-square",
+      "order": 1
     },
     {
       "file": "assets/games/candy-crush.html",
@@ -477,7 +506,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "random-sports",
+      "order": 4,
+      "players": 2
     },
     {
       "file": "assets/games/state-io.html",
@@ -513,7 +545,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "big-tower-tiny-square",
+      "order": 3
     },
     {
       "file": "assets/games/plonky.html",
@@ -549,7 +583,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/get-on-top.html",
@@ -558,7 +593,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/draw-climber.html",
@@ -657,7 +693,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/retro-highway.html",
@@ -675,7 +712,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "moto-x3m",
+      "order": 2
     },
     {
       "file": "assets/games/circloo-2.html",
@@ -684,7 +723,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "circloo",
+      "order": 2
     },
     {
       "file": "assets/games/moto-x3m-spooky-land.html",
@@ -693,7 +734,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "moto-x3m",
+      "order": 3
     },
     {
       "file": "assets/games/bacon-may-die.html",
@@ -711,7 +754,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "big-tower-tiny-square",
+      "order": 4
     },
     {
       "file": "assets/games/temple-of-boom.html",
@@ -738,7 +783,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "parking-fury",
+      "order": 1
     },
     {
       "file": "assets/games/chess.html",
@@ -747,7 +794,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/bubble-shooter.html",
@@ -765,7 +813,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/bloons-td.html",
@@ -774,7 +823,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "bloons",
+      "order": 1
     },
     {
       "file": "assets/games/fireboy-and-watergirl-2.html",
@@ -783,7 +834,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "fireboy-watergirl",
+      "order": 2,
+      "players": 2
     },
     {
       "file": "assets/games/fireboy-and-watergirl-3.html",
@@ -792,7 +846,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "fireboy-watergirl",
+      "order": 3,
+      "players": 2
     },
     {
       "file": "assets/games/fireboy-and-watergirl-4.html",
@@ -801,7 +858,10 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "fireboy-watergirl",
+      "order": 4,
+      "players": 2
     },
     {
       "file": "assets/games/moto-x3m-winter.html",
@@ -810,7 +870,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "moto-x3m",
+      "order": 1
     },
     {
       "file": "assets/games/bloons-td-2.html",
@@ -819,7 +881,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "bloons",
+      "order": 2
     },
     {
       "file": "assets/games/bloons-td-3.html",
@@ -828,7 +892,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "bloons",
+      "order": 3
     },
     {
       "file": "assets/games/bloons-td-4.html",
@@ -837,7 +903,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "bloons",
+      "order": 4
     },
     {
       "file": "assets/games/worlds-hardest-game.html",
@@ -846,7 +914,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "worlds-hardest-game",
+      "order": 1
     },
     {
       "file": "assets/games/worlds-hardest-game-2.html",
@@ -855,7 +925,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "worlds-hardest-game",
+      "order": 2
     },
     {
       "file": "assets/games/worlds-hardest-game-3.html",
@@ -864,7 +936,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "worlds-hardest-game",
+      "order": 3
     },
     {
       "file": "assets/games/riddle-school.html",
@@ -873,7 +947,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "riddle-school",
+      "order": 1
     },
     {
       "file": "assets/games/riddle-school-2.html",
@@ -882,7 +958,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "riddle-school",
+      "order": 2
     },
     {
       "file": "assets/games/dadish-3.html",
@@ -909,7 +987,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/tag.html",
@@ -990,7 +1069,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/1-on-1-tennis.html",
@@ -999,7 +1079,8 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "players": 2
     },
     {
       "file": "assets/games/sm-64.html",
@@ -1026,7 +1107,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "retro-bowl",
+      "order": 2
     },
     {
       "file": "assets/games/age-of-war.html",
@@ -1134,7 +1217,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "parking-fury",
+      "order": 2
     },
     {
       "file": "assets/games/idle-dice.html",
@@ -1152,7 +1237,9 @@
       "source": {
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
-      }
+      },
+      "series": "parking-fury",
+      "order": 3
     },
     {
       "file": "assets/games/dadish-2.html",
@@ -1162,6 +1249,68 @@
         "kind": "pack",
         "repo": "https://github.com/CoolDude2349/Offline-HTML-Games-Pack"
       }
+    }
+  ],
+  "series": [
+    {
+      "id": "ovo",
+      "name": "OvO",
+      "line": "Parkour trials, in order."
+    },
+    {
+      "id": "fireboy-watergirl",
+      "name": "Fireboy & Watergirl",
+      "line": "Two players, four temples."
+    },
+    {
+      "id": "bloons",
+      "name": "Bloons TD",
+      "line": "Four rounds of tower defence."
+    },
+    {
+      "id": "moto-x3m",
+      "name": "Moto X3M",
+      "line": "Three stunt courses."
+    },
+    {
+      "id": "big-tower-tiny-square",
+      "name": "Big Tower Tiny Square",
+      "line": "Four towers, one tiny square."
+    },
+    {
+      "id": "worlds-hardest-game",
+      "name": "World's Hardest Game",
+      "line": "Three tests of patience."
+    },
+    {
+      "id": "riddle-school",
+      "name": "Riddle School",
+      "line": "Two ways out."
+    },
+    {
+      "id": "parking-fury",
+      "name": "Parking Fury",
+      "line": "Three car parks."
+    },
+    {
+      "id": "retro-bowl",
+      "name": "Retro Bowl",
+      "line": "The Bowl and the college years."
+    },
+    {
+      "id": "circloo",
+      "name": "circloO",
+      "line": "Two circles of momentum."
+    },
+    {
+      "id": "tile-2048",
+      "name": "2048",
+      "line": "Two ways to reach the tile."
+    },
+    {
+      "id": "random-sports",
+      "name": "Random sports",
+      "line": "Four wobbly two-player sports."
     }
   ]
 }

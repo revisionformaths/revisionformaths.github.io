@@ -44,13 +44,18 @@
 
     <div class="search">
       <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
-      <input id="q" type="search" placeholder="Search titles" autocomplete="off" spellcheck="false" aria-label="Search titles">
+      <input id="q" type="search" placeholder="Search titles" autocomplete="off" spellcheck="false" aria-label="Search titles" aria-keyshortcuts="/">
       <button type="button" class="search-clear" data-search-clear hidden aria-label="Clear search">
         <svg class="ico" aria-hidden="true"><use href="#i-close"/></svg>
       </button>
     </div>
 
     <div class="bar-actions">
+      <button type="button" class="btn btn-kbd" data-palette-open aria-keyshortcuts="Control+K Meta+K" title="Jump to any G@M£$ or action (Ctrl or Cmd + K)">
+        <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+        <span>Jump</span>
+        <kbd>⌘K</kbd>
+      </button>
       <a class="btn btn-local" href="files.html" title="One hundred and twenty-nine G@M£$ that are just files — nothing to block">
         <svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>
         <span>100% Unblocked</span>
@@ -76,13 +81,51 @@
     refuse, no publisher to wait for and nothing a filter can block.
   </p>
 
+  <section class="today" aria-label="Today">
+    <article class="daily-card" data-daily hidden>
+      <img class="daily-art" data-daily-thumb alt="" width="168" height="126" decoding="async">
+      <div class="daily-body">
+        <p class="daily-kicker">
+          <svg class="ico" aria-hidden="true"><use href="#i-spark"/></svg>
+          G@M£$ of the day
+          <span class="daily-streak" data-daily-streak></span>
+        </p>
+        <h2 data-daily-title></h2>
+        <p class="daily-line" data-daily-line></p>
+        <div class="daily-actions">
+          <button type="button" class="btn btn-dark" data-daily-play>
+            <svg class="ico" aria-hidden="true"><use href="#i-play"/></svg>
+            <span>Play today's pick</span>
+          </button>
+          <span class="daily-state" data-daily-state role="status" aria-live="polite"></span>
+        </div>
+      </div>
+    </article>
+
+    <article class="shelf-card" aria-label="Your shelf">
+      <p class="shelf-kicker">
+        <svg class="ico" aria-hidden="true"><use href="#i-shelf"/></svg>
+        Your shelf
+      </p>
+      <p class="shelf-big"><b data-shelf-played>0</b> of <span data-shelf-total>129</span> played</p>
+      <div class="shelf-bar" role="progressbar" aria-label="Titles played" aria-valuemin="0" aria-valuemax="129" aria-valuenow="0" data-shelf-bar>
+        <span data-shelf-fill></span>
+      </div>
+      <p class="shelf-meta" data-shelf-meta>Nothing played yet — the first tile is a good start.</p>
+      <details class="shelf-more" data-shelf-more>
+        <summary>Collections</summary>
+        <div class="shelf-series" data-shelf-series></div>
+      </details>
+    </article>
+  </section>
+
   <div class="toolbar">
     <h1>All files <span class="count" data-count>0</span><span class="shown" data-shown></span></h1>
     <div class="sorts" role="group" aria-label="Sort by">
-      <button type="button" data-sort="hot" aria-pressed="true">Popular</button>
-      <button type="button" data-sort="top" aria-pressed="false">Top rated</button>
+      <button type="button" data-sort="hot" aria-pressed="true">Most played</button>
+      <button type="button" data-sort="top" aria-pressed="false">Series</button>
       <button type="button" data-sort="az" aria-pressed="false">A–Z</button>
-      <button type="button" data-sort="low" aria-pressed="false">Least played</button>
+      <button type="button" data-sort="low" aria-pressed="false">Unplayed first</button>
     </div>
   </div>
 
@@ -114,6 +157,8 @@
     <div class="recent-list" data-recent-list></div>
   </section>
 
+  <div class="collections" data-collections hidden aria-label="Collections"></div>
+
   <div class="tags" data-tags hidden></div>
 
   <div class="filter-bar" aria-label="Filter titles">
@@ -134,7 +179,7 @@
 
   <details class="site-help">
     <summary>How this page works</summary>
-    <p>Search titles or descriptions, then filter by G@M£$ type. Press <kbd>/</kbd> to search and <kbd>Esc</kbd> to close the player. Saved titles and history stay in this browser; use Export/Import to move them between devices.</p>
+    <p>Search titles or descriptions, then filter by G@M£$ type or collection. Press <kbd>/</kbd> to search, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to jump to anything, <kbd>R</kbd> for a random one, and <kbd>Esc</kbd> to close the player. In the player, <kbd>F</kbd> is fullscreen, <kbd>S</kbd> saves the title and <kbd>C</kbd> copies a link to it. Saved titles and history stay in this browser; use Export/Import to move them between devices.</p>
     <p>Every G@M£$ is an HTML file served with this site, so nothing from another site is loaded here and any of them can be saved to this browser for offline play. This site has no account and no server-side storage; saved picks and history stay in this browser. Microsoft Clarity measures page visits and sessions. The page itself is a static file served from GitHub Pages.</p>
   </details>
   <section id="grid" class="grid" aria-label="Titles"></section>
@@ -182,6 +227,8 @@
   </p>
 </footer>
 
+<div class="toast" data-toast hidden role="status" aria-live="polite"></div>
+
 <div class="player" data-player hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="player-title">
   <div class="player-top">
     <button type="button" class="pbtn" data-close aria-label="Close">
@@ -193,11 +240,16 @@
       <span class="player-source" data-source></span>
       <span class="player-description" data-player-description></span>
       <a class="player-report" data-report-game target="_blank" rel="noopener noreferrer">Report this title on GitHub</a>
+      <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
     </div>
     <div class="player-tools">
       <button type="button" class="pbtn pbtn-wide" data-next hidden>Try another source</button>
+      <button type="button" class="pbtn pbtn-wide pbtn-series" data-next-in-series hidden></button>
       <button type="button" class="pbtn" data-player-fav aria-label="Save" aria-pressed="false">
         <svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>
+      </button>
+      <button type="button" class="pbtn" data-copy-link aria-label="Copy a link to this title">
+        <svg class="ico" aria-hidden="true"><use href="#i-link"/></svg>
       </button>
       <a class="pbtn" data-external target="_blank" rel="noopener noreferrer" aria-label="Open in a new tab">
         <svg class="ico" aria-hidden="true"><use href="#i-external"/></svg>
@@ -228,6 +280,21 @@
   </div>
 </div>
 
+<div class="palette" data-palette hidden>
+  <div class="palette-backdrop" data-palette-close></div>
+  <div class="palette-box" role="dialog" aria-modal="true" aria-label="Jump to a title or action">
+    <div class="palette-search">
+      <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="text" data-palette-input autocomplete="off" spellcheck="false"
+             placeholder="Jump to a G@M£$ or an action…" aria-label="Jump to a title or action"
+             role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </div>
+    <ul class="palette-list" id="palette-list" data-palette-list role="listbox" aria-label="Matches"></ul>
+    <p class="palette-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> anywhere</p>
+  </div>
+</div>
+
 <svg class="sprite" aria-hidden="true" focusable="false">
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></symbol>
@@ -237,6 +304,9 @@
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 15v5h-5M4 15v5h5M20 9V4h-5"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
+  <symbol id="i-shelf" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 13h16M9 4v9M15 4v9"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></symbol>
 </svg>
 
 <script src="assets/js/local-games.js?v=5"></script>

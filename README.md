@@ -17,12 +17,37 @@ grid of playable titles.
 
 `index.html` is the wall: every file, searchable, sortable, with saves and
 history kept in the browser. `files.html` is the same library with the
-offline extras — **Save offline**, install as an app, and a card per file.
+offline extras — **Save offline**, **Save all for offline**, install as an
+app, and a card per file.
+
+Three things sit above the grid:
+
+- **G@M£$ of the day** — one file picked from the date alone, so it is the
+  same for everyone that day and changes at midnight without a server. Opening
+  it starts or continues a daily streak, and the best streak is kept.
+- **Your shelf** — how many of the 129 this browser has opened, a progress
+  bar, plays, saves, and a per-series tick list. Everything is local.
+- **Collections** — twelve curated series (OvO, Fireboy & Watergirl, Bloons TD,
+  Moto X3M, the Tiny Square towers, World's Hardest Game, Riddle School,
+  Parking Fury, Retro Bowl, circloO, 2048 and the Random sports), plus a
+  **2 players** filter. A tile that is part of a series carries its position,
+  and the player offers **Next: …** so a series can be played in order.
+
+**Jump** (or <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>) opens a command
+palette over any page: type a title and press Enter, or pick an action —
+random, today's pick, two players, the shelf, dark mode. Nothing about it
+touches the network.
 
 Both pages read `assets/js/local-games.js`, which is **generated** from
 `data/local-files.json`. To add a G@M£$: drop the file under `assets/games/`,
 its screenshot under `assets/img/pack/`, add one entry to the JSON, then run
 `python3 scripts/build-local-list.py`. Nothing else needs touching.
+
+An entry can also carry `"players": 2` (two people on one keyboard) and
+`"series": "<id>"` with `"order": <n>`; the series itself is named once in the
+top-level `series` list with an id, a name and a one-line description. Both
+fields are optional, and a series only appears when at least two of its files
+are actually in the folder.
 
 **Minecraft is not bundled.** It was a 76 MB single file — more than every
 other title put together — so it was removed and it is not on the site at all.
@@ -197,16 +222,22 @@ the files back.
 
 ## The page
 
-- Search titles and descriptions (multi-word: "car park" finds "Car Parking"), plus Popular / Top rated / A–Z / Least played
+- Search titles and descriptions (multi-word: "car park" finds "Car Parking"; "2p" or "two player" finds the two-player titles)
+- Sorts that mean something for a local library: **Most played** (by this browser), **Series**, **A–Z**, **Unplayed first**
 - G@M£$-type filters for action, puzzle, racing, sports, strategy and arcade
+- **Collections** filter by series, and a **2 players** filter for titles two people can share a keyboard on
+- **G@M£$ of the day**, with a daily streak; **Your shelf** counts what has been played and ticks off each series
+- **Jump** — a command palette on Ctrl/⌘+K for every title and every common action
+- Every tile says whether it takes two players and where it sits in a series; the player offers the next part
 - Display options for dark mode, larger text and high contrast; reduced-motion follows the operating system setting
 - "More like what you played" — suggestions derived on the device from titles
   you already opened, with nothing sent anywhere
 - Save straight from the player, not just the tile
+- **Copy link** in the player (key `C`) makes a `#p=` address for exactly that title
 - 120 tiles to a page, with a **Show more** button, so 129 cards paint in one
   frame
 - Save titles, and a row of the last eight you opened
-- `#p=<slug>` deep links, `Esc` to close, `/` to search, `` ` `` for a panic exit
+- `#p=<slug>` deep links, `Esc` to close, `/` to search, `R` for a random one, `F`/`S`/`C` in the player, `` ` `` for a panic exit
 - Tab cloaks (Classroom, Google, Docs), a blank-tab launcher and a quick exit
 - **100% Unblocked** in the header: the files page — the same 129 titles, the
   same list, with filter and Surprise me
@@ -221,6 +252,8 @@ the files back.
   something is broken or request a G@M£$, and it becomes a GitHub issue with
   the page, browser and your words already in it. Nothing is sent from the
   site, and no address is published — a free GitHub account is all it needs
+- The 404 page offers six real files, picked from the broken address, instead of a dead end
+- The installed app carries shortcuts for **All files** and a random one
 - A static GitHub Pages PWA caches the site shell; on the local-files page,
   **Save offline** downloads only the selected HTML G@M£$ — plus the shared
   runtime, if that page uses one — to this browser. They can be removed

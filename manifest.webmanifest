@@ -1,13 +1,32 @@
 {
   "name": "G@M£$ — Classroom",
   "short_name": "Classroom",
-  "description": "A searchable wall of browser G@M£$, with a collection of self-contained offline HTML G@M£$.",
+  "description": "129 self-contained HTML G@M£$, every one a file in this repository and every one playable with the wi-fi off.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f6f6f7",
   "theme_color": "#ffffff",
   "icons": [
-    { "src": "assets/img/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "assets/img/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "All files",
+      "short_name": "Files",
+      "url": "./files.html",
+      "description": "The whole offline library, and the Save all button"
+    },
+    {
+      "name": "Surprise me",
+      "short_name": "Random",
+      "url": "./files.html?random=1",
+      "description": "Open a random file"
+    }
   ]
 }
