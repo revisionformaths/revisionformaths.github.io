@@ -334,8 +334,8 @@ function titles(document) {
     const firstSlug = () => document.querySelector(".tile").getAttribute("data-id");
 
     check(
-      "the wall opens with the most played title",
-      firstSlug() === window.CATALOG.reduce((a, b) => ((b.plays || 0) > (a.plays || 0) ? b : a)).id,
+      "the wall opens in the library's own order when nothing is played yet",
+      firstSlug() === window.CATALOG[0].id,
       firstSlug()
     );
     check(
@@ -355,12 +355,13 @@ function titles(document) {
     );
 
     click(window, buttons.find((b) => b.dataset.sort === "top"));
-    const ratings = Array.from(document.querySelectorAll(".tile"))
-      .map((t) => Number(t.getAttribute("data-rating")));
+    const seriesFlags = Array.from(document.querySelectorAll(".tile"))
+      .map((t) => (window.CATALOG.find((c) => c.id === t.getAttribute("data-id")) || {}).series);
+    const firstPlain = seriesFlags.findIndex((s) => !s);
     check(
-      "top rated descends",
-      ratings.every((r, i) => i === 0 || ratings[i - 1] >= r),
-      ratings.slice(0, 5).join(",")
+      "the series sort puts every series ahead of the rest",
+      firstPlain === -1 || seriesFlags.slice(firstPlain).every((s) => !s),
+      seriesFlags.slice(0, 8).join(",")
     );
     check(
       "nothing is pinned above the sort",
@@ -758,15 +759,28 @@ function titles(document) {
 
     const random = window.Math.random;
     window.Math.random = () => 0;
+    const onScreen = document.querySelector(".tile").getAttribute("data-id");
+    const onScreenSource = window.CATALOG.find((item) => item.id === onScreen).sources[0].url;
     click(window, document.querySelector("[data-shuffle]"));
     check(
       "random opens the first file in the player",
       !document.querySelector("[data-player]").hidden &&
-        document.querySelector(".player-frame").getAttribute("src") === window.CATALOG[0].sources[0].url,
+        document.querySelector(".player-frame").getAttribute("src") === onScreenSource,
       document.querySelector(".player-frame") && document.querySelector(".player-frame").getAttribute("src")
+    );
+    press(window, "Escape");
+
+    // A random pick stays inside the filter that is on screen.
+    click(window, document.querySelector('.collections [data-collection="ovo"]'));
+    click(window, document.querySelector("[data-shuffle]"));
+    check(
+      "random respects the collection on screen",
+      /ovo/.test(document.querySelector(".player-frame").getAttribute("src")),
+      document.querySelector(".player-frame").getAttribute("src")
     );
     window.Math.random = random;
     press(window, "Escape");
+    click(window, document.querySelector("[data-filter-reset]"));
 
     const search = document.querySelector("#q");
     const event = press(window, "/");
@@ -1062,6 +1076,230 @@ function titles(document) {
         bugUrl.indexOf("example.test") !== -1
     );
     dom.window.close();
+  }
+
+  /* collections, the daily pick and the shelf */
+  {
+    const dom = boot();
+    await tick();
+    const { window } = dom;
+    const { document } = window;
+
+    const chips = Array.from(document.querySelectorAll("[data-collection]")).map((c) => c.getAttribute("data-collection"));
+    check("collections are offered", chips.includes("ovo") && chips.includes("players"), chips.length + " chips");
+    check("every series with two or more files gets a chip",
+      window.LOCAL_SERIES.every((group) => chips.includes(group.id)));
+
+    click(window, document.querySelector('.collections [data-collection="ovo"]'));
+    const ovoTitles = titles(document);
+    check("a series chip shows only that series", ovoTitles.length === 2 && ovoTitles.every((t) => /^OvO/.test(t)), ovoTitles.join(", "));
+    check("the chip reads as pressed", document.querySelector('.collections [data-collection="ovo"]').getAttribute("aria-pressed") === "true");
+    check("and the shelf agrees", document.querySelector('.shelf-series [data-collection="ovo"]').getAttribute("aria-pressed") === "true");
+
+    click(window, document.querySelector('.collections [data-collection="players"]'));
+    const twoPlayer = Array.from(document.querySelectorAll(".tile"))
+      .map((t) => window.CATALOG.find((c) => c.id === t.getAttribute("data-id")));
+    check("the 2-player chip only shows two-player titles",
+      twoPlayer.length > 0 && twoPlayer.every((item) => item.players === 2), String(twoPlayer.length));
+    check("two-player tiles say so", document.querySelectorAll(".tile-flag").length > 0);
+
+    // A search for "2p" means the same thing.
+    click(window, document.querySelector("[data-filter-reset]"));
+    type(window, document.querySelector("#q"), "2p");
+    const searched = Array.from(document.querySelectorAll(".tile"))
+      .map((t) => window.CATALOG.find((c) => c.id === t.getAttribute("data-id")));
+    check("searching 2p finds the two-player titles",
+      searched.length > 0 && searched.every((item) => item.players === 2), String(searched.length));
+
+    check("the daily pick is on screen", !document.querySelector("[data-daily]").hidden);
+    const dailyId = document.querySelector("[data-daily-play]").getAttribute("data-open");
+    check("the daily pick names a real file", !!window.CATALOG.find((c) => c.id === dailyId), dailyId);
+    check("the shelf starts empty", document.querySelector("[data-shelf-played]").textContent === "0");
+
+    click(window, document.querySelector("[data-daily-play]"));
+    await tick();
+    const after = readStore(window);
+    check("playing the daily pick records it", after.plays[dailyId] === 1);
+    check("and starts the streak", after.daily.streak === 1 && after.daily.date.length === 10, JSON.stringify(after.daily));
+    check("the shelf counts it", document.querySelector("[data-shelf-played]").textContent === "1");
+    check("the bar moves", document.querySelector("[data-shelf-fill]").style.width !== "0%");
+    dom.window.close();
+  }
+
+  /* the daily streak carries across consecutive days */
+  {
+    const yesterday = new Date(Date.now() - 86400000);
+    const key = yesterday.getFullYear() + "-" +
+      String(yesterday.getMonth() + 1).padStart(2, "0") + "-" +
+      String(yesterday.getDate()).padStart(2, "0");
+
+    const dom = boot();
+    await tick();
+    // Play whatever today's pick is, then reload with yesterday's streak in place.
+    const dailyId = dom.window.document.querySelector("[data-daily-play]").getAttribute("data-open");
+    dom.window.close();
+
+    const seeded = boot("", { daily: { date: key, streak: 4, best: 4 } });
+    await tick();
+    seeded.window.document.querySelector("[data-daily-play]").click();
+    await tick();
+    const store = readStore(seeded.window);
+    check("a streak continues on the next day", store.daily.streak === 5, String(store.daily.streak));
+    check("and the best is kept", store.daily.best === 5);
+    seeded.window.close();
+  }
+
+  /* a finished series says so */
+  {
+    const dom = boot("", { plays: { "local-ovo": 1 } });
+    await tick();
+    const { window } = dom;
+    const { document } = window;
+    click(window, document.querySelector('.tile[data-id="local-ovo-2"] .tile-open'));
+    await tick();
+    const toast = document.querySelector("[data-toast]");
+    check("finishing a series raises a toast", !toast.hidden && /Series complete: OvO/.test(toast.textContent), toast.textContent);
+    dom.window.close();
+  }
+
+  /* a streak milestone says so */
+  {
+    const yesterday = new Date(Date.now() - 86400000);
+    const key = yesterday.getFullYear() + "-" +
+      String(yesterday.getMonth() + 1).padStart(2, "0") + "-" +
+      String(yesterday.getDate()).padStart(2, "0");
+    const dom = boot("", { daily: { date: key, streak: 2, best: 2 } });
+    await tick();
+    const { window } = dom;
+    const { document } = window;
+    click(window, document.querySelector("[data-daily-play]"));
+    await tick();
+    check(
+      "a third day in a row is worth a toast",
+      /3-day streak/.test(document.querySelector("[data-toast]").textContent),
+      document.querySelector("[data-toast]").textContent
+    );
+    dom.window.close();
+  }
+
+  /* next in series */
+  {
+    const dom = boot();
+    await tick();
+    const { window } = dom;
+    const { document } = window;
+
+    const first = window.CATALOG.find((item) => item.series === "ovo" && item.order === 1);
+    click(window, document.querySelector('.tile[data-id="' + first.id + '"] .tile-open'));
+    await tick();
+    const nextBtn = document.querySelector("[data-next-in-series]");
+    check("the player offers the next part of a series", nextBtn && !nextBtn.hidden);
+    check("and names it", /OvO 2/.test(nextBtn.textContent), nextBtn.textContent);
+
+    click(window, nextBtn);
+    await tick();
+    check("clicking it opens the next file",
+      document.querySelector("iframe").getAttribute("src") === window.CATALOG.find((i) => i.series === "ovo" && i.order === 2).sources[0].url);
+    check("the last part offers no next", document.querySelector("[data-next-in-series]").hidden);
+    dom.window.close();
+  }
+
+  /* copy a link to one title */
+  {
+    const dom = boot();
+    await tick();
+    const { window } = dom;
+    const { document } = window;
+    let copied = null;
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: (text) => { copied = text; return Promise.resolve(); } },
+    });
+
+    const first = window.CATALOG[0];
+    click(window, document.querySelector('.tile[data-id="' + first.id + '"] .tile-open'));
+    await tick();
+    click(window, document.querySelector("[data-copy-link]"));
+    await tick();
+    check("copy link copies an address for this title",
+      copied === "https://example.test/#p=" + encodeURIComponent(first.id), String(copied));
+    check("and says so", /Link copied/.test(document.querySelector("[data-copy-status]").textContent));
+    dom.window.close();
+  }
+
+  /* the quick jump */
+  {
+    const dom = boot();
+    await tick();
+    const { window } = dom;
+    const { document } = window;
+
+    window.document.body.dispatchEvent(new window.KeyboardEvent("keydown", {
+      key: "k", ctrlKey: true, bubbles: true, cancelable: true,
+    }));
+    check("Ctrl+K opens the jump", !document.querySelector("[data-palette]").hidden);
+    check("the jump starts focused", document.activeElement === document.querySelector("[data-palette-input]"));
+
+    const input = document.querySelector("[data-palette-input]");
+    type(window, input, "bloons");
+    const labels = Array.from(document.querySelectorAll(".palette-label")).map((n) => n.textContent);
+    check("it searches every title", labels.some((l) => /^Bloons/.test(l)), labels.slice(0, 3).join(", "));
+    check("and puts the closest title first", /^Bloons/.test(labels[0] || ""), labels[0]);
+
+    // Enter opens the highlighted result.
+    input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    await tick();
+    check("Enter opens the highlighted title", !document.querySelector("[data-player]").hidden);
+    check("the jump closes behind it", document.querySelector("[data-palette]").hidden);
+
+    document.querySelector("[data-palette-open]").click();
+    check("the header button opens it too", !document.querySelector("[data-palette]").hidden);
+    document.querySelector("[data-palette-input]").dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    check("Esc closes the jump", document.querySelector("[data-palette]").hidden);
+    dom.window.close();
+  }
+
+  /* the files page: badges, and a series that can be played in order */
+  {
+    const dom = new JSDOM(FILES_HTML, {
+      url: "https://example.test/files.html",
+      runScripts: "outside-only",
+      pretendToBeVisual: true,
+    });
+    const { window } = dom;
+    window.scrollTo = function () {};
+    window.eval(LOCAL_JS);
+    const inline = Array.from(window.document.querySelectorAll("script:not([src])"))
+      .map((node) => node.textContent)
+      .join("\n");
+    window.eval(inline);
+    await tick();
+    const { document } = window;
+
+    check("the files page draws its cards", document.querySelectorAll(".file-card").length === 120);
+    check("a two-player file is flagged on the files page",
+      !!document.querySelector('.file-card[data-file$="basket-random.html"] .file-flag'));
+    check("a series file shows its position",
+      /^1\/2$/.test(document.querySelector('[data-file="assets/games/ovo.html"] .file-flag').textContent));
+
+    click(window, document.querySelector('[data-file="assets/games/ovo.html"] .file-open'));
+    const nextBtn = document.querySelector("[data-next-file]");
+    check("the files player knows the next part", nextBtn && !nextBtn.hidden && /OvO 2/.test(nextBtn.textContent));
+    click(window, nextBtn);
+    check(
+      "and opens it from the root, without doubling the path",
+      document.querySelector("iframe").getAttribute("src") === "https://example.test/assets/games/ovo-2.html",
+      document.querySelector("iframe").getAttribute("src")
+    );
+    dom.window.close();
+  }
+
+  /* the 404 page offers real files instead of a dead end */
+  {
+    const html = fs.readFileSync(path.join(ROOT, "404.html"), "utf8");
+    check("the 404 page loads the file list", /assets\/js\/local-games\.js/.test(html));
+    check("and draws six suggestions", /slice\(0, 6\)/.test(html) && /data-nf-grid/.test(html));
+    check("with root-relative paths, so a deep broken link still works", /href="\/"/.test(html) && /\/assets\/css\/app\.css/.test(html));
   }
 
   /* shared runtimes */

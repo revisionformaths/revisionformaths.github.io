@@ -682,7 +682,7 @@ check(
   fs.existsSync(path.join(ROOT, "scripts/build-sitemap.py"))
 );
 check("the old toolkit is gone", !fs.existsSync(path.join(ROOT, "assets/js/gamekit.js")));
-check("the 404 page links home", /href="\.\/"/.test(notFound));
+check("the 404 page links home", /href="\/"/.test(notFound));
 check("the 404 page wears the same skin", /assets\/css\/app\.css/.test(notFound));
 check("the 404 page keeps the wordmark", notFound.includes("G@M£$"));
 check("package version is 4.x", /^4\./.test(pkg.version), pkg.version);

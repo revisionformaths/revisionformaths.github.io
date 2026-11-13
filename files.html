@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-J8J07RTcwjs27H8dfPZlkYUX8rxjKUHeAw8Vf0P8oRA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://*.clarity.ms 'sha256-ZEzaXvCqkydfNz857rbN1dtqFdeMU3JPUvSBEgjphEo=' 'sha256-cixTkN5gq3JAQDyoaEvTGbgkX1BGrT9fsf6iKO1cJA4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://c.bing.com; font-src 'self' data:; connect-src 'self' https://*.clarity.ms; media-src 'self' https:; frame-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- No referrer to anyone: nothing this page links to learns where the click came from. -->
 <meta name="referrer" content="no-referrer">
@@ -164,6 +164,7 @@
     </div>
     <div class="player-tools">
       <button type="button" class="pbtn pbtn-wide" data-offline-game aria-label="Save this file for offline play">Save offline</button>
+      <button type="button" class="pbtn pbtn-wide pbtn-series" data-next-file hidden></button>
       <a class="pbtn" data-external target="_blank" rel="noopener noreferrer" aria-label="Open the file on its own">
         <svg class="ico" aria-hidden="true"><use href="#i-external"/></svg>
       </a>
@@ -190,6 +191,30 @@
 
   var GAMES = window.LOCAL_GAMES || [];
 
+  /* Series and two-player flags, straight from the same JSON the wall uses. */
+  var SERIES = window.LOCAL_SERIES || [];
+  var SERIES_BY_ID = {};
+  SERIES.forEach(function (group) { SERIES_BY_ID[group.id] = group; });
+  function seriesOf(game) {
+    return game.series && SERIES_BY_ID[game.series] ? SERIES_BY_ID[game.series] : null;
+  }
+  function seriesMembers(id) {
+    return GAMES.filter(function (game) { return game.series === id; })
+      .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  }
+  function seriesPosition(game) {
+    if (!seriesOf(game)) return null;
+    var members = seriesMembers(game.series);
+    var index = members.indexOf(game);
+    return index < 0 ? null : { index: index + 1, total: members.length };
+  }
+  function seriesNext(game) {
+    var position = seriesPosition(game);
+    return position && position.index < position.total
+      ? seriesMembers(game.series)[position.index]
+      : null;
+  }
+
   // The featured local file leads the page: it is the title people come for,
   // so it stays at the front of the list and comes first in its own search.
   // Every other title keeps the order of the shared list.
@@ -215,6 +240,7 @@
   var closeBtn = document.querySelector("[data-close]");
   var fsBtn = document.querySelector("[data-fs]");
   var offlineBtn = document.querySelector("[data-offline-game]");
+  var nextFileBtn = document.querySelector("[data-next-file]");
   var offlineStatus = document.querySelector("[data-offline-status]");
   var fileDescription = document.querySelector("[data-file-description]");
   var activeGamePath = "";
@@ -227,6 +253,10 @@
   // Where the page was before a title took over the address bar. Relative
   // links resolve against the address bar, so it has to be exact.
   var home = window.location.pathname + window.location.search;
+  // Resolve file paths against the page's own address, not the last file
+  // opened: after a pushState the document URL ends in /assets/games/, and
+  // a relative path would grow a second one on every "next".
+  var homeUrl = window.location.origin + home;
 
   // The last segment of the path, so a file can sit in a subfolder later
   // without changing its screenshot name or its saved-recent key.
@@ -321,6 +351,27 @@
     badge.textContent = "OFFLINE";
     art.appendChild(badge);
 
+    var position = seriesPosition(game);
+    if ((game.players === 2) || position) {
+      var flagBox = document.createElement("span");
+      flagBox.className = "file-flags";
+      if (game.players === 2) {
+        var two = document.createElement("span");
+        two.className = "file-flag";
+        two.textContent = "2P";
+        two.title = "Two players on one keyboard";
+        flagBox.appendChild(two);
+      }
+      if (position) {
+        var part = document.createElement("span");
+        part.className = "file-flag";
+        part.textContent = position.index + "/" + position.total;
+        part.title = seriesOf(game).name + " — " + position.index + " of " + position.total;
+        flagBox.appendChild(part);
+      }
+      art.appendChild(flagBox);
+    }
+
     var play = document.createElement("span");
     play.className = "file-play";
     play.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span>Play</span>';
@@ -411,10 +462,15 @@
   function openGame(file, title, opener) {
     lastFocus = opener || document.activeElement;
     titleEl.textContent = title;
-    var absolute = new URL(file, window.location.href).href;
+    var absolute = new URL(file, homeUrl).href;
     activeGamePath = file;
     var game = GAMES.filter(function (entry) { return entry.file === file; })[0];
     if (fileDescription) fileDescription.textContent = game ? game.line : "Self-contained HTML G@M£$ file.";
+    var following = game ? seriesNext(game) : null;
+    if (nextFileBtn) {
+      nextFileBtn.hidden = !following;
+      nextFileBtn.textContent = following ? "Next: " + following.title : "";
+    }
     if (offlineStatus) offlineStatus.textContent = "";
     if (offlineBtn) {
       offlineBtn.disabled = false; offlineBtn.textContent = "Save offline";
@@ -472,6 +528,11 @@
   if (recentList) recentList.addEventListener("click", openFrom);
 
   closeBtn.addEventListener("click", function () { closeGame(true); });
+  if (nextFileBtn) nextFileBtn.addEventListener("click", function () {
+    var game = GAMES.filter(function (entry) { return entry.file === activeGamePath; })[0];
+    var following = game ? seriesNext(game) : null;
+    if (following) openGame(following.file, following.title, nextFileBtn);
+  });
   if (offlineBtn) offlineBtn.addEventListener("click", function () {
     if (!activeGamePath || !window.ClassroomOffline) {
       if (offlineStatus) offlineStatus.textContent = "Offline storage is starting. Reload the page and try again.";
@@ -530,6 +591,15 @@
       search.focus();
     });
   }
+
+  // A shortcut from the installed app, and any link with ?random=1, opens a
+  // random file straight away.
+  function surpriseNow() {
+    if (!ORDER.length) return;
+    var pick = ORDER[Math.floor(Math.random() * ORDER.length)];
+    openGame(pick.file, pick.title, null);
+  }
+  if (/[?&]random=1\b/.test(window.location.search)) surpriseNow();
 
   var surprise = document.querySelector("[data-surprise]");
   if (surprise) surprise.addEventListener("click", function () {

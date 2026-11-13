@@ -27,14 +27,36 @@
           })
         : [],
       thumb: "assets/img/pack/" + slug + ".jpg",
+      series: game.series || null,
+      order: game.order || 0,
+      players: game.players || 1,
       sources: [{ portal: "Local HTML", url: game.file, embed: true }]
     });
   });
   window.CATALOG = ALL;
   var BY_ID = {};
   ALL.forEach(function (item) { BY_ID[item.id] = item; });
-  // There is only one of these, and it is Minecraft.
   var FEATURED = ALL.filter(function (item) { return item.featured; });
+
+  /* Curated series, and the two-player flags, come from data/local-files.json
+     through the generated list. A series is only offered when at least two of
+     its files are actually here, so a half-mirrored series cannot promise a
+     "next" that does not exist. */
+  var SERIES = (window.LOCAL_SERIES || []).slice();
+  var SERIES_BY_ID = {};
+  var SERIES_MEMBERS = {};
+  SERIES.forEach(function (group) { SERIES_BY_ID[group.id] = group; });
+  ALL.forEach(function (item) {
+    if (!item.series || !SERIES_BY_ID[item.series]) { item.series = null; return; }
+    (SERIES_MEMBERS[item.series] = SERIES_MEMBERS[item.series] || []).push(item);
+  });
+  SERIES = SERIES.filter(function (group) {
+    var members = SERIES_MEMBERS[group.id] || [];
+    members.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    return members.length > 1;
+  });
+  var SERIES_LIST = SERIES;
+  var TWO_PLAYER = ALL.filter(function (item) { return item.players === 2; });
 
   var KEY = "classroom.state.v1";
   var LEGACY_SAVED = "gams.saved.v1";
@@ -68,7 +90,10 @@
     sort: "hot",
     savedOnly: false,
     tag: "",
+    collection: "",
     availability: "all",
+    paletteIndex: 0,
+    paletteItems: [],
     genre: "all",
     active: null,
     sourceIndex: 0,
@@ -90,7 +115,8 @@
   function emptyStore() {
     return {
       v: 2, saved: [], recent: [], sort: "hot", cloak: "classroom", theme: "light", largeText: false, highContrast: false,
-      plays: {}, last: {}, scroll: 0, good: {}, bad: {}
+      plays: {}, last: {}, scroll: 0, good: {}, bad: {},
+      daily: { date: "", streak: 0, best: 0 }
     };
   }
 
@@ -110,6 +136,13 @@
     fresh.largeText = raw.largeText === true;
     fresh.highContrast = raw.highContrast === true;
     if (typeof raw.scroll === "number" && raw.scroll >= 0) fresh.scroll = Math.round(raw.scroll);
+    if (raw.daily && typeof raw.daily === "object") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw.daily.date || "")) fresh.daily.date = raw.daily.date;
+      ["streak", "best"].forEach(function (field) {
+        var value = raw.daily[field];
+        if (typeof value === "number" && isFinite(value) && value >= 0) fresh.daily[field] = Math.round(value);
+      });
+    }
 
     ["plays", "last", "good", "bad"].forEach(function (field) {
       if (!raw[field] || typeof raw[field] !== "object") return;
@@ -196,6 +229,57 @@
     }
   }
 
+  /* Local date, not UTC: a pick should turn over at midnight where the
+     classroom is, not at midnight in London. */
+  function dayKey(date) {
+    var d = date || new Date();
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
+
+  /* FNV-1a, on the date string. The pick is the same for everyone on a given
+     day and changes by itself tomorrow, with no server and no request. */
+  function hash32(text) {
+    var h = 2166136261;
+    for (var i = 0; i < text.length; i += 1) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function dailyItem() {
+    if (!ALL.length) return null;
+    var stable = ALL.slice().sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+    return stable[hash32(dayKey()) % stable.length];
+  }
+
+  function seriesMembers(id) { return (SERIES_MEMBERS[id] || []).slice(); }
+
+  function seriesNext(item) {
+    if (!item || !item.series) return null;
+    var members = seriesMembers(item.series);
+    var index = members.indexOf(item);
+    return index >= 0 ? members[index + 1] || null : null;
+  }
+
+  function seriesPosition(item) {
+    if (!item || !item.series) return null;
+    var members = seriesMembers(item.series);
+    var index = members.indexOf(item);
+    if (index < 0) return null;
+    return { index: index + 1, total: members.length, group: SERIES_BY_ID[item.series] };
+  }
+
+  function collectionCounts() {
+    var counts = {};
+    ALL.forEach(function (item) {
+      if (item.series) counts[item.series] = (counts[item.series] || 0) + 1;
+    });
+    return counts;
+  }
+
   function playable(item) {
     return embeddable(item).length > 0;
   }
@@ -244,18 +328,29 @@
         var eb = matchScore(b, query);
         if (ea !== eb) return ea - eb;
       }
-      // Playing in the page is not a ranking signal: every title does now, so
-      // there is nothing to rank on. They rank by the sort on offer.
+      // There is no global play count any more: the only plays that exist are
+      // the ones this browser remembers, so that is what the sorts rank.
+      var pa = store.plays[a.id] || 0;
+      var pb = store.plays[b.id] || 0;
       if (state.sort === "az") return a.title.localeCompare(b.title);
       if (state.sort === "top") {
-        if (b.rating !== a.rating) return b.rating - a.rating;
-        return b.plays - a.plays;
-      }
-      if (state.sort === "low") {
-        if (a.plays !== b.plays) return a.plays - b.plays;
+        // Series first, each in its own order, then everything else A-Z.
+        var ga = a.series ? SERIES_BY_ID[a.series].name : "";
+        var gb = b.series ? SERIES_BY_ID[b.series].name : "";
+        if (!!ga !== !!gb) return ga ? -1 : 1;
+        if (ga !== gb) return ga.localeCompare(gb);
+        if (ga) return (a.order || 0) - (b.order || 0);
         return a.title.localeCompare(b.title);
       }
-      return b.plays - a.plays;
+      // Ties keep the order the library is written in: the curated list, not
+      // an alphabetical accident. A–Z is a sort you choose, not the default.
+      if (state.sort === "low") {
+        if (!!pa !== !!pb) return pa ? 1 : -1;
+        if (pa !== pb) return pa - pb;
+        return 0;
+      }
+      if (pa !== pb) return pb - pa;
+      return 0;
     });
     return copy;
   }
@@ -296,6 +391,142 @@
     dom.tags.hidden = top.length === 0;
   }
 
+  /* ---------- collections ---------- */
+
+  function renderCollections() {
+    if (!dom.collections) return;
+    var counts = collectionCounts();
+    var groups = SERIES_LIST.filter(function (group) { return (counts[group.id] || 0) > 1; });
+    var twoPlayer = TWO_PLAYER.length;
+
+    dom.collections.innerHTML = "";
+    if (!groups.length && twoPlayer < 2) { dom.collections.hidden = true; return; }
+
+    function chip(value, label, count, title) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "collection";
+      button.setAttribute("data-collection", value);
+      button.setAttribute("aria-pressed", state.collection === value ? "true" : "false");
+      if (title) button.title = title;
+      var name = document.createElement("span");
+      name.textContent = label;
+      var num = document.createElement("b");
+      num.textContent = String(count);
+      button.appendChild(name);
+      button.appendChild(num);
+      dom.collections.appendChild(button);
+    }
+
+    chip("", "All titles", ALL.length, "Every file here");
+    groups.forEach(function (group) {
+      chip(group.id, group.name, counts[group.id] || 0, group.line || ("All the " + group.name + " files"));
+    });
+    if (twoPlayer >= 2) chip("players", "2 players", twoPlayer, "Titles two people can play on one keyboard");
+
+    dom.collections.hidden = false;
+  }
+
+  function setCollection(value) {
+    state.collection = state.collection === value ? "" : value;
+    renderCollections();
+    renderShelf();
+    renderGrid();
+  }
+
+  /* ---------- the daily pick ---------- */
+
+  function renderDaily() {
+    if (!dom.daily) return;
+    var item = dailyItem();
+    if (!item) { dom.daily.hidden = true; return; }
+
+    var today = dayKey();
+    var playedToday = store.daily.date === today;
+
+    dom.daily.hidden = false;
+    dom.dailyTitle.textContent = item.title;
+    dom.dailyLine.textContent = item.description || "A file from this folder, picked for today.";
+    dom.dailyThumb.src = item.thumb;
+    dom.dailyThumb.alt = "";
+
+    var streak = store.daily.streak || 0;
+    dom.dailyStreak.textContent = streak > 1 ? streak + "-day streak" : playedToday ? "played today" : "";
+
+    var label = dom.dailyPlay.querySelector("span");
+    if (label) label.textContent = playedToday ? "Play it again" : "Play today's pick";
+    dom.dailyPlay.setAttribute("data-open", item.id);
+    dom.dailyState.textContent = playedToday
+      ? "Done for today. Come back tomorrow for the next one."
+      : "One pick a day, the same for everyone.";
+  }
+
+  /* ---------- your shelf ---------- */
+
+  function renderShelf() {
+    if (!dom.shelfPlayed) return;
+
+    var ids = Object.keys(store.plays).filter(function (id) { return BY_ID[id]; });
+    var total = ALL.length;
+    var played = ids.length;
+    var plays = ids.reduce(function (sum, id) { return sum + (store.plays[id] || 0); }, 0);
+    var saved = store.saved.filter(function (id) { return BY_ID[id]; }).length;
+    var best = store.daily.best || 0;
+
+    dom.shelfPlayed.textContent = String(played);
+    dom.shelfTotal.textContent = String(total);
+    dom.shelfFill.style.width = (total ? Math.round((played / total) * 100) : 0) + "%";
+    dom.shelfBar.setAttribute("aria-valuenow", String(played));
+    dom.shelfBar.setAttribute("aria-valuemax", String(total));
+
+    if (!played) {
+      dom.shelfMeta.textContent = "Nothing played yet — the first tile is a good start.";
+    } else if (played === total) {
+      dom.shelfMeta.textContent = "Every single file, played. " + plays + " plays and counting.";
+    } else {
+      var bits = [plays + (plays === 1 ? " play" : " plays"), saved + " saved"];
+      if (best > 0) bits.push(best + "-day best streak");
+      dom.shelfMeta.textContent = bits.join(" · ");
+    }
+
+    if (!dom.shelfSeries) return;
+    dom.shelfSeries.innerHTML = "";
+    SERIES_LIST.forEach(function (group) {
+      var members = seriesMembers(group.id);
+      if (members.length < 2) return;
+      var done = members.filter(function (item) { return store.plays[item.id]; }).length;
+
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "shelf-series-row";
+      row.setAttribute("data-collection", group.id);
+      row.setAttribute("aria-pressed", state.collection === group.id ? "true" : "false");
+
+      var name = document.createElement("span");
+      name.className = "shelf-series-name";
+      name.textContent = group.name;
+
+      var dots = document.createElement("span");
+      dots.className = "series-dots";
+      dots.setAttribute("aria-hidden", "true");
+      members.forEach(function (item, index) {
+        var dot = document.createElement("i");
+        dot.className = store.plays[item.id] ? "on" : "";
+        dot.title = item.title + (store.plays[item.id] ? " — played" : "");
+        dot.style.setProperty("--i", String(index));
+        dots.appendChild(dot);
+      });
+
+      var count = document.createElement("b");
+      count.textContent = done + "/" + members.length;
+
+      row.appendChild(name);
+      row.appendChild(dots);
+      row.appendChild(count);
+      dom.shelfSeries.appendChild(row);
+    });
+  }
+
   function genreOf(item) {
     var text = (item.title + " " + (item.description || "") + " " + (item.keywords || []).join(" ")).toLowerCase();
     if (/puzzle|riddle|blox|2048|chess|sudoku|brain|logic|escape|room|mine/.test(text)) return "puzzle";
@@ -311,7 +542,11 @@
     return sorted(ALL.filter(function (item) {
       if (state.savedOnly && store.saved.indexOf(item.id) === -1) return false;
       if (state.tag && tagOf(item) !== state.tag) return false;
+      if (state.collection === "players" && item.players !== 2) return false;
+      if (state.collection && state.collection !== "players" && item.series !== state.collection) return false;
       if (state.genre !== "all" && genreOf(item) !== state.genre) return false;
+      // "2p", "2 player" and "two player" are the words people actually type.
+      if (/^(2p|2 ?players?|two ?players?|multiplayer)$/.test(q)) return item.players === 2;
       if (!q) return true;
       var titleHay = (item.title + " " + item.id.replace(/-/g, " ")).toLowerCase();
       var hay = (titleHay + " " + (item.description || "") + " " + item.sources.map(function (source) { return source.portal; }).join(" ")).toLowerCase();
@@ -381,6 +616,31 @@
       badge.className = "tile-file";
       badge.textContent = "OFFLINE";
       thumb.appendChild(badge);
+    }
+
+    /* Two-player and series marks. They are the two facts worth knowing
+       before opening a tile: can a friend join, and is this part of
+       something longer. */
+    var flags = [];
+    if (item.players === 2) flags.push({ text: "2P", title: "Two players on one keyboard" });
+    var position = seriesPosition(item);
+    if (position) {
+      flags.push({
+        text: position.index + "/" + position.total,
+        title: position.group.name + " — " + position.index + " of " + position.total
+      });
+    }
+    if (flags.length) {
+      var flagBox = document.createElement("span");
+      flagBox.className = "tile-flags";
+      flags.forEach(function (flag) {
+        var node = document.createElement("span");
+        node.className = "tile-flag";
+        node.textContent = flag.text;
+        node.title = flag.title;
+        flagBox.appendChild(node);
+      });
+      thumb.appendChild(flagBox);
     }
 
     var portals = {};
@@ -648,6 +908,9 @@
 
   function render() {
     renderGrid();
+    renderCollections();
+    renderDaily();
+    renderShelf();
     renderSaved();
     renderContinue();
     renderRecent();
@@ -738,9 +1001,18 @@
     state.loadedPortal = null;
 
     dom.playerTitle.textContent = item.title;
-    dom.playerSub.textContent = (item.rating > 0 ? item.rating.toFixed(1) + " stars · " : "") +
-      (item.plays > 0 ? shortNum(item.plays) + " plays" : "new arrival") +
-      " · local file · works offline";
+    var position = seriesPosition(item);
+    dom.playerSub.textContent = (position ? position.group.name + " · " + position.index + " of " + position.total + " · " : "") +
+      (item.players === 2 ? "2 players · " : "") +
+      "local file · works offline";
+
+    if (dom.nextSeries) {
+      var following = seriesNext(item);
+      dom.nextSeries.hidden = !following;
+      dom.nextSeries.textContent = following ? "Next: " + following.title : "";
+      dom.nextSeries.title = following ? "Next in " + position.group.name : "";
+    }
+    if (dom.copyStatus) dom.copyStatus.textContent = "";
     if (dom.playerDescription) dom.playerDescription.textContent = item.description ||
       "A self-contained HTML G@M£$ stored with this site. It keeps working with the wi-fi off.";
     if (dom.reportGame) {
@@ -1028,14 +1300,35 @@
   }
 
   function rememberPlay(id) {
+    var firstPlay = !store.plays[id];
+    var newStreak = 0;
+
     store.recent = [id].concat(store.recent.filter(function (s) { return s !== id; })).slice(0, MAX_RECENT);
     store.last[id] = Date.now();
     store.plays[id] = (store.plays[id] || 0) + 1;
+
+    // Today's pick carries a streak: one point for the first time it is opened
+    // on a given day, kept only while the days stay next to each other.
+    var daily = dailyItem();
+    if (daily && daily.id === id) {
+      var today = dayKey();
+      if (store.daily.date !== today) {
+        var yesterday = dayKey(new Date(Date.now() - 86400000));
+        store.daily.streak = store.daily.date === yesterday ? (store.daily.streak || 0) + 1 : 1;
+        store.daily.date = today;
+        if (store.daily.streak > (store.daily.best || 0)) store.daily.best = store.daily.streak;
+        newStreak = store.daily.streak;
+      }
+    }
+
+    milestones(BY_ID[id], firstPlay, newStreak);
     save();
     markTilePlayed(id);
     renderContinue();
     renderRecent();
     renderPicks();
+    renderDaily();
+    renderShelf();
     paintFooter();
   }
 
@@ -1077,12 +1370,268 @@
   }
 
   function shuffle() {
-    if (!ALL.length) return;
-    var pick = ALL[Math.floor(Math.random() * ALL.length)];
-    if (ALL.length > 1 && pick.id === state.active) {
-      pick = ALL[(ALL.indexOf(pick) + 1) % ALL.length];
+    // Random means random within what is on screen: a collection or a search
+    // should not hand back a title it just filtered out.
+    var pool = visible();
+    if (!pool.length) pool = ALL;
+    if (!pool.length) return;
+    var pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length > 1 && pick.id === state.active) {
+      pick = pool[(pool.indexOf(pick) + 1) % pool.length];
     }
     openPlayer(pick.id);
+  }
+
+  /* ---------- one small toast, for the moments worth noticing ---------- */
+
+  function showToast(text) {
+    if (!dom.toast) return;
+    dom.toast.textContent = text;
+    dom.toast.hidden = false;
+    window.clearTimeout(dom.toastTimer);
+    dom.toastTimer = window.setTimeout(function () {
+      if (dom.toast) dom.toast.hidden = true;
+    }, 4200);
+  }
+
+  function milestones(item, firstPlay, streak) {
+    var notes = [];
+    if (firstPlay) {
+      if (item.series && seriesMembers(item.series).every(function (member) { return store.plays[member.id]; })) {
+        notes.push("Series complete: " + SERIES_BY_ID[item.series].name);
+      }
+      var played = Object.keys(store.plays).filter(function (id) { return BY_ID[id]; }).length;
+      if (played === ALL.length) notes.push("That is every file in the folder. All 129.");
+    }
+    if (streak && [3, 7, 14, 30].indexOf(streak) !== -1) {
+      notes.push(streak + "-day streak. Same time tomorrow.");
+    }
+    if (notes.length) showToast(notes.join(" "));
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function () {});
+    } else if (dom.player && dom.player.requestFullscreen) {
+      dom.player.requestFullscreen().catch(function () {});
+    }
+  }
+
+  function openSeriesNext() {
+    var item = BY_ID[state.active];
+    var next = seriesNext(item);
+    if (next) openPlayer(next.id);
+  }
+
+  /* A link to one title, using the hash the page already understands. */
+  function playerLink(item) {
+    var base = window.location.origin + window.location.pathname;
+    return base + "#p=" + encodeURIComponent(item.id);
+  }
+
+  function copyPlayerLink() {
+    var item = BY_ID[state.active];
+    if (!item) return;
+    var url = playerLink(item);
+    var report = function (ok) {
+      if (!dom.copyStatus) return;
+      dom.copyStatus.textContent = ok ? "Link copied. Paste it anywhere." : "Copy failed. The link is " + url;
+      window.clearTimeout(dom.copyTimer);
+      dom.copyTimer = window.setTimeout(function () {
+        if (dom.copyStatus) dom.copyStatus.textContent = "";
+      }, 4000);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () { report(true); }, function () { legacyCopy(url, report); });
+    } else {
+      legacyCopy(url, report);
+    }
+  }
+
+  function legacyCopy(url, report) {
+    var area = document.createElement("textarea");
+    area.value = url;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    var ok = false;
+    try {
+      area.select();
+      ok = document.execCommand("copy") === true;
+    } catch (err) { ok = false; }
+    area.remove();
+    report(ok);
+  }
+
+  /* ---------- command palette ---------- */
+
+  function paletteActions() {
+    var daily = dailyItem();
+    var actions = [
+      { kind: "action", label: "Random G@M£$", hint: "Shuffle the whole wall", run: shuffle },
+      { kind: "action", label: "2 players", hint: "Titles for two on one keyboard", run: function () {
+        state.collection = "players"; renderCollections(); renderGrid();
+      } },
+      { kind: "action", label: "Your shelf", hint: "What you have played so far", run: function () {
+        if (dom.shelfMore) dom.shelfMore.open = true;
+        if (dom.shelfPlayed && dom.shelfPlayed.scrollIntoView) {
+          dom.shelfPlayed.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+      } },
+      { kind: "action", label: "All files page", hint: "Offline copies, install, save all", run: function () {
+        window.location.href = "files.html";
+      } },
+      { kind: "action", label: "Toggle dark theme", hint: "Light or dark, remembered here", run: function () {
+        store.theme = store.theme === "dark" ? "light" : "dark"; applyDisplaySettings(); save();
+      } },
+      { kind: "action", label: "Back to the top", hint: "Every title, no filter", run: function () {
+        state.q = ""; state.collection = ""; state.tag = ""; state.genre = "all"; state.savedOnly = false;
+        if (dom.q) dom.q.value = "";
+        if (dom.genre) dom.genre.value = "all";
+        render();
+        window.scrollTo(0, 0);
+      } }
+    ];
+    if (daily) {
+      actions.splice(1, 0, {
+        kind: "action",
+        label: "G@M£$ of the day: " + daily.title,
+        hint: "Today's pick, the same for everyone",
+        run: function () { openPlayer(daily.id); }
+      });
+    }
+    return actions;
+  }
+
+  function paletteMatches(query) {
+    var q = query.trim().toLowerCase();
+    var actions = paletteActions().filter(function (action) {
+      return !q || action.label.toLowerCase().indexOf(q) !== -1;
+    });
+    var titles = ALL.filter(function (item) {
+      if (!q) return true;
+      var hay = (item.title + " " + item.id.replace(/-/g, " ") + " " + (item.description || "")).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    }).sort(function (a, b) {
+      if (!q) return a.title.localeCompare(b.title);
+      // A title that starts with the query beats one that merely mentions it
+      // in its description, which is what made "fire" offer Rocket first.
+      function rank(item) {
+        var title = item.title.toLowerCase();
+        var at = title.indexOf(q);
+        if (at === 0) return 0;
+        if (at > 0) return 1;
+        if (title.split(/[^a-z0-9]+/).some(function (word) { return word.indexOf(q) === 0; })) return 2;
+        return 3;
+      }
+      var ra = rank(a);
+      var rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      return a.title.localeCompare(b.title);
+    });
+
+    return actions.map(function (action) {
+      return { kind: "action", action: action, label: action.label, hint: action.hint };
+    }).concat(titles.map(function (item) {
+      var position = seriesPosition(item);
+      var hint = position ? position.group.name + " · " + position.index + " of " + position.total : item.description || "";
+      if (item.players === 2 && position) hint += " · 2 players";
+      else if (item.players === 2) hint = "2 players · " + hint;
+      return { kind: "title", item: item, label: item.title, hint: hint };
+    }));
+  }
+
+  function updatePaletteActive() {
+    if (!dom.paletteList) return;
+    Array.prototype.forEach.call(dom.paletteList.children, function (node, index) {
+      var on = index === state.paletteIndex;
+      node.classList.toggle("is-active", on);
+      node.setAttribute("aria-selected", on ? "true" : "false");
+      if (on && node.scrollIntoView) node.scrollIntoView({ block: "nearest" });
+    });
+    var active = dom.paletteList.children[state.paletteIndex];
+    if (active && dom.paletteInput) dom.paletteInput.setAttribute("aria-activedescendant", active.id);
+  }
+
+  function renderPalette(query) {
+    if (!dom.paletteList) return;
+    var matches = paletteMatches(query);
+    state.paletteItems = matches;
+    state.paletteIndex = 0;
+    dom.paletteList.innerHTML = "";
+
+    if (!matches.length) {
+      var empty = document.createElement("li");
+      empty.className = "palette-empty";
+      empty.textContent = "Nothing matches \"" + query.trim() + "\".";
+      dom.paletteList.appendChild(empty);
+      return;
+    }
+
+    matches.slice(0, 40).forEach(function (match, index) {
+      var row = document.createElement("li");
+      row.id = "palette-opt-" + index;
+      row.className = "palette-item";
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", "false");
+      row.setAttribute("data-palette-run", String(index));
+
+      var label = document.createElement("span");
+      label.className = "palette-label";
+      label.textContent = match.label;
+      row.appendChild(label);
+
+      if (match.hint) {
+        var hint = document.createElement("span");
+        hint.className = "palette-hint-line";
+        hint.textContent = match.hint;
+        row.appendChild(hint);
+      }
+      if (match.kind === "title") {
+        var kind = document.createElement("span");
+        kind.className = "palette-kind";
+        kind.textContent = "FILE";
+        row.appendChild(kind);
+      }
+      dom.paletteList.appendChild(row);
+    });
+    updatePaletteActive();
+  }
+
+  function paletteRun(index) {
+    var match = state.paletteItems[index];
+    if (!match) return;
+    closePalette();
+    if (match.kind === "action") match.action.run();
+    else openPlayer(match.item.id);
+  }
+
+  function openPalette() {
+    if (!dom.palette) return;
+    state.paletteReturnFocus = document.activeElement;
+    dom.palette.hidden = false;
+    document.body.classList.add("palette-open");
+    if (dom.paletteInput) {
+      dom.paletteInput.value = "";
+      dom.paletteInput.focus();
+    }
+    renderPalette("");
+  }
+
+  function closePalette() {
+    if (!dom.palette || dom.palette.hidden) return;
+    dom.palette.hidden = true;
+    document.body.classList.remove("palette-open");
+    if (dom.paletteInput) dom.paletteInput.value = "";
+    var back = state.paletteReturnFocus;
+    if (back && back.focus) { try { back.focus({ preventScroll: true }); } catch (err) { /* ignore */ } }
+  }
+
+  function paletteOpen() {
+    return !!(dom.palette && !dom.palette.hidden);
   }
 
   /* ---------- url ---------- */
@@ -1113,6 +1662,29 @@
     dom.emptyQ = $("[data-empty-q]");
     dom.shown = $("[data-shown]");
     dom.tags = $("[data-tags]");
+    dom.collections = $("[data-collections]");
+    dom.daily = $("[data-daily]");
+    dom.dailyTitle = $("[data-daily-title]");
+    dom.dailyLine = $("[data-daily-line]");
+    dom.dailyThumb = $("[data-daily-thumb]");
+    dom.dailyPlay = $("[data-daily-play]");
+    dom.dailyState = $("[data-daily-state]");
+    dom.dailyStreak = $("[data-daily-streak]");
+    dom.shelfPlayed = $("[data-shelf-played]");
+    dom.shelfTotal = $("[data-shelf-total]");
+    dom.shelfFill = $("[data-shelf-fill]");
+    dom.shelfBar = $("[data-shelf-bar]");
+    dom.shelfMeta = $("[data-shelf-meta]");
+    dom.shelfMore = $("[data-shelf-more]");
+    dom.shelfSeries = $("[data-shelf-series]");
+    dom.nextSeries = $("[data-next-in-series]");
+    dom.copyLink = $("[data-copy-link]");
+    dom.copyStatus = $("[data-copy-status]");
+    dom.toast = $("[data-toast]");
+    dom.palette = $("[data-palette]");
+    dom.paletteInput = $("[data-palette-input]");
+    dom.paletteList = $("[data-palette-list]");
+    dom.paletteOpen = $("[data-palette-open]");
     dom.more = $("[data-more]");
     dom.count = $("[data-count]");
     dom.savedToggle = $("[data-saved-toggle]");
@@ -1193,7 +1765,7 @@
     if (dom.availability) dom.availability.addEventListener("change", function () { state.availability = dom.availability.value; onFilter(); });
     dom.genre.addEventListener("change", function () { state.genre = dom.genre.value; onFilter(); });
     dom.filterReset.addEventListener("click", function () {
-      state.availability = "all"; state.genre = "all"; state.tag = ""; state.savedOnly = false;
+      state.availability = "all"; state.genre = "all"; state.tag = ""; state.savedOnly = false; state.collection = "";
       if (dom.availability) dom.availability.value = "all"; dom.genre.value = "all";
       if (dom.tags) Array.prototype.forEach.call(dom.tags.children, function (chip) { chip.setAttribute("aria-pressed", "false"); });
       render();
@@ -1277,13 +1849,7 @@
     dom.next.addEventListener("click", function () { nextSource(false); });
     $("[data-retry]").addEventListener("click", retrySources);
 
-    dom.fs.addEventListener("click", function () {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(function () {});
-      } else if (dom.player.requestFullscreen) {
-        dom.player.requestFullscreen().catch(function () {});
-      }
-    });
+    dom.fs.addEventListener("click", toggleFullscreen);
 
     document.addEventListener("fullscreenchange", function () {
       dom.fs.setAttribute("aria-pressed", document.fullscreenElement ? "true" : "false");
@@ -1322,6 +1888,13 @@
             next.saved = incoming.saved.filter(function (id) { return BY_ID[id]; });
             next.recent = incoming.recent.filter(function (id) { return BY_ID[id]; }).slice(0, MAX_RECENT);
             ["plays", "last", "good", "bad"].forEach(function (key) { if (incoming[key] && typeof incoming[key] === "object") next[key] = incoming[key]; });
+            if (incoming.daily && typeof incoming.daily === "object") {
+              if (/^\d{4}-\d{2}-\d{2}$/.test(incoming.daily.date || "")) next.daily.date = incoming.daily.date;
+              ["streak", "best"].forEach(function (field) {
+                var value = incoming.daily[field];
+                if (typeof value === "number" && isFinite(value) && value >= 0) next.daily[field] = Math.round(value);
+              });
+            }
             if (/^(hot|top|az|low)$/.test(incoming.sort)) next.sort = incoming.sort;
             if (CLOAKS[incoming.cloak]) next.cloak = incoming.cloak;
             next.theme = incoming.theme === "dark" ? "dark" : "light";
@@ -1374,8 +1947,81 @@
       render();
     });
 
+    if (dom.collections) dom.collections.addEventListener("click", function (event) {
+      var chip = event.target.closest("[data-collection]");
+      if (chip) setCollection(chip.getAttribute("data-collection"));
+    });
+
+    if (dom.shelfSeries) dom.shelfSeries.addEventListener("click", function (event) {
+      var row = event.target.closest("[data-collection]");
+      if (!row) return;
+      setCollection(row.getAttribute("data-collection"));
+      var heading = $(".toolbar");
+      if (heading && heading.scrollIntoView) heading.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+
+    if (dom.dailyPlay) dom.dailyPlay.addEventListener("click", function () {
+      var item = dailyItem();
+      if (item) openPlayer(item.id);
+    });
+
+    if (dom.nextSeries) dom.nextSeries.addEventListener("click", openSeriesNext);
+    if (dom.copyLink) dom.copyLink.addEventListener("click", copyPlayerLink);
+
+    if (dom.paletteOpen) dom.paletteOpen.addEventListener("click", openPalette);
+    if (dom.palette) {
+      var backdrop = $("[data-palette-close]", dom.palette);
+      if (backdrop) backdrop.addEventListener("click", closePalette);
+      if (dom.paletteList) dom.paletteList.addEventListener("click", function (event) {
+        var row = event.target.closest("[data-palette-run]");
+        if (row) paletteRun(Number(row.getAttribute("data-palette-run")));
+      });
+      if (dom.paletteInput) {
+        dom.paletteInput.addEventListener("input", function () { renderPalette(dom.paletteInput.value); });
+        dom.paletteInput.addEventListener("keydown", function (event) {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            var delta = event.key === "ArrowDown" ? 1 : -1;
+            var count = Math.min(state.paletteItems.length, 40);
+            if (!count) return;
+            event.preventDefault();
+            state.paletteIndex = (state.paletteIndex + delta + count) % count;
+            updatePaletteActive();
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            paletteRun(state.paletteIndex);
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            closePalette();
+          }
+        });
+      }
+    }
+
     document.addEventListener("keydown", function (event) {
       var typing = /^(input|textarea|select)$/i.test(event.target.tagName);
+
+      // Ctrl/Cmd+K opens the quick jump from anywhere, including a text box.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (paletteOpen()) closePalette(); else openPalette();
+        return;
+      }
+      if (paletteOpen()) {
+        if (event.key === "Escape") { event.preventDefault(); closePalette(); }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          if (dom.paletteInput) dom.paletteInput.focus();
+        }
+        return;
+      }
+
+      // Inside the player, two letters do the common jobs.
+      if (state.active && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.key === "f") { event.preventDefault(); toggleFullscreen(); return; }
+        if (event.key === "s") { event.preventDefault(); toggleSaved(state.active); syncPlayerFav(BY_ID[state.active]); return; }
+        if (event.key === "c") { event.preventDefault(); copyPlayerLink(); return; }
+      }
       if (event.key === "Tab" && state.active) {
         var focusable = $$("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])", dom.player)
           .filter(function (node) { return !node.hidden && node.offsetParent !== null; });
@@ -1394,6 +2040,10 @@
       if (event.key === "/" && !typing) {
         event.preventDefault();
         dom.q.focus();
+      }
+      if (event.key === "r" && !typing && !state.active && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        shuffle();
       }
       // Panic key: one tap and the tab looks like homework again.
       if (event.key === "`" && !typing) {
